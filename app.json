@@ -1,25 +1,55 @@
 {
   "expo": {
-    "name": "openrath-rn",
-    "slug": "openrath-rn",
-    "version": "1.0.0",
-    "orientation": "portrait",
+    "name": "OpenRath",
+    "slug": "openrath",
+    "version": "1.28.0",
+    "scheme": "openrath",
+    "orientation": "default",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "org.openrath.rn",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "OpenRath uses your location for speed, the trip computer, weather, the map and speed limit alerts."
+      }
     },
     "android": {
+      "package": "org.openrath.rn",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "WAKE_LOCK",
+        "CALL_PHONE"
+      ],
+      "intentFilters": [
+        {
+          "action": "MAIN",
+          "category": ["HOME", "DEFAULT"]
+        }
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "OpenRath uses your location for speed, the trip computer, weather, the map and speed limit alerts."
+        }
+      ]
+    ]
   }
 }

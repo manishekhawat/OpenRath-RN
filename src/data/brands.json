@@ -1,0 +1,191 @@
+[
+ {
+  "id": "maruti-suzuki",
+  "name": "Maruti Suzuki",
+  "models": [
+   "Swift",
+   "Dzire",
+   "Baleno",
+   "WagonR",
+   "Alto K10",
+   "Brezza",
+   "Ertiga",
+   "Fronx"
+  ]
+ },
+ {
+  "id": "hyundai",
+  "name": "Hyundai",
+  "models": [
+   "Creta",
+   "Venue",
+   "i20",
+   "Grand i10 Nios",
+   "Verna",
+   "Exter"
+  ]
+ },
+ {
+  "id": "tata",
+  "name": "Tata Motors",
+  "models": [
+   "Nexon",
+   "Punch",
+   "Tiago",
+   "Altroz",
+   "Harrier",
+   "Safari"
+  ]
+ },
+ {
+  "id": "mahindra",
+  "name": "Mahindra",
+  "models": [
+   "Scorpio-N",
+   "XUV700",
+   "Thar",
+   "Thar Roxx",
+   "XUV 3XO",
+   "Bolero"
+  ]
+ },
+ {
+  "id": "kia",
+  "name": "Kia",
+  "models": [
+   "Seltos",
+   "Sonet",
+   "Carens",
+   "Syros"
+  ]
+ },
+ {
+  "id": "toyota",
+  "name": "Toyota",
+  "models": [
+   "Innova Crysta",
+   "Innova Hycross",
+   "Fortuner",
+   "Urban Cruiser Hyryder",
+   "Glanza"
+  ]
+ },
+ {
+  "id": "honda",
+  "name": "Honda",
+  "models": [
+   "City",
+   "Amaze",
+   "Elevate"
+  ]
+ },
+ {
+  "id": "mg",
+  "name": "MG",
+  "models": [
+   "Hector",
+   "Astor",
+   "ZS EV",
+   "Comet EV",
+   "Windsor EV",
+   "Gloster"
+  ]
+ },
+ {
+  "id": "renault",
+  "name": "Renault",
+  "models": [
+   "Kwid",
+   "Triber",
+   "Kiger"
+  ]
+ },
+ {
+  "id": "nissan",
+  "name": "Nissan",
+  "models": [
+   "Magnite"
+  ]
+ },
+ {
+  "id": "volkswagen",
+  "name": "Volkswagen",
+  "models": [
+   "Virtus",
+   "Taigun"
+  ]
+ },
+ {
+  "id": "skoda",
+  "name": "Skoda",
+  "models": [
+   "Kushaq",
+   "Slavia",
+   "Kylaq"
+  ]
+ },
+ {
+  "id": "citroen",
+  "name": "Citroën",
+  "models": [
+   "C3",
+   "Basalt",
+   "C3 Aircross"
+  ]
+ },
+ {
+  "id": "jeep",
+  "name": "Jeep",
+  "models": [
+   "Compass",
+   "Meridian"
+  ]
+ },
+ {
+  "id": "byd",
+  "name": "BYD",
+  "models": [
+   "Atto 3",
+   "Seal",
+   "Sealion 7"
+  ]
+ },
+ {
+  "id": "mercedes-benz",
+  "name": "Mercedes-Benz",
+  "models": [
+   "GLC",
+   "E-Class LWB"
+  ]
+ },
+ {
+  "id": "bmw",
+  "name": "BMW",
+  "models": [
+   "X1",
+   "3 Series Gran Limousine"
+  ]
+ },
+ {
+  "id": "audi",
+  "name": "Audi",
+  "models": [
+   "Q3",
+   "A4"
+  ]
+ },
+ {
+  "id": "volvo",
+  "name": "Volvo",
+  "models": [
+   "XC60"
+  ]
+ },
+ {
+  "id": "lexus",
+  "name": "Lexus",
+  "models": [
+   "ES"
+  ]
+ }
+]
