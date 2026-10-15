@@ -2,7 +2,10 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+// defines the background trip task as the app starts, before Android hands it any fixes
+import '../state/background';
 import { DriveProvider } from '../state/drive';
+import { PlayerProvider } from '../state/player';
 import { useLook } from '../state/look';
 import { PrefsProvider } from '../state/prefs';
 
@@ -21,7 +24,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <PrefsProvider>
         <DriveProvider>
-          <Screens />
+          <PlayerProvider>
+            <Screens />
+          </PlayerProvider>
         </DriveProvider>
       </PrefsProvider>
     </SafeAreaProvider>

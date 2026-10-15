@@ -1,14 +1,11 @@
 /**
- * The settings store for the app (the React Native side of Prefs.java): every value is a string
- * by key, kept in memory for synchronous reads and saved to AsyncStorage shortly after a change.
- * Components that call usePrefs() re-render when anything changes.
+ * The settings for the screens: the store in store.ts (which the background trip task shares),
+ * with a version number so components that call usePrefs() re-render when anything changes.
  */
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import type { Prefs } from '../logic/prefs';
-
-const KEY = 'openrath:prefs';
+import * as Store from './store';
 
 interface Ctx {
   prefs: Prefs;
@@ -19,43 +16,19 @@ interface Ctx {
 const PrefsContext = createContext<Ctx | null>(null);
 
 export function PrefsProvider({ children }: { children: ReactNode }) {
-  const values = useRef(new Map<string, string>());
-  const [loaded, setLoaded] = useState(false);
-  const [version, setVersion] = useState(0);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [loaded, setLoaded] = useState(Store.loaded());
+  const [version, setVersion] = useState(Store.version());
 
   useEffect(() => {
-    AsyncStorage.getItem(KEY)
-      .then((raw) => {
-        if (raw) for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, string>)) values.current.set(k, v);
-      })
-      .catch(() => {})
-      .finally(() => setLoaded(true));
+    const off = Store.subscribe(() => setVersion(Store.version()));
+    Store.load().then(() => {
+      setVersion(Store.version());
+      setLoaded(true);
+    });
+    return off;
   }, []);
 
-  const prefs = useMemo<Prefs>(() => {
-    const changed = () => {
-      setVersion((n) => n + 1);
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => {
-        AsyncStorage.setItem(KEY, JSON.stringify(Object.fromEntries(values.current))).catch(() => {});
-      }, 300);
-    };
-    return {
-      str: (k, d) => values.current.get(k) ?? d,
-      put: (k, v) => {
-        if (values.current.get(k) === v) return;
-        values.current.set(k, v);
-        changed();
-      },
-      all: () => Object.fromEntries(values.current),
-      remove: (k) => {
-        if (values.current.delete(k)) changed();
-      },
-    };
-  }, []);
-
-  const value = useMemo(() => ({ prefs, version }), [prefs, version]);
+  const value = useMemo(() => ({ prefs: Store.prefs, version }), [version]);
   if (!loaded) return null;
   return <PrefsContext.Provider value={value}>{children}</PrefsContext.Provider>;
 }

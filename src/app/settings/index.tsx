@@ -7,6 +7,7 @@ import { Button, Field, Heading, Row, Screen } from '../../components/ui';
 import * as Car from '../../logic/car';
 import * as Car3D from '../../logic/car3d';
 import * as Chores from '../../logic/chores';
+import * as Dashcam from '../../logic/dashcam';
 import * as Features from '../../logic/features';
 import * as Fuel from '../../logic/fuel';
 import * as Holidays from '../../logic/holidays';
@@ -14,6 +15,7 @@ import { num } from '../../logic/prefs';
 import * as Rescue from '../../logic/rescue';
 import * as Valet from '../../logic/valet';
 import * as Layouts from '../../logic/layouts';
+import * as Cam from '../../state/camera';
 import { themeName } from '../../state/look';
 import { usePrefs } from '../../state/prefs';
 
@@ -148,6 +150,8 @@ export default function Settings() {
       <Row name="Toll per plaza on routes" value={`₹${num(prefs, 'tollRate', 100)}`} onPress={() => edit('toll', String(num(prefs, 'tollRate', 100)))} />
       {editor('toll', 'Rupees per toll plaza')}
       <Row name="Holiday traffic ahead" value={Holidays.upcoming(new Date(), 3).join('; ')} />
+      {Features.on(prefs, 'dashcam') ? <Row name="Dashcam" value={Dashcam.rowText(prefs, Cam.get().status)} onPress={() => router.push('/dashcam')} /> : null}
+      {Features.on(prefs, 'parkPhoto') ? <Row name="Last parking photo" value={Cam.photoRowText()} onPress={() => router.push('/parkphoto')} /> : null}
       <Row name="Road helpers" value="Highway, hills, fog, monsoon, breaks and learnt spots" onPress={() => router.push('/settings/road')} />
       <Row name="Emergency contact" value={Rescue.contactRow(prefs, Features.on(prefs, 'accidentHelp'))} onPress={() => router.push('/sos?setup=1')} />
 

@@ -16,7 +16,10 @@ import * as Air from '../logic/air';
 import * as Features from '../logic/features';
 import type { Prefs } from '../logic/prefs';
 import * as Voice from '../logic/voice';
+import * as Cam from '../state/camera';
 import { say } from '../state/drive';
+import * as Engine from '../state/engine';
+import * as Music from '../state/player';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 
@@ -160,11 +163,22 @@ export function run(cmd: Voice.Command, ctx: VoiceCtx) {
       return go('/map');
     case 'clip':
       if (!Features.on(p, 'dashcam')) toast('Turn on the dashcam in Settings > Driving', true);
-      else toast("The dashcam isn't in this version yet", true);
+      else {
+        const t = Cam.protect(p);
+        toast(t);
+        say(t);
+      }
       return;
-    case 'flood':
-      toast("Marking waterlogged spots isn't in this version yet", true);
+    case 'flood': {
+      if (!Features.on(p, 'monsoon')) {
+        toast('Turn on monsoon mode in Settings > Features', true);
+        return;
+      }
+      const t = Engine.markFlood();
+      toast(t);
+      say(t);
       return;
+    }
     case 'docs':
       if (Features.on(p, 'wallet')) go('/wallet');
       else toast('Turn on the documents wallet in Settings > Car', true);
@@ -187,8 +201,11 @@ export function run(cmd: Voice.Command, ctx: VoiceCtx) {
       if (!Features.on(p, 'tripShare')) toast('Turn on "Share the trip by QR code" in Settings > Features', true);
       else go({ pathname: '/chores', params: { open: 'share' } });
       return;
-    case 'hotspot':
     case 'parkPhoto':
+      if (!Features.on(p, 'parkPhoto')) toast('Turn on the parking photo in Settings > Features', true);
+      else go('/parkphoto');
+      return;
+    case 'hotspot':
     case 'split':
     case 'parkTimer':
       return go({ pathname: '/chores', params: { open: k } });
@@ -229,16 +246,26 @@ export function run(cmd: Voice.Command, ctx: VoiceCtx) {
       return;
     }
     case 'music':
-      openApp(p, 'media:music', 'Music');
+      // the app's own player; a music app chosen in Settings still opens when nothing is set up here
+      if (p.str('app:media:music', '') !== '') openApp(p, 'media:music', 'Music');
+      else Music.play();
       return;
     case 'next':
+      if (!Music.next()) toast('Nothing of ours is playing');
+      return;
     case 'prev':
+      Music.prev();
+      return;
     case 'pause':
-    case 'volUp':
-    case 'volDown':
     case 'mute':
-      // media keys and the music volume need a native module (see PORTING.md)
-      toast("Music and volume controls by voice aren't in this version yet", true);
+      Music.pause();
+      return;
+    // only the app's own player's volume: the unit's volume needs a native module (see PORTING.md)
+    case 'volUp':
+      Music.changeVolume(10);
+      return;
+    case 'volDown':
+      Music.changeVolume(-10);
       return;
   }
   // the map's places: home, office, petrol pump, a break, service centres

@@ -16,6 +16,7 @@ import { Button, Heading, Row, Screen } from '../../components/ui';
 import * as Backup from '../../logic/backup';
 import * as Features from '../../logic/features';
 import type { Prefs } from '../../logic/prefs';
+import * as Engine from '../../state/engine';
 import { useLook } from '../../state/look';
 import { usePrefs } from '../../state/prefs';
 
@@ -85,6 +86,8 @@ async function restore(prefs: Prefs, bytes: Uint8Array): Promise<number> {
   if (r.drive) {
     await AsyncStorage.setItem(TRIP_KEY, JSON.stringify(r.drive.trip));
     await AsyncStorage.setItem(HIST_KEY, JSON.stringify(r.drive.history));
+    // the drive service keeps running, so it takes the restored trip now rather than overwriting it
+    await Engine.reloadTrip();
   }
   const names = Object.keys(o.pictures);
   if (names.length > 0) {
@@ -140,7 +143,7 @@ export default function BackupScreen() {
         onPress: async () => {
           try {
             const n = await restore(prefs, await bytes());
-            Alert.alert('Restored', `${n} settings are back. Close and reopen OpenRath to finish (the trip computer reloads then).`);
+            Alert.alert('Restored', `${n} settings are back.`);
           } catch (e) {
             Alert.alert("Couldn't restore", e instanceof Error ? e.message : String(e));
           }

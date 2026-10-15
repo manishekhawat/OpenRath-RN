@@ -15,6 +15,7 @@ import { say } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 import { Box } from './ui';
+import { stop as stopSpeech } from '../state/speech';
 
 /** The shared headlines, refreshed when old (every 30 minutes, retried after 3), re-rendering on change. */
 export function useNews(): typeof News.state {
@@ -51,7 +52,7 @@ export function NewsBox({ style, lines = News.COUNT }: { style?: StyleProp<ViewS
   }, []);
 
   const toggle = async () => {
-    if (await Speech.isSpeakingAsync().catch(() => false)) Speech.stop();
+    if (await Speech.isSpeakingAsync().catch(() => false)) stopSpeech();
     else await readAll(prefs);
     setTimeout(() => Speech.isSpeakingAsync().then(setSpeaking, () => {}), 600);
   };

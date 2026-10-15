@@ -15,6 +15,7 @@ import * as News from '../logic/news';
 import { say } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
+import { stop as stopSpeech } from '../state/speech';
 
 export default function NewsScreen() {
   const { prefs } = usePrefs();
@@ -55,7 +56,7 @@ export default function NewsScreen() {
         news.items.map((it, i) => <Row key={i} name={`${i + 1}.  ${it.title}`} value={it.source} onPress={() => say(News.readOne(it))} />)
       )}
       <Button label="▶  Read aloud" kind="primary" onPress={() => readAll(prefs)} />
-      <Button label="■  Stop" onPress={() => Speech.stop()} />
+      <Button label="■  Stop" onPress={() => stopSpeech()} />
       <Button label={busy ? 'Fetching…' : 'Fetch the latest'} onPress={fetchNow} />
       <Text style={{ color: look.textDim, marginTop: 8 }}>
         From Google News, every 30 minutes while there is internet. The last five are kept for when there isn't.

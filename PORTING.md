@@ -18,6 +18,10 @@ what is left needs native Android code, and is listed at the end with what it wo
   kids' games, documents wallet, accident help, voice commands, picture layouts, theme packs,
   driver profiles, backup and restore, cab driver tools, boot animation maker, valet mode, child
   lock and the clock screensaver.
+- **With Expo's own modules:** trips keep counting behind other apps (a background location task
+  with a foreground-service notification), a dashcam and parking photo with the unit's or phone's
+  own camera, and the app's own music and internet radio player with resume, ducking, quiet hours,
+  volume by speed, sound profiles and the parked-music reminder (on its own volume).
 
 ## How the code maps
 
@@ -35,6 +39,9 @@ what is left needs native Android code, and is listed at the end with what it wo
 | `Theme`, `ThemeGallery`, `Layouts`, `LayoutView`, `LayoutGallery` | `src/logic/{theme,layouts}.ts`, `src/state/look.ts`, `src/components/LayoutView.tsx`, `src/app/settings/{theme,layouts}.tsx` | Layout pictures drawn by `art/scenes.py` at build time, in `assets/layouts`. |
 | `Profiles`, `Backup` | `src/logic/{profiles,backup}.ts`, `src/app/settings/{profiles,backup}.tsx` | Same backup format as the Android app. |
 | `Cab`, `BootArt` | `src/logic/{cab,bootart}.ts`, `src/app/cab/*`, `src/app/bootart.tsx` | The boot animation is drawn and zipped in TypeScript. |
+| `Drive` as a foreground service | `src/state/engine.ts`, `src/state/background.ts`, `src/state/store.ts`, `index.js` | The per-fix work runs outside React; a background location task feeds it behind other apps. Setting: Road helpers > Count trips behind other apps (`bgTrips`). |
+| `Dashcam`, `Snap` | `src/logic/{dashcam,snap}.ts`, `src/state/camera.ts`, `src/components/DashcamView.tsx`, `src/app/{dashcam,parkphoto}.tsx` | expo-camera; a jolt (accelerometer or harsh braking) keeps the clip. |
+| `Player`, `Resume`, `ParkedMusic`, `Duck`, `Sound`, `Quiet`, `Speak` | `src/logic/{player,sound}.ts`, `src/state/{player,speech}.tsx`, `src/app/music.tsx`, `src/components/MusicBox.tsx` | expo-audio with background playback; songs from the media library or picked files, stations from Radio Browser. |
 | `Valet`, `ChildLock` | `src/logic/{valet,childlock}.ts`, Settings and the app drawer | |
 | Map card + `assets/map/map.html`, `OfflineNav` | `src/app/map.tsx`, `src/map/mapHtml.ts` | The original map page in a WebView; offline guidance hands over with a `geo:` link. |
 | `AppsActivity`, `AppPicker` | `src/app/apps.tsx` | Opens apps by package name. |
@@ -45,12 +52,16 @@ what is left needs native Android code, and is listed at the end with what it wo
 
 - **Accident help and cab SOS** open the messaging app with the text filled in; sending still needs
   a tap. Sending by itself needs SmsManager and the SEND_SMS permission.
-- **Volume** (valet mode's cap, quiet-ride, volume rising with speed, quiet hours) needs the system
-  audio API. The settings and rules are kept; nothing changes the volume yet.
+- **Volume:** volume by speed, quiet hours, sound profiles and ducking change the app's own
+  player only. The unit's volume (and so valet mode's cap and cab quiet-ride) needs the system
+  audio API; other apps' music doesn't dip for voice prompts without audio focus from native code.
 - **Installed apps** can't be listed, so the app drawer, the 360 camera app and the ride apps open
   apps by package name.
 - **Beeps** before spoken warnings are left out (no tone generator); the spoken warnings play.
-- **Trips count while the app is open**, not behind other apps.
+- **The dashcam records while its dashboard box or screen is showing**, with a second or so between
+  clips; recording with the screen off, and USB cameras, need native code. Clips open in the unit's
+  video player.
+- **Parked music** only reminds after 30 minutes parked, as the Android version does without OBD.
 - **The number plate** on the 3D car uses an affine transform, not Android's perspective mapping.
 - **QR codes** keep the screen awake but don't raise the brightness.
 - **The boot animation** uses a built-in stroke font instead of Inter, and the brand badge is the
@@ -62,12 +73,11 @@ Each of these needs Kotlin or Java in an Expo module or a config plugin.
 
 - Being the Home app beyond the HOME intent filter (single task, clear task on launch): a small config plugin.
 - Listing installed apps (`AppsActivity`, `ChildLock` sending the screen home, finding the 360 camera and ride apps): PackageManager.
-- Counting trips behind other apps and after boot (`Drive` as a foreground service, `Resume$Boot`): expo-task-manager background location and a boot receiver.
 - What's playing and the notification ticker (`MediaListener`, `Ticker`): NotificationListenerService.
 - Steering-wheel buttons (`Keys`, `KeyService`): key events and an AccessibilityService.
-- Own music and radio player, equalizer, ducking, sound profiles, quiet hours, parked music (`Player`, `Eq`, `Duck`, `Sound`, `Quiet`, `Resume`, `ParkedMusic`): expo-audio covers playback; equalizer and system volume need native code.
+- Equalizer and the unit's volume (`Eq`, the volume parts of `Sound`, `Valet`, `Cab` quiet-ride): Android audio effects and AudioManager. Steering-wheel next/previous for the app's player needs a media session with those buttons.
 - OBD-II and TPMS over Bluetooth (`Obd`, `Tpms`): a Bluetooth library such as react-native-ble-plx.
-- Dashcam, parking photo, reverse camera (`Dashcam`, `Snap`, `ReverseView`): expo-camera for the phone camera; USB cameras need native code.
+- USB cameras, recording with the screen off, and the reverse camera (`Dashcam` over UVC, `ReverseView`): a UVC library and a foreground service.
 - Stereo makers' services: Topway (`TopwayUnit`, `Tw`, `Xt`, `Calls`, `Lights`), and new in 1.30 FYT and MTC units (`FytUnit`, `MtcUnit`, `Unit` with its frequency and lights helpers), plus `Fm`, `Tuner`, `Scan`, `StockRadio`, `Probe`, `Peek`, `Stereo`, `Hub`'s unit start/stop and `com.android.fmradio.FmNative`. These call firmware classes by reflection and only make sense as a native module loaded on those units.
 - Floating mic over other apps (`Floaters`, `OverMic`): SYSTEM_ALERT_WINDOW overlay.
 - Crash guard and diagnostics (`Crash`, `Strings`): reads other apps' dex files and guards native calls.

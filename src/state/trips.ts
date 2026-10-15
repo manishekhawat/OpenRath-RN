@@ -3,15 +3,15 @@
  * Drive.java that called Coach, Tracks and FuelPlan): the mileage coach's drive tracker, the route
  * recorder and the fuel-low check (the 0–100 timer is in road.ts, which also shows it). Each keeps its own state for the app's run.
  *
- * In the location callback of src/state/drive.tsx:
+ * For each fix in src/state/engine.ts:
  *
- *   const before = tripRef.current;               // before Trip.feed replaces it
+ *   const before = snap.trip;                     // before Trip.feed replaces it
  *   const r = Trip.feed(before, fix, opts);
  *   ...
  *   const out = Trips.onTripFix(prefs, before, r, l.coords.altitude);
  *   out.say.forEach(say);
  *
- * and in the effect's cleanup (the app closing): `Trips.end(prefs)`.
+ * and when the app closes with no background task to go on: `Trips.end(prefs)`.
  */
 import * as Coach from '../logic/coach';
 import * as Features from '../logic/features';

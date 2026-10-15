@@ -1,16 +1,20 @@
 /**
  * Settings > Road helpers (the Android version's rows for fog, monsoon, breaks, the 0–100 timer
- * and learnt spots): each row shows its value, and a tap cycles it or clears it.
+ * and learnt spots): each row shows its value, and a tap cycles it or clears it. The first row
+ * keeps trips counting behind other apps.
  */
+import { useEffect, useState } from 'react';
 import { Alert, Switch, Text } from 'react-native';
 
 import { Heading, Row, Screen } from '../../components/ui';
 import * as Accel from '../../logic/accel';
+import * as Bg from '../../logic/background';
 import * as Features from '../../logic/features';
 import * as Fog from '../../logic/fog';
 import * as Monsoon from '../../logic/monsoon';
 import * as Rest from '../../logic/rest';
 import * as Spots from '../../logic/spots';
+import * as Background from '../../state/background';
 import { useDrive } from '../../state/drive';
 import { useLook } from '../../state/look';
 import { usePrefs } from '../../state/prefs';
@@ -25,6 +29,34 @@ const confirm = (message: string, action: string, run: () => void) =>
     { text: 'Cancel', style: 'cancel' },
     { text: action, style: 'destructive', onPress: run },
   ]);
+
+/** The "behind other apps" row: the switch, and a tap asks for "all the time" again when it is missing. */
+function BehindApps() {
+  const { prefs, version } = usePrefs();
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [src, setSrc] = useState(Background.current());
+  const want = Bg.wanted(prefs);
+
+  const refresh = () => {
+    Background.allowed().then(setAllowed);
+    setSrc(Background.current());
+  };
+  useEffect(refresh, [version]);
+
+  const turn = (on: boolean) => {
+    Bg.set(prefs, on);
+    // the drive provider switches the source on the change; turning it on asks again if needed
+    Background.sync(on).then(refresh);
+  };
+  return (
+    <Row
+      name={Bg.EXPLAIN_TITLE}
+      value={Bg.statusText(want, allowed, src)}
+      onPress={() => (want && src !== 'task' ? Background.sync(true).then(refresh) : turn(!want))}
+      right={<Switch value={want} onValueChange={turn} />}
+    />
+  );
+}
 
 export default function RoadSettings() {
   const { prefs } = usePrefs();
@@ -42,6 +74,9 @@ export default function RoadSettings() {
 
   return (
     <Screen title="Road helpers">
+      <Heading>Behind other apps</Heading>
+      <BehindApps />
+
       <Heading>Fog</Heading>
       <Row
         name="Fog mode now"
@@ -102,7 +137,7 @@ export default function RoadSettings() {
         );
       })}
       <Text style={{ color: look.textDim, marginTop: 12 }}>
-        Map data © OpenStreetMap contributors, through the Overpass API. Warnings are spoken while the app is open.
+        Map data © OpenStreetMap contributors, through the Overpass API. Warnings are spoken while the app is open, and behind other apps when trips count there.
       </Text>
     </Screen>
   );

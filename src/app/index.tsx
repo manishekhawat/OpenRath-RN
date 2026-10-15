@@ -9,7 +9,9 @@ import { Alert, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import LayoutView, { useLayout } from '../components/LayoutView';
+import { DashcamView } from '../components/DashcamView';
 import MicButton from '../components/MicButton';
+import { MusicBox } from '../components/MusicBox';
 import { NewsBox } from '../components/NewsBox';
 import { RoadAhead } from '../components/RoadAhead';
 import { Box } from '../components/ui';
@@ -26,6 +28,7 @@ import * as Holidays from '../logic/holidays';
 import { num } from '../logic/prefs';
 import * as Trip from '../logic/trip';
 import * as Weekly from '../logic/weekly';
+import { useParkedSnap } from '../state/camera';
 import { say, useDrive } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
@@ -54,6 +57,8 @@ export default function Home() {
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
   const layout = useLayout();
+  // the parking photo when the car parks
+  useParkedSnap();
 
   const fuelStats = useMemo(() => Fuel.stats(Fuel.log(prefs)), [prefs, version]);
   const odoKm = Care.odo(prefs, trip.odoKm);
@@ -280,6 +285,9 @@ export default function Home() {
     </Box>
   );
 
+  // the dashcam records through this box, so it stays mounted while either camera feature is on
+  const camBox = Features.on(prefs, 'dashcam') || Features.on(prefs, 'parkPhoto') ? <DashcamView style={styles.flexBox} /> : null;
+
   const cabShare = Cab.targetShare(prefs, now.getTime());
   const cabBox = Features.on(prefs, 'cab') ? (
     <Box title="CAB" style={styles.flexBox} onPress={() => router.push('/cab')}>
@@ -316,6 +324,7 @@ export default function Home() {
     <View style={[styles.dock, { borderColor: look.edge, backgroundColor: look.panelTop }]}>
       {[
         ['Map', '/map'],
+        ['Music', '/music'],
         ['Apps', '/apps'],
         ['Fuel', '/fuel'],
         ['Care', '/care'],
@@ -335,6 +344,8 @@ export default function Home() {
       <View style={styles.col}>
         {clockBox}
         <RoadAhead style={styles.flexBox} />
+        <MusicBox style={styles.flexBox} />
+        {camBox}
         {weatherBox}
       </View>
       <View style={styles.col}>
@@ -351,6 +362,8 @@ export default function Home() {
         {weatherBox}
       </View>
       <RoadAhead />
+      <MusicBox />
+      {camBox}
       <View style={styles.pair}>
         {tripBox}
         {cabBox ?? fuelBox}

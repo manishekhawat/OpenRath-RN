@@ -5,7 +5,8 @@
  * highway mode. Each speaks through `speak` when its switch in Settings > Features is on, and
  * the dashboard reads what to show from `view`.
  *
- * Plain TypeScript with no React, so drive.tsx keeps one of these in a ref.
+ * Plain TypeScript with no React, so the drive engine (engine.ts) keeps one, on screen and behind
+ * other apps alike.
  */
 import * as Accel from '../logic/accel';
 import * as Ahead from '../logic/ahead';
