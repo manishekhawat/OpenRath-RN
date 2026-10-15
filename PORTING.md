@@ -41,7 +41,7 @@ what is left needs native Android code, and is listed at the end with what it wo
 | `Cab`, `BootArt` | `src/logic/{cab,bootart}.ts`, `src/app/cab/*`, `src/app/bootart.tsx` | The boot animation is drawn and zipped in TypeScript. |
 | `Drive` as a foreground service | `src/state/engine.ts`, `src/state/background.ts`, `src/state/store.ts`, `index.js` | The per-fix work runs outside React; a background location task feeds it behind other apps. Setting: Road helpers > Count trips behind other apps (`bgTrips`). |
 | `Dashcam`, `Snap` | `src/logic/{dashcam,snap}.ts`, `src/state/camera.ts`, `src/components/DashcamView.tsx`, `src/app/{dashcam,parkphoto}.tsx` | expo-camera; a jolt (accelerometer or harsh braking) keeps the clip. |
-| `Player`, `Resume`, `ParkedMusic`, `Duck`, `Sound`, `Quiet`, `Speak` | `src/logic/{player,sound}.ts`, `src/state/{player,speech}.tsx`, `src/app/music.tsx`, `src/components/MusicBox.tsx` | expo-audio with background playback; songs from the media library or picked files, stations from Radio Browser. |
+| `Player`, `Resume`, `ParkedMusic`, `Duck`, `Sound`, `Quiet`, `Speak` | `src/logic/{player,sound}.ts`, `src/state/player.tsx`, `src/state/speech.ts`, `src/app/music.tsx`, `src/components/MusicBox.tsx` | expo-audio with background playback; songs from the media library or picked files, stations from Radio Browser. |
 | `Valet`, `ChildLock` | `src/logic/{valet,childlock}.ts`, Settings and the app drawer | |
 | Map card + `assets/map/map.html`, `OfflineNav` | `src/app/map.tsx`, `src/map/mapHtml.ts` | The original map page in a WebView; offline guidance hands over with a `geo:` link. |
 | `AppsActivity`, `AppPicker` | `src/app/apps.tsx` | Opens apps by package name. |
