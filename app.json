@@ -12,7 +12,12 @@
       "supportsTablet": true,
       "bundleIdentifier": "org.openrath.rn",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "OpenRath uses your location for speed, the trip computer, weather, the map and speed limit alerts."
+        "NSLocationWhenInUseUsageDescription": "OpenRath uses your location for speed, the trip computer, weather, the map and speed limit alerts.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "OpenRath keeps counting your trip, mileage and alerts while another app is on screen.",
+        "UIBackgroundModes": [
+          "location",
+          "audio"
+        ]
       }
     },
     "android": {
@@ -29,12 +34,21 @@
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "WAKE_LOCK",
-        "CALL_PHONE"
+        "CALL_PHONE",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "CAMERA",
+        "RECORD_AUDIO"
       ],
       "intentFilters": [
         {
           "action": "MAIN",
-          "category": ["HOME", "DEFAULT"]
+          "category": [
+            "HOME",
+            "DEFAULT"
+          ]
         }
       ],
       "predictiveBackGestureEnabled": false
@@ -47,7 +61,33 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "OpenRath uses your location for speed, the trip computer, weather, the map and speed limit alerts."
+          "locationWhenInUsePermission": "OpenRath uses your location for speed, the trip computer, weather, the map and speed limit alerts.",
+          "locationAlwaysAndWhenInUsePermission": "OpenRath keeps counting your trip, mileage and alerts while another app is on screen.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "OpenRath uses the camera for the dashcam and the parking photo.",
+          "microphonePermission": "OpenRath records sound with dashcam clips when you turn that on.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": true
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "OpenRath saves dashcam clips and parking photos to your gallery.",
+          "savePhotosPermission": "OpenRath saves dashcam clips and parking photos to your gallery."
         }
       ]
     ]
