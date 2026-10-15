@@ -1,22 +1,32 @@
 /**
  * The driving side (the React Native version of the Drive service): follows the GPS, keeps the
- * trip computer and parking spot, looks up speed limits and cameras, and speaks the alerts.
+ * trip computer and parking spot, looks up speed limits and cameras, and speaks the alerts. The
+ * road helpers (highway, hill, fog, monsoon, the road ahead, learnt spots, the 0–100 timer and
+ * the break reminder) live in road.ts and get every fix too.
  *
  * It runs while the app is open. The Android version kept counting behind other apps as a
  * foreground service; doing that here needs expo-task-manager background location (see
  * PORTING.md).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import * as Speech from 'expo-speech';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Alert, Platform, ToastAndroid } from 'react-native';
 
+import * as Cab from '../logic/cab';
+import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
 import { dist } from '../logic/geo';
 import { num } from '../logic/prefs';
+import * as Rescue from '../logic/rescue';
+import * as Valet from '../logic/valet';
 import * as Speed from '../logic/speed';
 import * as Trip from '../logic/trip';
 import { usePrefs } from './prefs';
+import { EMPTY as NO_ROAD, RoadWatch, type RoadView } from './road';
+import * as Trips from './trips';
 
 const TRIP_KEY = 'openrath:trip';
 const HIST_KEY = 'openrath:history';
@@ -31,6 +41,14 @@ export interface DriveState {
   alertError: string;
   /** "", "denied" or a message about the GPS */
   gps: string;
+  /** the road helpers' view: road-ahead line, highway and fog modes, 0–100 result, break and crash times */
+  road: RoadView;
+  /** a message came in: true when highway mode holds it back until the car slows down */
+  holdMessage: () => boolean;
+  /** mark where the car is as a waterlogging spot; returns the message to show */
+  markFlood: () => string;
+  /** hide the fog screen for the rest of this drive */
+  hideFog: () => void;
   setPark: (lat: number, lon: number) => void;
   resetToday: () => void;
 }
@@ -49,16 +67,34 @@ export function DriveProvider({ children }: { children: ReactNode }) {
   const [over, setOver] = useState(false);
   const [alertError, setAlertError] = useState('');
   const [gps, setGps] = useState('');
+  const [road, setRoad] = useState<RoadView>(NO_ROAD);
 
   const tripRef = useRef(trip);
   const speedRef = useRef({ limit: 0, cameras: [] as Speed.Camera[], warned: false, announced: new Set<string>() });
   const queryRef = useRef({ busy: false, at: null as null | { lat: number; lon: number }, time: 0 });
   const savedAt = useRef(0);
+  const roadRef = useRef<RoadWatch | null>(null);
+  const crashSeen = useRef(0);
+  const lights = useRef({ told: false, darkSince: -1 });
+  if (!roadRef.current) roadRef.current = new RoadWatch(prefs, say);
 
   const update = (s: Trip.TripState) => {
     tripRef.current = s;
     setTrip(s);
   };
+
+  // the Cab tools' once-a-second tick: the meter's waiting time, the duty reminder, papers due
+  useEffect(() => {
+    const id = setInterval(() => {
+      const t = tripRef.current;
+      for (const n of Cab.tick(prefs, Date.now(), t.kmh, t.last?.t ?? 0)) {
+        if (Platform.OS === 'android') ToastAndroid.show(n.text, ToastAndroid.LONG);
+        else Alert.alert(n.text);
+        if (n.speak) say(n.text);
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [prefs]);
 
   // load what was saved
   useEffect(() => {
@@ -126,7 +162,7 @@ export function DriveProvider({ children }: { children: ReactNode }) {
           }
         }
       }
-      const o = Speed.isOver(s.kmh, sp.limit, num(prefs, 'warnSpeed', 0));
+      const o = Speed.isOver(s.kmh, sp.limit, Valet.warnAt(prefs));
       if (o && !sp.warned) say(sp.limit > 0 && s.kmh > sp.limit + 3 ? 'Speed limit ' + sp.limit : 'Slow down');
       sp.warned = o;
       setOver(o);
@@ -143,9 +179,10 @@ export function DriveProvider({ children }: { children: ReactNode }) {
       sub = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
         (l) => {
-          const alerts = Features.on(prefs, 'speedAlerts');
+          const alerts = Features.on(prefs, 'speedAlerts') || Valet.on(prefs);
+          const prev = tripRef.current;
           const r = Trip.feed(
-            tripRef.current,
+            prev,
             {
               lat: l.coords.latitude,
               lon: l.coords.longitude,
@@ -157,11 +194,48 @@ export function DriveProvider({ children }: { children: ReactNode }) {
             { over: speedRef.current.warned, scoring: Features.on(prefs, 'score'), parking: Features.on(prefs, 'parking') },
           );
           update(r.state);
-          if (alerts) speedAlerts(r.state);
+          const s = r.state;
+          if (alerts) speedAlerts(s);
           else {
             setLimit(0);
             setCameraM(-1);
             setOver(false);
+          }
+          // the road helpers: they speak their own warnings
+          const view = roadRef.current!.feed({
+              lat: s.lat,
+              lon: s.lon,
+              kmh: s.kmh,
+              heading: s.heading,
+              altitude: l.coords.altitude,
+              accuracy: l.coords.accuracy,
+              driveKm: s.driveKm,
+              t: s.prevAt,
+            });
+          setRoad(view);
+          // a crash-like stop with accident help on: the countdown screen, which texts the contact
+          if (view.crashAt > crashSeen.current) {
+            crashSeen.current = view.crashAt;
+            router.push(Rescue.sosHref(s.lat, s.lon) as never);
+          }
+          // the mileage coach, the route recorder and the fuel-low check
+          const out = Trips.onTripFix(prefs, prev, r, l.coords.altitude ?? null);
+          out.say.forEach(say);
+          // the headlight reminder, once a drive, after 30 s of driving in the dark (Drive.carChecks)
+          if (out.driveEnded) lights.current = { told: false, darkSince: -1 };
+          const lt = lights.current;
+          if (Features.on(prefs, 'lightsReminder') && !lt.told) {
+            const now = Date.now();
+            if (Errands.dark(s.lat, s.lon, now) && s.kmh >= 20) {
+              if (lt.darkSince < 0) lt.darkSince = now;
+            } else lt.darkSince = -1;
+            if (lt.darkSince > 0 && now - lt.darkSince > 30000) {
+              // the unit's headlight signal isn't readable here, so only "always on" counts as known
+              const on = prefs.str('lights', '') === 'on';
+              const t = Errands.lightsReminder(true, s.kmh, on, on, false);
+              lt.told = true;
+              if (t) say(t);
+            }
           }
           if (r.closedDay || Date.now() - savedAt.current > 15000) {
             savedAt.current = Date.now();
@@ -177,6 +251,8 @@ export function DriveProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       sub?.remove();
       save(tripRef.current).catch(() => {});
+      roadRef.current?.saveSpots();
+      Trips.end(prefs);
     };
   }, [prefs]);
 
@@ -187,6 +263,14 @@ export function DriveProvider({ children }: { children: ReactNode }) {
     over,
     alertError,
     gps,
+    road,
+    holdMessage: () => {
+      const held = roadRef.current!.holdMessage();
+      if (held) setRoad(roadRef.current!.view);
+      return held;
+    },
+    markFlood: () => roadRef.current!.markFlood(),
+    hideFog: () => setRoad(roadRef.current!.hideFog()),
     setPark: (lat, lon) => {
       const s = { ...tripRef.current, park: { lat, lon, at: Date.now() } };
       update(s);

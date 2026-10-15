@@ -33,21 +33,27 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoaded(true));
   }, []);
 
-  const prefs = useMemo<Prefs>(
-    () => ({
+  const prefs = useMemo<Prefs>(() => {
+    const changed = () => {
+      setVersion((n) => n + 1);
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => {
+        AsyncStorage.setItem(KEY, JSON.stringify(Object.fromEntries(values.current))).catch(() => {});
+      }, 300);
+    };
+    return {
       str: (k, d) => values.current.get(k) ?? d,
       put: (k, v) => {
         if (values.current.get(k) === v) return;
         values.current.set(k, v);
-        setVersion((n) => n + 1);
-        if (saveTimer.current) clearTimeout(saveTimer.current);
-        saveTimer.current = setTimeout(() => {
-          AsyncStorage.setItem(KEY, JSON.stringify(Object.fromEntries(values.current))).catch(() => {});
-        }, 300);
+        changed();
       },
-    }),
-    [],
-  );
+      all: () => Object.fromEntries(values.current),
+      remove: (k) => {
+        if (values.current.delete(k)) changed();
+      },
+    };
+  }, []);
 
   const value = useMemo(() => ({ prefs, version }), [prefs, version]);
   if (!loaded) return null;

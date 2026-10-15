@@ -1,7 +1,9 @@
 /**
- * Car care (Settings > Car care in the Android version): the odometer, and service reminders by
- * distance (oil, tyres, alignment, service) or by date (insurance, PUC).
+ * Car care (Settings > Car care in the Android version): the odometer, service reminders by
+ * distance (oil, tyres, alignment, service) or by date (insurance, PUC), and links to the trip
+ * history and the toll log.
  */
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 
@@ -86,6 +88,10 @@ export default function CareScreen() {
           {editing === i ? editor : null}
         </View>
       ))}
+      <Heading>Trips and spending</Heading>
+      <Row name="Trip history" value="weekly and monthly distance, time and costs" onPress={() => router.push('/trips')} />
+      <Row name="Add a toll payment" value={Care.tollsThisMonth(prefs).replace('  ·  ', '') || 'no tolls this month'} onPress={() => router.push('/tolls')} />
+      <Row name="Weekly report" value="the last seven days in one card" onPress={() => router.push('/report')} />
     </Screen>
   );
 }

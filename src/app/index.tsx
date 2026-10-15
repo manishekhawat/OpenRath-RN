@@ -4,24 +4,33 @@
  */
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import LayoutView, { useLayout } from '../components/LayoutView';
+import MicButton from '../components/MicButton';
+import { NewsBox } from '../components/NewsBox';
+import { RoadAhead } from '../components/RoadAhead';
 import { Box } from '../components/ui';
 import { Road } from '../components/Road';
 import * as Air from '../logic/air';
+import * as Cab from '../logic/cab';
 import * as Car from '../logic/car';
 import * as Care from '../logic/care';
+import * as Chores from '../logic/chores';
 import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
 import * as Fuel from '../logic/fuel';
 import * as Holidays from '../logic/holidays';
+import { num } from '../logic/prefs';
 import * as Trip from '../logic/trip';
+import * as Weekly from '../logic/weekly';
 import { say, useDrive } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 import { useWeather } from '../state/weather';
+import { dailyBackup } from './settings/backup';
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -44,6 +53,7 @@ export default function Home() {
   const weather = useWeather(trip.lat, trip.lon);
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
+  const layout = useLayout();
 
   const fuelStats = useMemo(() => Fuel.stats(Fuel.log(prefs)), [prefs, version]);
   const odoKm = Care.odo(prefs, trip.odoKm);
@@ -59,7 +69,7 @@ export default function Home() {
     const today = Trip.dayKey(Date.now());
     if (prefs.str('summaryDay', '') === today || !weather.wx) return;
     prefs.put('summaryDay', today);
-    const range = -1; // the petrol range needs the fuel-low planner's tank level estimate, not ported yet
+    const { rangeKm, holiday } = Weekly.summaryExtras(prefs, trip.odoKm);
     const text = Errands.summary(
       new Date(),
       prefs.str('ownerName', ''),
@@ -67,15 +77,96 @@ export default function Home() {
       weather.wx.text,
       weather.wx.rainSoon > 0.2 ? 'Rain is expected within the hour' : '',
       weather.aqi,
-      range,
+      rangeKm,
       careAlert,
-      Holidays.upcoming(new Date(), 1)[0] ?? '',
+      holiday,
     );
     say(text);
     Alert.alert(Errands.greeting(new Date()), text.substring(text.indexOf('.') + 1).trim());
   }, [weather.wx, prefs, careAlert, fuelStats]);
 
+  // the wash reminder, when parked and the next days look dry
+  useEffect(() => {
+    if (!weather.wx || trip.kmh > 3) return;
+    const ask = Chores.washCheck(prefs, trip.kmh, Chores.forecastIcons(weather.wx.daily.map((d) => d.code)));
+    if (ask) Alert.alert(ask.title, ask.message, [{ text: 'Washed today', onPress: () => Chores.washed(prefs) }, { text: 'Later' }]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weather.wx]);
+
+  // the automatic daily backup (Backup.daily)
+  useEffect(() => {
+    dailyBackup(prefs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // the service booking reminder: once a day when parked, if a service is near (HomeActivity)
+  useEffect(() => {
+    if (!Car.ready(prefs) || !Features.on(prefs, 'serviceBooking') || !Features.on(prefs, 'care') || trip.kmh > 3) return;
+    const today = Trip.dayKey(Date.now());
+    if (prefs.str('bookAsked', '') === today) return;
+    const i = Care.bookingDue(prefs, odoKm);
+    if (i < 0) return;
+    prefs.put('bookAsked', today);
+    const mine = prefs.str('myService', '').split('|');
+    const have = mine.length === 2 && mine[1] !== '';
+    const k = Care.kmLeft(prefs, i, odoKm);
+    const when = k < 0 ? `is overdue by ${-k} km` : `is due in ${k} km`;
+    Alert.alert(
+      'Book the service?',
+      `${Care.NAMES[i]} ${when}.` +
+        (have ? ` Call ${mine[0]} to book a slot?` : " Find your service centre on the map and tap Mine next to it, so next time it's one tap to call."),
+      [
+        { text: 'Later', style: 'cancel' },
+        {
+          text: have ? 'Call' : 'Find one',
+          onPress: () => (have ? Linking.openURL('tel:' + mine[1].replace(/[^0-9+]/g, '')).catch(() => {}) : router.push('/map?go=service')),
+        },
+      ],
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // the clock screensaver: after a few idle minutes while parked (Extras.saverCheck)
+  const touchAt = useRef(Date.now());
+  const tripRef = useRef(trip);
+  tripRef.current = trip;
+  const [saver, setSaver] = useState(false);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const t = tripRef.current;
+      const parked = Date.now() - (t.last?.t ?? 0) > 10000 || t.kmh < 5;
+      if (Features.on(prefs, 'saver') && parked && Date.now() - touchAt.current > num(prefs, 'saverMin', 5) * 60000) setSaver(true);
+    }, 20000);
+    return () => clearInterval(id);
+  }, [prefs]);
+
+  // the weekly report, on the first parked start of a new week
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (Car.ready(prefs) && trip.kmh <= 3 && Weekly.due(prefs)) router.push('/report');
+    }, 3000);
+    return () => clearTimeout(t);
+    // once per dashboard visit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (!Car.ready(prefs)) return <Redirect href="/setup" />;
+
+  if (saver) {
+    const wake = () => {
+      touchAt.current = Date.now();
+      setSaver(false);
+    };
+    return (
+      <Pressable style={[styles.fill, styles.saver]} onPress={wake}>
+        <Text style={styles.saverTime}>{`${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')}`}</Text>
+        <Text style={styles.saverDate}>
+          {DAYS[now.getDay()]}  {now.getDate()} {MONTHS[now.getMonth()]}
+        </Text>
+        {weather.wx ? <Text style={[styles.saverNow, { color: look.accent }]}>{`${weather.wx.temp}°  ${weather.wx.text}`}</Text> : null}
+      </Pressable>
+    );
+  }
 
   if (nightDrive) {
     // after sunset while driving: big red speed, nothing else
@@ -86,6 +177,8 @@ export default function Home() {
       </Pressable>
     );
   }
+
+  if (layout) return <LayoutView layout={layout} />;
 
   const time = `${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')}`;
   const ampm = now.getHours() < 12 ? 'AM' : 'PM';
@@ -187,6 +280,18 @@ export default function Home() {
     </Box>
   );
 
+  const cabShare = Cab.targetShare(prefs, now.getTime());
+  const cabBox = Features.on(prefs, 'cab') ? (
+    <Box title="CAB" style={styles.flexBox} onPress={() => router.push('/cab')}>
+      <Text style={{ color: look.text, fontSize: 18 }}>{Cab.title(prefs, now.getTime()).replace(/^Cab\s+·\s+/, '')}</Text>
+      {cabShare >= 0 ? (
+        <View style={[styles.bar, { backgroundColor: look.edge }]}>
+          <View style={{ width: `${Math.round(cabShare * 100)}%`, height: '100%', backgroundColor: look.accent, borderRadius: 3 }} />
+        </View>
+      ) : null}
+    </Box>
+  ) : null;
+
   const fuelWord = Car.word(Car.fuel(prefs));
   const fuelBox = (
     <Box title={`${fuelWord.toUpperCase()} LOG`} style={styles.flexBox} onPress={() => router.push('/fuel')}>
@@ -220,6 +325,7 @@ export default function Home() {
           <Text style={[styles.dockText, { color: look.icons }]}>{label}</Text>
         </Pressable>
       ))}
+      {Features.on(prefs, 'voice') ? <MicButton size={40} aqi={weather.aqi} /> : null}
     </View>
   );
 
@@ -228,11 +334,13 @@ export default function Home() {
       {carBox}
       <View style={styles.col}>
         {clockBox}
+        <RoadAhead style={styles.flexBox} />
         {weatherBox}
       </View>
       <View style={styles.col}>
         {tripBox}
-        {fuelBox}
+        {cabBox ?? fuelBox}
+        {Features.on(prefs, 'news') ? <NewsBox style={styles.flexBox} /> : null}
       </View>
     </View>
   ) : (
@@ -242,15 +350,16 @@ export default function Home() {
         {clockBox}
         {weatherBox}
       </View>
+      <RoadAhead />
       <View style={styles.pair}>
         {tripBox}
-        {fuelBox}
+        {cabBox ?? fuelBox}
       </View>
     </View>
   );
 
   const content = (
-    <SafeAreaView style={styles.fill}>
+    <SafeAreaView style={styles.fill} onTouchStart={() => (touchAt.current = Date.now())}>
       {body}
       {dock}
     </SafeAreaView>
@@ -294,7 +403,12 @@ const styles = StyleSheet.create({
   time: { fontSize: 54, fontWeight: '300' },
   ampm: { fontSize: 18 },
   big: { fontSize: 34, fontWeight: '300' },
-  dock: { flexDirection: 'row', justifyContent: 'space-around', borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 10 },
+  saver: { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
+  saverTime: { color: '#C9CDD2', fontSize: 150, fontWeight: '200' },
+  saverDate: { color: '#7D838A', fontSize: 22 },
+  saverNow: { fontSize: 18, paddingTop: 26 },
+  bar: { height: 6, borderRadius: 3, marginTop: 10, overflow: 'hidden' },
+  dock: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 10 },
   dockItem: { paddingHorizontal: 12, paddingVertical: 6 },
   dockText: { fontSize: 16, fontWeight: '500' },
 });

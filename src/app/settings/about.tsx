@@ -11,7 +11,7 @@ export default function About() {
     <Screen title="About OpenRath">
       <Text style={p}>
         A free, open source home screen for car stereos. Rath (रथ) is Sanskrit for chariot. This is the React Native edition of
-        OpenRath 1.28.
+        OpenRath 1.30.
       </Text>
       <Heading>Where the data comes from</Heading>
       <Text style={p}>• Weather and air quality: Open-Meteo</Text>

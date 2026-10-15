@@ -1,8 +1,9 @@
 /**
- * The car profile (port of Car.java): brand, model, fuel and tank size, set once on the first
- * start. The name beside the logo, fuel words and expected mileage all follow it.
+ * The car profile (port of Car.java 1.30): brand, model, shape, fuel and tank size, set once on
+ * the first start. The name beside the logo, fuel words and expected mileage all follow it.
  */
-import type { Prefs } from './prefs.ts';
+import { colourPref, SHAPES } from './car3d.ts';
+import { num, type Prefs } from './prefs.ts';
 
 export const FUELS = ['petrol', 'diesel', 'cng', 'hybrid', 'ev'] as const;
 export const FUEL_NAMES = ['Petrol', 'Diesel', 'CNG', 'Petrol hybrid', 'Electric'];
@@ -77,17 +78,49 @@ export function idFor(n: string): string {
   return b.replace(/-+$/, '');
 }
 
-/** Save the profile from the setup screen. Picking Electric switches off the fuel features. */
+/** What the tank holds, litres (kg for CNG): the setup's answer, else 40. */
+export const tankL = (p: Prefs) => num(p, 'tankL', 40);
+
+/** The tank answer as saved: rounded, 5–120; 0 when empty or not a number (nothing is saved). */
+export function tankFor(v: string): number {
+  const t = v.trim();
+  const f = t === '' ? NaN : Number(t);
+  if (!Number.isFinite(f)) return 0;
+  const l = Math.round(f);
+  return l > 0 ? Math.max(5, Math.min(120, l)) : 0;
+}
+
+/**
+ * Save the profile from the setup screen (Car.save, with the 1.30 shape question). The shape
+ * goes to 'carShape' for the 3D car and 'carBody' ("suv" for SUV and MUV, else "car") for the
+ * car picture. Picking Electric switches off the fuel features.
+ */
 export function save(
   p: Prefs,
-  v: { brandId: string; brandName: string; model: string; fuel: string; tank: string },
+  v: { brandId: string; brandName: string; model: string; fuel: string; tank: string; shape?: string; colour?: string },
   setFeature: (id: string, on: boolean) => void,
 ): void {
   p.put('carBrand', v.brandId);
   p.put('carBrandName', v.brandName);
   p.put('carModel', v.model);
   p.put('fuel', v.fuel);
-  p.put('tank', v.tank);
+  if (v.model !== '') p.put('carName', nameFor(v.model));
+  const l = v.fuel === 'ev' ? 0 : tankFor(v.tank);
+  if (l > 0) p.put('tankL', String(l));
+  const si = v.shape == null ? -1 : (SHAPES as readonly string[]).indexOf(v.shape);
+  if (si >= 0) {
+    p.put('carShape', SHAPES[si]);
+    p.put('carBody', si >= 2 ? 'suv' : 'car');
+  }
+  if (v.colour) p.put('carColour', colourPref(v.colour));
   if (v.fuel === 'ev') for (const f of FUEL_FEATURES) setFeature(f, false);
   p.put('carSetup', 'yes');
+}
+
+/** One line for Settings > Car. */
+export function summary(p: Prefs): string {
+  const s = (brandName(p) + ' ' + model(p)).trim();
+  const f = fuel(p);
+  const i = (FUELS as readonly string[]).indexOf(f);
+  return (s === '' ? 'not set' : s) + ', ' + (i < 0 ? f : FUEL_NAMES[i]).toLowerCase();
 }

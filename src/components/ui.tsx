@@ -90,12 +90,15 @@ export function Field({
   onChange,
   numeric = false,
   placeholder,
+  secret = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   numeric?: boolean;
   placeholder?: string;
+  /** hide what is typed (a PIN) */
+  secret?: boolean;
 }) {
   const look = useLook();
   return (
@@ -105,6 +108,7 @@ export function Field({
         value={value}
         onChangeText={onChange}
         keyboardType={numeric ? 'decimal-pad' : 'default'}
+        secureTextEntry={secret}
         placeholder={placeholder}
         placeholderTextColor={look.textDim}
         style={[styles.input, { color: look.text, borderColor: look.edge, backgroundColor: look.panel }]}

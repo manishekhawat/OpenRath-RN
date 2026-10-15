@@ -6,6 +6,9 @@
 export interface Prefs {
   str(key: string, def: string): string;
   put(key: string, value: string): void;
+  /** every key and value, for profiles and backups */
+  all?(): Record<string, string>;
+  remove?(key: string): void;
 }
 
 export function num(p: Prefs, key: string, def: number): number {
@@ -19,6 +22,10 @@ export function memoryPrefs(init: Record<string, string> = {}): Prefs {
     str: (k, d) => (m.has(k) ? (m.get(k) as string) : d),
     put: (k, v) => {
       m.set(k, v);
+    },
+    all: () => Object.fromEntries(m),
+    remove: (k) => {
+      m.delete(k);
     },
   };
 }

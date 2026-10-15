@@ -8,6 +8,9 @@ import { useMemo, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Button, Field, Heading, Screen } from '../components/ui';
+import * as ChildLock from '../logic/childlock';
+import * as Features from '../logic/features';
+import { useDrive } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 
@@ -27,6 +30,8 @@ const DEFAULTS: App[] = [
 export default function Apps() {
   const { prefs, version } = usePrefs();
   const look = useLook();
+  const { trip } = useDrive();
+  const locked = ChildLock.apps(prefs);
   const apps = useMemo<App[]>(() => {
     try {
       return JSON.parse(prefs.str('apps', JSON.stringify(DEFAULTS)));
@@ -39,6 +44,7 @@ export default function Apps() {
 
   const open = (a: App) => {
     if (Platform.OS !== 'android') return Alert.alert('Opening other apps works on Android only');
+    if (ChildLock.blocked(prefs, a.pkg, trip.kmh, trip.prevAt)) return Alert.alert(ChildLock.SORRY);
     try {
       IntentLauncher.openApplication(a.pkg);
     } catch {
@@ -47,9 +53,12 @@ export default function Apps() {
   };
 
   const remove = (a: App) =>
-    Alert.alert(`Remove ${a.label}?`, undefined, [
-      { text: 'Keep', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => prefs.put('apps', JSON.stringify(apps.filter((x) => x.pkg !== a.pkg))) },
+    Alert.alert(a.label, undefined, [
+      ...(Features.on(prefs, 'childLock')
+        ? [{ text: locked.has(a.pkg) ? 'Unlock while moving' : 'Lock while moving', onPress: () => void ChildLock.toggle(prefs, a.pkg) }]
+        : []),
+      { text: 'Remove', style: 'destructive' as const, onPress: () => prefs.put('apps', JSON.stringify(apps.filter((x) => x.pkg !== a.pkg))) },
+      { text: 'Keep', style: 'cancel' as const },
     ]);
 
   return (
@@ -65,11 +74,12 @@ export default function Apps() {
             <Text style={[styles.initial, { color: look.accent }]}>{a.label.substring(0, 1)}</Text>
             <Text style={{ color: look.text, textAlign: 'center' }} numberOfLines={2}>
               {a.label}
+              {locked.has(a.pkg) ? ' 🔒' : ''}
             </Text>
           </Pressable>
         ))}
       </View>
-      <Text style={{ color: look.textDim, marginTop: 8 }}>Long-press an app to remove it.</Text>
+      <Text style={{ color: look.textDim, marginTop: 8 }}>Long-press an app to remove it, or to lock it while the car is moving (Child-lock in Features).</Text>
       <Heading>Add an app</Heading>
       <Field label="Name" value={label} onChange={setLabel} />
       <Field label="Package name (from the app's Play Store link, id=…)" value={pkg} onChange={setPkg} placeholder="com.example.app" />

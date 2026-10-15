@@ -1,13 +1,17 @@
 # OpenRath (React Native)
 
 A free, open source home screen for Android car stereos, rebuilt in React Native with Expo. It
-is the React Native edition of [OpenRath](https://github.com/) 1.28: a dashboard with your car
-and its live speed on a moving road, the clock, weather, a map with turn-by-turn guidance, a trip
-computer, a fuel log, service reminders, and speed limit and camera alerts.
+is the React Native edition of OpenRath 1.30: a dashboard with your car and its live speed on a
+moving road (or one of ten picture layouts), the clock, weather and news, a map with turn-by-turn
+guidance, a 360° view of your car, voice commands, a trip computer with a mileage coach, a fuel log
+and fuel-low planner, service reminders, speed limit and camera alerts, road helpers for highways,
+hills, fog and the monsoon, chores, kids' trip games, a documents wallet, accident help, cab driver
+tools, driver profiles, backups and a boot animation maker.
 
 *Rath* (रथ) is Sanskrit for chariot.
 
-What is ported so far, and what is still to come, is in [PORTING.md](PORTING.md).
+How it maps to the Android code, and the parts that still need native Android code, are in
+[PORTING.md](PORTING.md).
 
 ## Run it
 
@@ -30,13 +34,15 @@ weather and the map.
 
 ```
 src/
-  app/          screens (Expo Router): dashboard, setup, fuel, care, map, apps, settings
-  components/   themed boxes, rows, buttons, the moving road
+  app/          screens (Expo Router): dashboard, setup, map, 360 view, fuel, care, trips, tolls,
+                report, news, chores, kids, wallet, sos, cab/, bootart, apps, settings/
+  components/   themed boxes, rows, buttons, the moving road, road ahead, news, QR, mic, layouts
   logic/        everything with no screen, ported from the Java classes, with tests
-  state/        settings store, GPS and trip computer, weather
+  state/        settings store, GPS and the drive service, road helpers, trips, weather, look
   data/         built-in themes, picture layouts, car brands and models
   map/          the map page, generated from assets/map by `npm run map`
 assets/map/     the original Leaflet map page and its libraries
+assets/layouts/ the picture layouts' backgrounds, drawn by the Android project's art/scenes.py
 ```
 
 ## Licence

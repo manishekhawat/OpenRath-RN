@@ -1,6 +1,6 @@
 /**
  * Every optional feature, each with its own switch in Settings > Features (generated from
- * Features.java). `ported` marks the ones this React Native version already does; the rest are
+ * Features.java, version 1.30). `ported` marks the ones this React Native version already does; the rest are
  * listed so their switches and saved values carry over, and are shown as "coming" in Settings.
  */
 import type { Prefs } from './prefs.ts';
@@ -23,7 +23,7 @@ const F = (id: string, name: string, group: string, def: boolean, about: string)
   ported: PORTED.has(id),
 });
 
-export const PORTED = new Set(["aqi", "care", "fuelCheck", "fuelPrice", "holidayTraffic", "nightDrive", "parking", "rain", "road", "score", "speedAlerts", "startSummary", "weather"]);
+export const PORTED = new Set(["accel", "accidentHelp", "aqi", "backup", "bootArt", "bumps", "cab", "cabApps", "cabCng", "cabEarnings", "cabMeter", "cabNotes", "cabPapers", "cabPhrases", "cabQuiet", "cabSos", "cabSpots", "cabTarget", "care", "childLock", "coach", "commute", "fog", "fuelCheck", "fuelPlan", "fuelPrice", "gpx", "highway", "hill", "holidayTraffic", "hotspot", "kids", "lightsReminder", "monsoon", "news", "nightDrive", "overtake", "parkLink", "parkTimer", "parking", "profiles", "rain", "restStop", "road", "saver", "score", "serviceBooking", "serviceFinder", "speedAlerts", "split", "startSummary", "tollAhead", "tolls", "tripShare", "view360", "voice", "waits", "wallet", "wash", "weather", "weekly", "wrongWay", "zones"]);
 
 export const ALL: Feature[] = [
   F("road", "Moving road under the car", "Dashboard", true, "Dashes move with your speed"),
@@ -76,11 +76,13 @@ export const ALL: Feature[] = [
   F("parkPhoto", "Parking photo", "Driving", true, "A camera photo when you park, to find the car in a big lot (needs a camera)"),
   F("weekly", "Weekly report", "Driving", true, "On Sundays: km, time, petrol, tolls, score, best and worst drive"),
   F("hotspot", "Guest Wi-Fi", "Phone", true, "A QR code passengers scan to join the unit's hotspot"),
-  F("maker", "Stereo maker's services", "Radio and music", true, "On Topway units: FM in the radio box, Bluetooth calls and reverse gear through Topway's own apps. Off, or on other stereos: plain Android only (the radio app's controls, the system phone)"),
+  F("maker", "Stereo maker's services", "Radio and music", true, "Topway, FYT and MTCD/Joying units: FM in the radio box, Bluetooth calls, reverse gear and lights through the maker's own services. Off, or on other stereos: plain Android only (the radio app's controls, the system phone)"),
   F("soundProfiles", "Sound profiles", "Radio and music", false, "City, highway and night: equalizer and volume switch by themselves"),
   F("fog", "Fog mode", "Driving", true, "In thick fog: big speed, a slow guide and the next bend ahead"),
   F("accidentHelp", "Accident help", "Driving", false, "After a crash-like stop, calls your emergency contact unless you tap I'm OK"),
   F("holidayTraffic", "Holiday traffic warning", "Driving", true, "Before festival and long-weekend drives, warns of busy highways"),
+  F("view360", "360 view of your car", "Car", true, "Your car in 3D in its shape, colour and number plate, from any side; opens the stereo's 360 camera app when it has one"),
+  F("cam360Turn", "360 camera on turn signals", "Car", false, "Below 15 km/h the indicator opens the stereo's 360 camera app (needs the indicators set up in Car signals)"),
   F("care", "Service reminders", "Car", true, "Oil, tyres, service, insurance and PUC"),
   F("fuelCheck", "Fuel leak or theft check", "Car", true, "After a full tank: warns if the mileage dropped sharply"),
   F("wash", "Car wash reminder", "Car", true, "Every two weeks or as you set, only when no rain is due"),

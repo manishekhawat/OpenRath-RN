@@ -1,15 +1,19 @@
 /**
  * The fuel log (Fuel.add / Fuel.history): add a fill-up, see mileage per tank by the full-to-full
  * method, and delete a wrong entry. A sharp drop after a full tank raises the leak or theft check.
+ * Also the fuel-low planner's rows (petrol left, tank size, when to warn) and the month's tolls.
  */
+import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, Switch, Text, View } from 'react-native';
 
 import { Button, Field, Heading, Row, Screen } from '../components/ui';
+import * as Care from '../logic/care';
 import * as Car from '../logic/car';
 import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
 import * as Fuel from '../logic/fuel';
+import * as FuelPlan from '../logic/fuelplan';
 import { useDrive } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
@@ -34,6 +38,7 @@ export default function FuelLog() {
   const [rupees, setRupees] = useState('');
   const [odo, setOdo] = useState('');
   const [full, setFull] = useState(true);
+  const [tankEdit, setTankEdit] = useState<string | null>(null);
 
   const startAdding = () => {
     setLitres('');
@@ -75,6 +80,38 @@ export default function FuelLog() {
         <Stat label="Cost a km" value={stats.rupeesPerKm > 0 ? `₹${Fuel.fmt(stats.rupeesPerKm)}` : '–'} />
       </View>
       <Text style={{ color: look.textDim }}>Price: {Fuel.priceText(prefs)}</Text>
+      <Text style={{ color: look.textDim }}>
+        {stats.fills} fill-ups{Care.tollsThisMonth(prefs)}
+      </Text>
+
+      <Heading>Fuel-low planner</Heading>
+      <Row
+        name={`${Car.word(Car.fuel(prefs)).replace(/^./, (c) => c.toUpperCase())} left`}
+        value={Features.on(prefs, 'fuelPlan') ? FuelPlan.text(prefs, trip.odoKm) : 'off (switch it on in Settings > Features)'}
+      />
+      <Row name="Tank size" value={`${FuelPlan.tank(prefs)} ${unit === 'kg' ? 'kg' : 'litres'}`} onPress={() => setTankEdit(String(FuelPlan.tank(prefs)))} />
+      {tankEdit !== null ? (
+        <View>
+          <Field label={unit === 'kg' ? 'CNG cylinder, kg' : 'Fuel tank, litres'} value={tankEdit} onChange={setTankEdit} numeric />
+          <Button
+            label="Save"
+            kind="primary"
+            onPress={() => {
+              const v = parseFloat(tankEdit);
+              if (!(v > 0)) return Alert.alert('Enter the tank size as a number');
+              FuelPlan.setTank(prefs, v);
+              setTankEdit(null);
+            }}
+          />
+          <Button label="Cancel" onPress={() => setTankEdit(null)} />
+        </View>
+      ) : null}
+      <Row
+        name={`Warn when the ${Car.word(Car.fuel(prefs))} is below`}
+        value={`${FuelPlan.warnKm(prefs)} km of driving (tap to change)`}
+        onPress={() => prefs.put('fuelWarnKm', String(FuelPlan.nextWarnKm(FuelPlan.warnKm(prefs))))}
+      />
+      <Row name="Tolls" value="Add a toll payment; weekly and monthly spending" onPress={() => router.push('/tolls')} />
 
       {adding ? (
         <View style={{ marginTop: 16 }}>

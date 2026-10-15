@@ -1,7 +1,12 @@
 /**
  * Theme packs (port of Theme.java): a theme.json sets colours and switches; anything it leaves
  * out falls back to the built-in look. See THEMES.md in the original source for the format.
+ * Five themes are built in (ids start with @); others are folders of plain files, imported from a
+ * .zip of the folder or a lone theme.json (see src/state/look.ts for where they are kept).
  */
+import { unzipSync } from 'fflate';
+
+import type { Prefs } from './prefs.ts';
 
 export interface ThemeJson {
   name?: string;
@@ -35,6 +40,8 @@ export interface Look {
   welcomeTitle: string;
   /** what was wrong with the theme file, for Settings; "" when it was fine */
   problem: string;
+  /** the pack's background.jpg or .png, cropped to fill the screen; absent for none */
+  backgroundImage?: string;
 }
 
 /** The car-paint accent used by themes that don't set their own. */
@@ -90,4 +97,107 @@ export function lookOf(json: ThemeJson, defAccent = PAINT_ACCENT, defEdge = PAIN
     welcomeTitle: json.welcomeTitle ?? 'WELCOME',
     problem,
   };
+}
+
+// ------------------------------------------------------------------ packs
+
+export const DEFAULT = '@magma-grey';
+
+/** A theme the owner can choose: built in, or a folder of their own. */
+export interface Pack {
+  id: string;
+  name: string;
+  author: string;
+  description: string;
+  json: ThemeJson;
+  /** the folder name for an imported theme; null for a built-in one */
+  folder: string | null;
+}
+
+export function packOf(id: string, json: ThemeJson, folder: string | null): Pack {
+  return {
+    id,
+    json,
+    folder,
+    name: typeof json.name === 'string' ? json.name : id.startsWith('@') ? id.substring(1) : id,
+    author: typeof json.author === 'string' ? json.author : '',
+    description: typeof json.description === 'string' ? json.description : '',
+  };
+}
+
+/** A pack whose theme.json couldn't be read: listed, with the mistake as its description. */
+export function brokenPack(folder: string, why: string): Pack {
+  return packOf(folder, { name: folder, description: 'theme.json has a mistake: ' + why }, folder);
+}
+
+/** The line under a theme's picture in the gallery. */
+export function about(p: Pack): string {
+  let s = p.description;
+  if (p.folder != null && p.author) s = (s ? s + '  ·  ' : '') + 'by ' + p.author;
+  if (p.folder != null) s = (s ? s + '  ·  ' : '') + 'themes/' + p.folder;
+  return s;
+}
+
+/**
+ * The chosen theme's id ("themePack", as in the Android version, where "theme" is the car-paint
+ * accent). The old built-in name from 1.10 means Magma Grey; an id kept in "theme" by the first
+ * React Native builds still counts.
+ */
+export function chosen(p: Prefs): string {
+  const want = p.str('themePack', '');
+  if (want === '' || want === 'Built-in Dzire chrome') {
+    const old = p.str('theme', '');
+    return want === '' && old.startsWith('@') ? old : DEFAULT;
+  }
+  return want;
+}
+
+export function choose(p: Prefs, id: string): void {
+  p.put('themePack', id);
+}
+
+/** theme.json's text as a theme; throws with what is wrong. */
+export function parseJson(text: string): ThemeJson {
+  const j = JSON.parse(text.replace(/^\uFEFF/, ''));
+  if (!j || typeof j !== 'object' || Array.isArray(j)) throw new Error('theme.json should be an object like {"name": ...}');
+  return j as ThemeJson;
+}
+
+/** A safe folder name from a file name: "Oxford Blue (1).zip" -> "Oxford Blue _1_". */
+export function folderName(file: string): string {
+  const n = file.replace(/\.(zip|json)$/i, '').replace(/[^A-Za-z0-9 _.-]/g, '_').replace(/^\.+/, '');
+  return n === '' ? 'theme' : n;
+}
+
+/** Pictures and fonts bigger than this are skipped, as in the Android version. */
+const MAX_FILE = 8 * 1024 * 1024;
+
+/**
+ * The files of a theme .zip, flat: a zip of the folder itself has them one level down. Throws
+ * "no theme.json in <name>" when there is none.
+ */
+export function zipFiles(bytes: Uint8Array, zipName: string): Record<string, Uint8Array> {
+  let entries: Record<string, Uint8Array>;
+  try {
+    entries = unzipSync(bytes);
+  } catch {
+    throw new Error(zipName + " isn't a .zip file");
+  }
+  let prefix = '';
+  for (const n of Object.keys(entries)) {
+    if (n.endsWith('theme.json')) {
+      prefix = n.substring(0, n.length - 'theme.json'.length);
+      break;
+    }
+  }
+  const out: Record<string, Uint8Array> = {};
+  for (const [n, b] of Object.entries(entries)) {
+    if (n.endsWith('/') || !n.startsWith(prefix)) continue;
+    const rel = n.substring(prefix.length);
+    if (rel === '' || rel.includes('/') || rel.includes('..')) continue; // flat folder only
+    if (b.length > MAX_FILE) continue;
+    out[rel] = b;
+  }
+  if (!out['theme.json']) throw new Error('no theme.json in ' + zipName);
+  return out;
 }

@@ -1,9 +1,10 @@
 /**
  * Looking after the car (port of Care.java): service reminders by distance from the odometer or
- * by date, and the odometer itself.
+ * by date, the odometer itself, toll spending, and the weekly and monthly trip history.
  */
-import { log, suggestOdo } from './fuel.ts';
+import { fmt, log, suggestOdo } from './fuel.ts';
 import { num, type Prefs } from './prefs.ts';
+import { dayKey, type History } from './trip.ts';
 
 export const ITEMS = ['oil', 'tyres', 'alignment', 'service', 'insurance', 'puc'] as const;
 export const NAMES = [
@@ -107,4 +108,134 @@ export function bookingDue(p: Prefs, odoKm: number): number {
     }
   }
   return best;
+}
+
+// ------------------------------------------------------------------ tolls
+
+/** A toll paid: when (ms) and rupees. Fuel fill-ups have the same two fields, so spent() adds either. */
+export interface Paid {
+  t: number;
+  rs: number;
+}
+
+export const TOLLS_KEY = 'tolls';
+
+export function tolls(p: Prefs): Paid[] {
+  try {
+    const a = JSON.parse(p.str(TOLLS_KEY, '[]'));
+    return Array.isArray(a) ? a.filter((e) => e && typeof e === 'object') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function setTolls(p: Prefs, l: Paid[]): void {
+  p.put(TOLLS_KEY, JSON.stringify(l));
+}
+
+export function addToll(p: Prefs, rs: number, now: number = Date.now()): void {
+  if (!Number.isFinite(rs) || rs <= 0) return;
+  setTolls(p, [...tolls(p), { t: now, rs }]);
+}
+
+/** Rupees spent on tolls (or fuel) between two times, `from` included. */
+export function spent(l: { t?: number; rs?: number }[], from: number, to: number): number {
+  let s = 0;
+  for (const e of l) {
+    const t = Number(e.t ?? 0);
+    const rs = Number(e.rs ?? 0);
+    if (t >= from && t < to && Number.isFinite(rs)) s += rs;
+  }
+  return s;
+}
+
+/** "  ·  tolls ₹450 this month" for the fuel box's foot, or "". */
+export function tollsThisMonth(p: Prefs, now: Date = new Date()): string {
+  const rs = spent(tolls(p), new Date(now.getFullYear(), now.getMonth(), 1).getTime(), Number.MAX_SAFE_INTEGER);
+  return rs > 0 ? `  ·  tolls ₹${Math.round(rs)} this month` : '';
+}
+
+// ------------------------------------------------------------------ trip history
+
+export interface Period {
+  name: string;
+  /** midnight on the first day, ms */
+  from: number;
+  /** midnight after the last day, ms (not included) */
+  to: number;
+}
+
+/** This week (from Sunday), last week, this month and last month, up to the end of today. */
+export function periods(now: Date = new Date()): Period[] {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const d = now.getDate();
+  const weekStart = new Date(y, m, d - now.getDay());
+  const lastWeek = new Date(y, m, d - now.getDay() - 7);
+  const monthStart = new Date(y, m, 1);
+  const lastMonth = new Date(y, m - 1, 1);
+  const tomorrow = new Date(y, m, d + 1);
+  return [
+    { name: 'This week', from: weekStart.getTime(), to: tomorrow.getTime() },
+    { name: 'Last week', from: lastWeek.getTime(), to: weekStart.getTime() },
+    { name: 'This month', from: monthStart.getTime(), to: tomorrow.getTime() },
+    { name: 'Last month', from: lastMonth.getTime(), to: monthStart.getTime() },
+  ];
+}
+
+export interface Totals {
+  km: number;
+  sec: number;
+  fuelRs: number;
+  tollRs: number;
+  /** the average of the days' scores (days over 1 km), or -1 */
+  score: number;
+}
+
+/** Distance, time and score from the day-by-day history between two midnights. */
+export function driven(hist: History, from: number, to: number): { km: number; sec: number; score: number } {
+  let km = 0;
+  let sec = 0;
+  let scoreSum = 0;
+  let scored = 0;
+  const start = new Date(from);
+  for (let d = new Date(start.getFullYear(), start.getMonth(), start.getDate()); d.getTime() < to; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) {
+    const r = hist[dayKey(d.getTime())];
+    if (!Array.isArray(r)) continue;
+    km += Number(r[0]) || 0;
+    sec += Number(r[1]) || 0;
+    if ((Number(r[0]) || 0) > 1 && r.length > 5) {
+      scoreSum += Number(r[5]) || 0;
+      scored++;
+    }
+  }
+  return { km, sec, score: scored > 0 ? Math.trunc(scoreSum / scored) : -1 };
+}
+
+/** One period's totals: driving from the history, money from the fuel log and the tolls. */
+export function totals(p: Prefs, hist: History, from: number, to: number): Totals {
+  const d = driven(hist, from, to);
+  return { ...d, fuelRs: spent(log(p), from, to), tollRs: spent(tolls(p), from, to) };
+}
+
+/** "This week: 120.5 km, 3 h 10 min, fuel ₹2000, tolls ₹150, score 88" */
+export function periodLine(name: string, t: Totals): string {
+  let b = `${name}: ${fmt(t.km)} km, ${Math.floor(t.sec / 3600)} h ${Math.floor((t.sec % 3600) / 60)} min`;
+  if (t.fuelRs > 0) b += `, fuel ₹${Math.round(t.fuelRs)}`;
+  if (t.tollRs > 0) b += `, tolls ₹${Math.round(t.tollRs)}`;
+  if (t.score >= 0) b += `, score ${t.score}`;
+  return b;
+}
+
+/**
+ * The history with today's running figures added (the drive service only files a day when it
+ * closes): row = [km, seconds, harsh brakes, hard starts, seconds over the limit, score].
+ */
+export function withToday(hist: History, day: string, row: number[]): History {
+  return { ...hist, [day]: row };
+}
+
+/** "Today's driving score: 92 / 100 (1 harsh brakes, 2 hard starts, 0 min over the limit)" */
+export function scoreLine(score: number, brakes: number, accels: number, speedSec: number): string {
+  return `Today's driving score: ${score} / 100 (${brakes} harsh brakes, ${accels} hard starts, ${Math.floor(speedSec / 60)} min over the limit)`;
 }
