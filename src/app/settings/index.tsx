@@ -20,6 +20,7 @@ import { LAYOUTS } from '../../components/LayoutView';
 import { Button, Field, PickList, Row, Screen, toast } from '../../components/ui';
 import * as Car from '../../logic/car';
 import * as Car3D from '../../logic/car3d';
+import * as Care from '../../logic/care';
 import * as ChildLock from '../../logic/childlock';
 import * as Chores from '../../logic/chores';
 import * as Dashcam from '../../logic/dashcam';
@@ -34,9 +35,11 @@ import { num, type Prefs } from '../../logic/prefs';
 import * as Profiles from '../../logic/profiles';
 import * as Reports from '../../logic/reports';
 import * as S from '../../logic/settings';
+import * as Trip from '../../logic/trip';
 import * as Units from '../../logic/units';
 import * as Valet from '../../logic/valet';
 import * as Cam from '../../state/camera';
+import { useDrive } from '../../state/drive';
 import { themeName, useLook } from '../../state/look';
 import { usePrefs } from '../../state/prefs';
 
@@ -70,6 +73,7 @@ function appName(p: Prefs, key: string): string {
 export default function Settings() {
   const { prefs } = usePrefs();
   const look = useLook();
+  const { trip } = useDrive();
   const { width } = useWindowDimensions();
   const params = useLocalSearchParams<{ section?: string }>();
   const wide = width >= 760;
@@ -281,7 +285,7 @@ export default function Settings() {
   });
   add('Driving', 'Road helpers', 'highway, fog, breaks, learnt spots and the 0–100 km/h timer', '/settings/road');
   const fills = Fuel.stats(Fuel.log(prefs)).fills;
-  add('Driving', 'Trips, fuel and tolls', fills === 0 ? t('no fill-ups yet') : f('%1$s fill-ups', String(fills)), '/trips');
+  add('Driving', 'Trips, fuel and tolls', Care.tripRow(trip.todayKm, Trip.score(trip), fills), '/tripmenu');
   add('Driving', 'Toll estimate per plaza', f('₹%1$s (for route estimates)', String(num(prefs, 'tollRate', 100))), () =>
     askText({
       title: 'Typical car toll per plaza (₹)',

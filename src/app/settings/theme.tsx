@@ -69,7 +69,7 @@ export default function ThemeScreen() {
   };
 
   return (
-    <Screen title={t('Themes')}>
+    <Screen title="Themes">
       {look.problem ? <Text style={{ color: '#E5484D', marginBottom: 10 }}>{look.problem}</Text> : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
         {packs.map((p) => {
@@ -103,14 +103,9 @@ export default function ThemeScreen() {
         })}
       </View>
 
-      <Heading>{t('Theme changes by itself')}</Heading>
-      <Row
-        name={t('Theme changes by itself')}
-        value={t(autoOn ? 'on' : 'off')}
-        right={<Text style={{ color: look.accent, fontSize: 18 }}>{autoOn ? '✓' : ''}</Text>}
-        onPress={() => Features.set(prefs, 'autoTheme', !autoOn)}
-      />
-      <Row name={f('At night: %1$s', nameOf(packs, nightTheme))} value={t('Which theme?')} onPress={() => setPickingNight(!pickingNight)} />
+      <Heading>Theme changes by itself</Heading>
+      <Row name="Theme changes by itself" value="A theme for the night" on={autoOn} onPress={() => Features.set(prefs, 'autoTheme', !autoOn)} />
+      <Row name={f('At night: %1$s', nameOf(packs, nightTheme))} value="Which theme?" chevron onPress={() => setPickingNight(!pickingNight)} />
       {pickingNight ? (
         <>
           <Row
@@ -133,13 +128,13 @@ export default function ThemeScreen() {
         </>
       ) : null}
 
-      <Heading>{t('Your own themes')}</Heading>
+      <Heading>Your own themes</Heading>
       <Text style={{ color: look.textDim, marginBottom: 8 }}>
         {t(
           'A theme is a folder with a theme.json and any pictures. Zip the folder to share it. Add one from a .zip or a theme.json file; long-press an added theme to remove it.',
         )}
       </Text>
-      <Button label={t('Add a theme from a file')} kind="primary" onPress={pickTheme} />
+      <Button label="Add a theme from a file" kind="primary" onPress={pickTheme} />
     </Screen>
   );
 }

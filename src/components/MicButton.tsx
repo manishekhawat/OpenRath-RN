@@ -1,19 +1,27 @@
 /**
- * Voice commands (HomeActivity.voiceSearch, heard and run in the Android version): the mic
+ * Voice commands (HomeVoice.java and HomeActivity.voiceSearch in the Android version): the mic
  * button opens Android's speech recogniser, Voice.parse turns what was heard into a command,
  * and this file acts on it: FM, calls to favourites, the map's home, office, petrol pump and
- * rest stops, the news, documents, games, cab tools, the 360 view. Anything that isn't a command
- * is searched for on the map. The map page's own mic uses listen() and runVoice() too.
+ * rest stops, the news, documents, games, cab tools, the 360 view, and since 1.40 questions
+ * about the car ("how far today?"). Anything that isn't a command is searched for on the map.
+ * The map page's own mic uses listen() and runVoice() too.
+ *
+ * The button is the dock's round mic; FloatingMic is the same button to drag anywhere on the
+ * dashboard, which is where Settings' one Mic button setting ('micPlace', 1.35) puts it: "map"
+ * (only the map's own mic), "float" (a floating button) or "apps" (also over other apps, which
+ * needs an overlay permission and so native code).
  */
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Linking from 'expo-linking';
 import { router, type Href } from 'expo-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Svg, { Path, Rect } from 'react-native-svg';
-import { Alert, Platform, Pressable, StyleSheet, ToastAndroid, type StyleProp, type ViewStyle } from 'react-native';
+import { Alert, PanResponder, Platform, Pressable, StyleSheet, ToastAndroid, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 
 import * as Air from '../logic/air';
+import * as CarAnswer from '../logic/caranswer';
 import * as Features from '../logic/features';
+import { f, t } from '../logic/i18n';
 import type { Prefs } from '../logic/prefs';
 import * as Voice from '../logic/voice';
 import * as Cam from '../state/camera';
@@ -35,8 +43,8 @@ export interface VoiceCtx {
 
 /** A short message at the bottom of the screen (Android's Toast). */
 export function toast(text: string, long = false) {
-  if (Platform.OS === 'android') ToastAndroid.show(text, long ? ToastAndroid.LONG : ToastAndroid.SHORT);
-  else Alert.alert(text);
+  if (Platform.OS === 'android') ToastAndroid.show(t(text), long ? ToastAndroid.LONG : ToastAndroid.SHORT);
+  else Alert.alert(t(text));
 }
 
 /**
@@ -54,7 +62,7 @@ export async function listen(prefs: Prefs): Promise<string[] | null> {
     const r = await IntentLauncher.startActivityAsync('android.speech.action.RECOGNIZE_SPEECH', {
       extra: {
         'android.speech.extra.LANGUAGE_MODEL': 'free_form',
-        'android.speech.extra.PROMPT': commands ? 'Say a command or a place' : 'Where to?',
+        'android.speech.extra.PROMPT': t(commands ? 'Say a command or a place' : 'Where to?'),
         'android.speech.extra.LANGUAGE': lang,
         'android.speech.extra.LANGUAGE_PREFERENCE': lang,
         'android.speech.extra.MAX_RESULTS': 5,
@@ -109,7 +117,7 @@ function openApp(prefs: Prefs, key: string, name: string): boolean {
       // not installed any more: choose again
     }
   }
-  toast('Choose the app for ' + name + ' in Apps', true);
+  toast(f('Choose the app for %1$s in Apps', t(name)), true);
   return false;
 }
 
@@ -132,7 +140,7 @@ export function run(cmd: Voice.Command, ctx: VoiceCtx) {
     case 'fm': {
       // the stereo's FM chip needs the maker's services (not in this version): the radio app plays it
       if (cmd.arg !== '') p.put('fmFreq', cmd.arg);
-      if (openApp(p, 'media:radio', 'Radio')) toast('FM ' + (cmd.arg === '' ? 'radio' : cmd.arg));
+      if (openApp(p, 'media:radio', 'Radio')) toast(cmd.arg === '' ? t('FM radio') : 'FM ' + cmd.arg);
       return;
     }
     case 'call': {
@@ -150,11 +158,11 @@ export function run(cmd: Voice.Command, ctx: VoiceCtx) {
       }
       if (num === '') {
         say("I couldn't find " + cmd.arg + ' in your favourites');
-        toast('No favourite called "' + cmd.arg + '". Add one in Settings > Phone and messages.', true);
+        toast(f('No favourite called "%1$s". Add one in Settings > Phone and messages.', cmd.arg), true);
       } else {
         Linking.openURL('tel:' + num.replace(/[^0-9+]/g, ''))
-          .then(() => toast('Calling ' + who + '…'))
-          .catch((e) => toast("Couldn't call: " + String(e?.message ?? e)));
+          .then(() => toast(f('Calling %1$s…', who)))
+          .catch((e) => toast(f("Couldn't call: %1$s", String(e?.message ?? e))));
       }
       return;
     }
@@ -218,7 +226,7 @@ export function run(cmd: Voice.Command, ctx: VoiceCtx) {
     case 'cab':
       return go('/cab');
     case 'sos':
-      if (cabOn(p, 'cabSos')) go('/sos');
+      if (cabOn(p, 'cabSos')) go('/cab/sos');
       else toast('Turn on One-tap SOS in Settings > Cab driver', true);
       return;
     case 'meter':
@@ -232,17 +240,30 @@ export function run(cmd: Voice.Command, ctx: VoiceCtx) {
     case 'earnings': {
       if (cabOn(p, 'cabEarnings')) go({ pathname: '/cab', params: { open: 'earnings', speak: '1' } });
       else {
-        const t = 'Turn on the earnings log in Settings > Cab driver.';
-        toast(t, true);
-        say(t);
+        const text = 'Turn on the earnings log in Settings > Cab driver.';
+        toast(text, true);
+        say(text);
       }
       return;
     }
     case 'aqi': {
       const aqi = ctx.aqi ?? -1;
-      const t = aqi < 0 ? "The air quality isn't known yet." : 'The air quality is ' + Air.band(aqi).toLowerCase() + ', A Q I ' + aqi + '.';
-      toast(t, true);
-      say(t);
+      const spoken = aqi < 0 ? "The air quality isn't known yet." : 'The air quality is ' + Air.band(aqi).toLowerCase() + ', A Q I ' + aqi + '.';
+      toast(aqi < 0 ? t("The air quality isn't known yet.") : f('The air quality is %1$s, AQI %2$s.', t(Air.band(aqi)).toLowerCase(), aqi), true);
+      say(spoken);
+      return;
+    }
+    case 'ask': {
+      // "ask the car": the trip computer answers how far today; the engine answers need an OBD
+      // adapter, which needs native Bluetooth or Wi-Fi code (see PORTING.md), so they say so
+      if (!Features.on(p, 'askCar')) {
+        toast('Turn on Ask the car in Settings, Car', true);
+        return;
+      }
+      const trip = Engine.snapshot().trip;
+      const answer = CarAnswer.answer(cmd.arg, CarAnswer.car({ todayKm: trip.todayKm, todaySec: trip.todaySec }));
+      toast(answer, true);
+      say(answer);
       return;
     }
     case 'music':
@@ -302,7 +323,17 @@ export function openCam(p: Prefs): boolean {
 }
 
 /** A round mic button for the dashboard: tap, speak, and it's done. */
-export default function MicButton({ style, size = 56, aqi }: { style?: StyleProp<ViewStyle>; size?: number; aqi?: number }) {
+export default function MicButton({
+  style,
+  size = 56,
+  aqi,
+  onLayout,
+}: {
+  style?: StyleProp<ViewStyle>;
+  size?: number;
+  aqi?: number;
+  onLayout?: (e: LayoutChangeEvent) => void;
+}) {
   const { prefs } = usePrefs();
   const look = useLook();
   const [busy, setBusy] = useState(false);
@@ -320,8 +351,9 @@ export default function MicButton({ style, size = 56, aqi }: { style?: StyleProp
   return (
     <Pressable
       onPress={onPress}
+      onLayout={onLayout}
       accessibilityRole="button"
-      accessibilityLabel="Voice command"
+      accessibilityLabel={t('Voice command')}
       hitSlop={8}
       style={[
         styles.mic,
@@ -337,6 +369,113 @@ export default function MicButton({ style, size = 56, aqi }: { style?: StyleProp
   );
 }
 
+/** Where the floating mic sits ('micPlace'): "map", "float" or "apps" (Features.micPlace). */
+export const micPlace = Features.micPlace;
+
+/** The floating mic's size, as the Android version's 64 dp button. */
+export const FLOAT_SIZE = 64;
+
+/**
+ * The same mic button, to drag anywhere over the dashboard (Floaters.Mic): it starts where it was
+ * left ('micX', 'micY', as a share of the screen) and a drag of more than 10 dp moves it instead
+ * of listening. Shown when the Mic button setting is "float" or "apps"; "apps" also put it over
+ * other apps in the Android version, which needs the overlay permission and so native code, so
+ * here it stays on OpenRath's own screens.
+ */
+export function FloatingMic({ aqi }: { aqi?: number }) {
+  const { prefs } = usePrefs();
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  const [at, setAt] = useState<[number, number] | null>(null);
+  const spot = useRef<[number, number]>([0, 0]);
+  const start = useRef<[number, number]>([0, 0]);
+  const dragged = useRef(false);
+  const busy = useRef(false);
+
+  const share = () => {
+    let fx = 0.94;
+    let fy = 0.8;
+    const x = parseFloat(prefs.str('micX', '0.94'));
+    const y = parseFloat(prefs.str('micY', '0.80'));
+    if (Number.isFinite(x)) fx = x;
+    if (Number.isFinite(y)) fy = y;
+    return [fx, fy] as [number, number];
+  };
+
+  const place = (w: number, h: number) => {
+    const [fx, fy] = share();
+    const p = Voice.place(fx, fy, w, h, FLOAT_SIZE);
+    spot.current = p;
+    setAt(p);
+  };
+
+  const pan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        start.current = spot.current;
+        dragged.current = false;
+      },
+      onPanResponderMove: (_e, g) => {
+        if (Math.abs(g.dx) + Math.abs(g.dy) > 10) dragged.current = true;
+        if (!dragged.current) return;
+        const w = boxRef.current.w;
+        const h = boxRef.current.h;
+        const p: [number, number] = [
+          Math.max(0, Math.min(w - FLOAT_SIZE, start.current[0] + g.dx)),
+          Math.max(0, Math.min(h - FLOAT_SIZE, start.current[1] + g.dy)),
+        ];
+        spot.current = p;
+        setAt(p);
+      },
+      onPanResponderRelease: async () => {
+        const w = boxRef.current.w;
+        const h = boxRef.current.h;
+        if (dragged.current && w > 0 && h > 0) {
+          // where it was left, as a share of the screen, so it comes back there
+          prefs.put('micX', ((spot.current[0] + FLOAT_SIZE / 2) / w).toFixed(3));
+          prefs.put('micY', ((spot.current[1] + FLOAT_SIZE / 2) / h).toFixed(3));
+          return;
+        }
+        if (busy.current) return;
+        busy.current = true;
+        try {
+          heard(await listen(prefsRef.current), { prefs: prefsRef.current, aqi: aqiRef.current });
+        } finally {
+          busy.current = false;
+        }
+      },
+    }),
+  ).current;
+
+  // the handlers above are made once, so they read the latest values through these
+  const boxRef = useRef(box);
+  boxRef.current = box;
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
+  const aqiRef = useRef(aqi);
+  aqiRef.current = aqi;
+
+  const onLayout = (e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width === box.w && height === box.h) return;
+    setBox({ w: width, h: height });
+    place(width, height);
+  };
+
+  return (
+    <View pointerEvents="box-none" style={StyleSheet.absoluteFill} onLayout={onLayout}>
+      {at ? (
+        <View {...pan.panHandlers} style={[styles.float, { left: at[0], top: at[1], width: FLOAT_SIZE, height: FLOAT_SIZE }]}>
+          <View pointerEvents="none">
+            <MicButton size={FLOAT_SIZE} />
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   mic: { alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  float: { position: 'absolute' },
 });

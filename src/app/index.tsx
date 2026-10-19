@@ -231,7 +231,8 @@ export default function Home() {
   const carName = Car.name(prefs);
   // 1.42: no greeting line until the owner types their name
   const owner = prefs.str('ownerName', '').trim();
-  const stopped = Features.on(prefs, 'stopSummary') ? drive.stopped : null;
+  // the engine fills this in after 5 seconds at a standstill, when stopSummary is on
+  const stopped = drive.stopped;
 
   const carBox = (
     <TapBox style={landscape ? { flex: 1.4 } : { height: 300 }} onPress={() => router.push('/map')} onLongPress={() => router.push('/settings')}>
