@@ -22,6 +22,8 @@
     },
     "android": {
       "package": "org.openrath.rn",
+      "versionCode": 142,
+      "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#000000",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -34,7 +36,6 @@
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "WAKE_LOCK",
-        "CALL_PHONE",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
         "FOREGROUND_SERVICE_LOCATION",
@@ -43,7 +44,12 @@
         "RECORD_AUDIO",
         "READ_CALENDAR",
         "VIBRATE",
-        "ACCESS_WIFI_STATE"
+        "ACCESS_WIFI_STATE",
+        "QUERY_ALL_PACKAGES",
+        "POST_NOTIFICATIONS"
+      ],
+      "blockedPermissions": [
+        "android.permission.WRITE_CALENDAR"
       ],
       "intentFilters": [
         {
@@ -61,6 +67,14 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "backgroundColor": "#000000",
+          "imageWidth": 200
+        }
+      ],
       [
         "expo-location",
         {
