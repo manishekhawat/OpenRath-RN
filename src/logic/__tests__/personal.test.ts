@@ -11,7 +11,9 @@ import { test } from 'node:test';
 import { strToU8, zipSync } from 'fflate';
 
 import * as backup from '../backup.ts';
+import * as car from '../car.ts';
 import * as features from '../features.ts';
+import * as fuel from '../fuel.ts';
 import * as layouts from '../layouts.ts';
 import { memoryPrefs } from '../prefs.ts';
 import * as profiles from '../profiles.ts';
@@ -178,13 +180,14 @@ test('profiles: snapshots from the Android version load as text', () => {
 });
 
 test('backup: the Android format, both ways', () => {
-  const p = memoryPrefs({ carModel: 'Dzire', warnSpeed: '80', swapped: 'true', fuel: '[]' });
+  const p = memoryPrefs({ carModel: 'Dzire', warnSpeed: '80', swapped: 'true', fuelLog: '[]' });
   const b = backup.build(p, 1000, { trip: { day: '2026-10-15', todayKm: 12.5, odoKm: 4000, park: null, lat: 0, lon: 0 }, history: { '2026-10-14': [10, 600, 0, 0, 0, 98] } });
   assert.equal(b.app, 'OpenRath');
   assert.equal(b.format, 1);
-  assert.deepEqual(b.prefs.home.carModel, ['s', 'Dzire']);
-  assert.deepEqual(b.prefs.home.warnSpeed, ['i', 80], 'Android keeps it as a number');
+  assert.deepEqual(b.prefs.home['x:carModel'], ['s', 'Dzire'], 'Android keeps its generic settings under x:');
+  assert.deepEqual(b.prefs.home.warnSpeed, ['i', 80], 'a named setting has no prefix, and Android keeps it as a number');
   assert.deepEqual(b.prefs.home.swapped, ['b', true]);
+  assert.deepEqual(b.prefs.home.fuel, ['s', '[]'], 'the fill-up log is "fuel" in a backup, as Android names it');
   assert.deepEqual(b.prefs.drive.dayKm, ['f', 12.5]);
   assert.ok(!('player' in b.prefs), "the Android player's settings are left alone");
   const bytes = backup.zip(b, { 'car.png': new Uint8Array([1, 2]), '../evil.png': new Uint8Array([3]) });
@@ -207,7 +210,7 @@ test('backup: one made by the Android app', () => {
     format: 1,
     made: 5,
     prefs: {
-      home: { alerts: ['b', false], dimLevel: ['f', 0.5], saverMin: ['l', 5], fav: ['ss', ['a', 'b']], 'feat:eq': ['s', 'on'], odd: ['x', 1] },
+      home: { alerts: ['b', false], 'x:dimLevel': ['f', 0.5], 'x:saverMin': ['l', 5], 'x:fav': ['ss', ['a', 'b']], 'x:feat:eq': ['s', 'on'], 'x:odd': ['x', 1] },
       player: { song: ['i', 3] },
       drive: { odo: ['f', 1234.5], parkLat: ['f', 28.6], parkLon: ['f', 77.2], parkAt: ['l', 99], hist: ['s', '{"2026-01-01":[1,2,3,4,5,6]}'] },
     },
@@ -229,9 +232,9 @@ test('backup: one made by the Android app', () => {
   // and back: the types come back as Android had them
   const again = backup.build(p, 6);
   assert.deepEqual(again.prefs.home.alerts, ['b', false]);
-  assert.deepEqual(again.prefs.home.dimLevel, ['f', 0.5]);
-  assert.deepEqual(again.prefs.home.saverMin, ['l', 5]);
-  assert.deepEqual(again.prefs.home.fav, ['ss', ['a', 'b']]);
+  assert.deepEqual(again.prefs.home['x:dimLevel'], ['f', 0.5]);
+  assert.deepEqual(again.prefs.home['x:saverMin'], ['l', 5]);
+  assert.deepEqual(again.prefs.home['x:fav'], ['ss', ['a', 'b']]);
   assert.ok(!(backup.TYPES_KEY in again.prefs.home));
   assert.throws(() => backup.unzip(zipSync({ 'other.txt': strToU8('hi') })), /not an OpenRath backup/);
   assert.throws(() => backup.unzip(strToU8('not a zip')), /not an OpenRath backup/);
@@ -291,13 +294,13 @@ test('backup: a restore writes only what the settings screens would have accepte
 
   // a .zip handed to a driver: each doctored value is left out and the one here now is kept
   const doctored = JSON.parse(JSON.stringify(b)) as backup.BackupJson;
-  doctored.prefs.home.upiId = ['s', 'thief@evil bank'];
-  doctored.prefs.home.cabSos2 = ['s', 'Police|+1-900-PREMIUM'];
-  doctored.prefs.home.fav1 = ['s', 'Mummy|#31#9000000000'];
+  doctored.prefs.home['x:upiId'] = ['s', 'thief@evil bank'];
+  doctored.prefs.home['x:cabSos2'] = ['s', 'Police|+1-900-PREMIUM'];
+  doctored.prefs.home['x:fav1'] = ['s', 'Mummy|#31#9000000000'];
   doctored.prefs.home['app:dock:navi'] = ['s', 'com.Evil.app/../Boom'];
-  doctored.prefs.home.valetPin = ['s', 'letmein'];
-  doctored.prefs.home.apPass = ['s', 'letmein too'];
-  doctored.prefs.home.carModel = ['s', 'Alto'];
+  doctored.prefs.home['x:valetPin'] = ['s', 'letmein'];
+  doctored.prefs.home['x:apPass'] = ['s', 'letmein too'];
+  doctored.prefs.home['x:carModel'] = ['s', 'Alto'];
   const r = memoryPrefs({ ...mine, ...secret });
   const n = backup.restore(r, doctored);
   for (const k of ['upiId', 'cabSos2', 'fav1', 'app:dock:navi', 'valetPin', 'apPass']) {
@@ -307,6 +310,48 @@ test('backup: a restore writes only what the settings screens would have accepte
   assert.equal(n.settings, Object.keys(mine).length - 4, 'and the dropped ones are not counted');
   assert.ok(!backup.okValue('cabSos1', 'Papa|'), 'a contact with no number is no contact');
   assert.ok(backup.okValue('app:offlineNav', ''), 'nothing chosen is still nothing chosen');
+});
+
+test('the fill-up log and the car\'s fuel type keep out of each other\'s way', () => {
+  const p = memoryPrefs({ fuel: 'diesel' });
+  fuel.setLog(p, [{ t: 1, l: 30, rs: 3000, odo: 1000 }]);
+  assert.equal(car.fuel(p), 'diesel', 'a fill-up no longer writes over the fuel type');
+  assert.equal(fuel.log(p).length, 1);
+
+  // an install made before the two were named apart: the log sits under the fuel type's name
+  const old = memoryPrefs({ fuel: JSON.stringify([{ t: 1, l: 30, rs: 3000, odo: 1000 }]) });
+  fuel.moveOldLog(old);
+  assert.equal(fuel.log(old).length, 1, 'the log is moved across');
+  assert.equal(car.fuel(old), 'petrol', 'and the fuel type falls back to its default');
+
+  // one that never wrote a log is left alone
+  const fine = memoryPrefs({ fuel: 'cng' });
+  fuel.moveOldLog(fine);
+  assert.equal(car.fuel(fine), 'cng');
+  assert.equal(fuel.log(fine).length, 0);
+});
+
+test('backup: the keys Android uses for the same settings', () => {
+  assert.equal(backup.androidKey('carModel'), 'x:carModel', 'generic settings carry the prefix');
+  assert.equal(backup.androidKey('welcome'), 'welcome', 'a named one does not');
+  assert.equal(backup.androidKey('app:dock:navi'), 'app:dock:navi');
+  assert.equal(backup.androidKey('slot3'), 'slot3');
+  assert.equal(backup.androidKey('p2slot1'), 'p2slot1');
+  assert.equal(backup.androidKey('fuelLog'), 'fuel', "the fill-up log is Android's \"fuel\"");
+  assert.equal(backup.androidKey('fuel'), 'x:fuel', "and the car's fuel type is its \"x:fuel\"");
+
+  assert.equal(backup.ourKey('x:carModel'), 'carModel');
+  assert.equal(backup.ourKey('welcome'), 'welcome');
+  assert.equal(backup.ourKey('fuel', '[{"l":30}]'), 'fuelLog', 'an array under "fuel" is a log');
+  assert.equal(backup.ourKey('fuel', 'diesel'), 'fuel', 'anything else is the fuel type');
+  assert.equal(backup.ourKey('tankL'), 'tankL', 'a backup this port made before 1.43 has no prefixes');
+
+  // the round trip a driver actually does: back up here, restore here
+  const mine = memoryPrefs({ carModel: 'Dzire', welcome: 'Driver', fuel: 'diesel', fuelLog: '[{"l":30}]', 'app:dock:navi': 'com.example' });
+  const back = memoryPrefs();
+  backup.restore(back, backup.unzip(backup.zip(backup.build(mine, 1000))).json);
+  const { [backup.TYPES_KEY]: _types, ...restored } = back.all?.() ?? {};
+  assert.deepEqual(restored, mine.all?.());
 });
 
 test('theme packs: choosing and importing', () => {

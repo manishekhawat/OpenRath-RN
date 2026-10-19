@@ -132,7 +132,7 @@ test('news: the kept headlines show before any fetch', async () => {
 });
 
 test('chores: split', () => {
-  const p = memoryPrefs({ fuel: JSON.stringify([{ t: 1, l: 30, rs: 3150.4, odo: 1000 }]) });
+  const p = memoryPrefs({ fuelLog: JSON.stringify([{ t: 1, l: 30, rs: 3150.4, odo: 1000 }]) });
   assert.equal(chores.lastFill(p), 3150.4);
   assert.equal(chores.lastFill(memoryPrefs()), 0);
   assert.equal(chores.split(p, 1000, 3), 'Your UPI id (like name@okbank)');

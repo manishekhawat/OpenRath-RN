@@ -5,6 +5,7 @@
  */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import * as Fuel from '../logic/fuel';
 import * as I18n from '../logic/i18n';
 import type { Prefs } from '../logic/prefs';
 import * as Store from './store';
@@ -24,6 +25,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const off = Store.subscribe(() => setVersion(Store.version()));
     Store.load().then(() => {
+      Fuel.moveOldLog(Store.prefs);   // a fill-up log kept under the fuel type's name (1.43)
       I18n.load(Store.prefs);
       setVersion(Store.version());
       setLoaded(true);

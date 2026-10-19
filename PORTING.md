@@ -71,7 +71,7 @@ native Android code, and is listed at the end with what it would take.
 | `OverpassGate`, `Diag`, `Crash` | `src/logic/{overpass,diag}.ts`, `src/state/crash.ts`, `src/app/settings/diagnostics.tsx` | One gate for every Overpass question, speed cameras kept by square, and the errors carried on from, in Settings > Help > Diagnostics. |
 | Map card + `assets/map/map.html`, `OfflineNav`, `Tiles` | `src/app/map.tsx`, `src/map/mapHtml.ts` | The original map page in a WebView, with the 1.38 crash guard; offline guidance hands over to the chosen offline map app. |
 | `AppsActivity`, `AppPicker`, `Apps` | `src/logic/apps.ts`, `src/app/apps.tsx` | The 1.38 screen: search, pinned and recent, A to Z; opens apps by package name. |
-| `tests/Tests.java` | `src/logic/__tests__/*.test.ts` | 195 checks; run with `npm test`. |
+| `tests/Tests.java` | `src/logic/__tests__/*.test.ts` | 197 checks; run with `npm test`. |
 
 ## Done differently, because Expo can't do it from TypeScript
 

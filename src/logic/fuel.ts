@@ -29,7 +29,28 @@ export interface Stats {
   lastAt: number;
 }
 
-export const LOG_KEY = 'fuel';
+/**
+ * Where the fill-ups are kept. Up to 1.43 this was "fuel", which is also where the car's fuel type
+ * lives (Car.fuel), so the first fill-up wrote over "diesel" or "cng". The Android version uses the
+ * same two names without clashing, because everything it reads through Prefs.str carries an "x:"
+ * prefix and the fuel log does not; this port has no prefix, so the log is named apart instead.
+ */
+export const LOG_KEY = 'fuelLog';
+/** The name the log had before, which is the car's fuel type's name. */
+export const OLD_LOG_KEY = 'fuel';
+
+/**
+ * Moves a log still kept under the old name across, once, at start-up. The car's fuel type was
+ * lost when the log replaced it, so the key is cleared and the type falls back to its default
+ * until the owner sets it again in Settings > Car.
+ */
+export function moveOldLog(p: Prefs): void {
+  const old = p.str(OLD_LOG_KEY, '').trim();
+  if (!old.startsWith('[')) return; // a fuel type, or nothing
+  if (p.str(LOG_KEY, '') === '') p.put(LOG_KEY, old);
+  if (p.remove) p.remove(OLD_LOG_KEY);
+  else p.put(OLD_LOG_KEY, '');
+}
 /** Used until the fuel log has learnt the real figure (Coach.DEFAULT_KMPL). */
 export const DEFAULT_KMPL = 18;
 

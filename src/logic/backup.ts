@@ -44,6 +44,41 @@ export const SECRET = ['valetPin', 'apPass', 'keyToken'];
  */
 export const KEPT = [...SECRET, 'valet', 'updateUrl', 'reportUrl'];
 
+/**
+ * Android's own name for a setting. Everything the Android version reads through Prefs.str and
+ * Prefs.put is kept under an "x:" prefix; the keys its named accessors use (Prefs.java) have no
+ * prefix. This port keeps every setting unprefixed, so a backup is translated on the way out and
+ * back on the way in, which is what makes the two apps' backups interchangeable.
+ */
+const ANDROID_PLAIN = new Set(['swapped', 'lights', 'lightKey', 'lightOff', 'lightOn', 'alerts', 'warnSpeed', 'fmFreq', 'welcome']);
+/** The same, by how the name begins: chosen apps, radio commands, the car's learnt signals, box slots. */
+const ANDROID_PLAIN_START = ['app:', 'src:', 'fm:', 'sigKey_', 'sigOff_', 'sigOn_'];
+const ANDROID_SLOT = /^(slot\d+|p\d+slot\d+)$/;
+/** Settings this port had to name apart from the Android version's own key. */
+const RENAMED: Record<string, string> = { fuelLog: 'fuel' };
+const X = 'x:';
+
+function plainOnAndroid(key: string): boolean {
+  return ANDROID_PLAIN.has(key) || ANDROID_SLOT.test(key) || ANDROID_PLAIN_START.some((s) => key.startsWith(s));
+}
+
+/** Our key, as a backup holds it. */
+export function androidKey(key: string): string {
+  return RENAMED[key] ?? (plainOnAndroid(key) ? key : X + key);
+}
+
+/**
+ * A key from a backup, as we hold it. A backup made by this port before 1.43 has no prefixes at
+ * all; such a key is neither prefixed nor one of Android's plain ones, and is taken as it is.
+ * "fuel" is the one name that means two things: the fill-up log in an Android backup, and the
+ * car's fuel type in a backup this port made while the two shared a name. The value says which.
+ */
+export function ourKey(key: string, value = ''): string {
+  if (key.startsWith(X)) return key.substring(X.length);
+  if (key === 'fuel') return value.trim().startsWith('[') ? 'fuelLog' : 'fuel';
+  return key;
+}
+
 /** Whether a setting goes into backups. */
 export function backedUp(key: string): boolean {
   return !SECRET.includes(key);
@@ -224,7 +259,7 @@ export function build(p: Prefs, now: number, drive?: { trip: Partial<TripState> 
   if (!p.all) throw new Error('backups need a settings store that lists its keys');
   const t = types(p);
   const home: Record<string, Typed> = {};
-  for (const [k, v] of Object.entries(p.all())) if (k !== TYPES_KEY && backedUp(k)) home[k] = typed(v, t[k]);
+  for (const [k, v] of Object.entries(p.all())) if (k !== TYPES_KEY && backedUp(k)) home[androidKey(k)] = typed(v, t[k]);
   const prefs: Record<string, Record<string, Typed>> = { home };
   if (drive) prefs.drive = driveOf(drive.trip, drive.history);
   return { app: 'OpenRath', format: 1, made: now, prefs };
@@ -283,9 +318,10 @@ export function restore(p: Prefs, json: BackupJson): { settings: number; drive: 
     const put: Record<string, string> = {};
     const kinds: Record<string, Typed[0]> = {};
     const kept = new Set<string>();
-    for (const [k, v] of Object.entries(home)) {
+    for (const [name, v] of Object.entries(home)) {
       const s = text(v);
       if (s == null) continue;
+      const k = ourKey(name, s);
       if (!restorable(k) || !okValue(k, s)) {
         kept.add(k);
         continue;
