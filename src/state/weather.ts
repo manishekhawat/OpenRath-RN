@@ -14,6 +14,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { Platform, ToastAndroid } from 'react-native';
 
 import * as Air from '../logic/air';
+import * as Diag from '../logic/diag';
 import * as Features from '../logic/features';
 import { f, t } from '../logic/i18n';
 import * as Weather from '../logic/weather';
@@ -124,7 +125,8 @@ async function run() {
       Store.forecast.put('wxSavedAt', String(Date.now()));
     }
     set({ wx, aqi, place });
-  } catch {
+  } catch (e) {
+    Diag.note('weather', e);
     fetchedAt = Date.now() - WEATHER_MS + 60000; // retry in a minute
     set({ wx: saved() });
   }

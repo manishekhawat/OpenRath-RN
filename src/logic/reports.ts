@@ -13,6 +13,7 @@ import { dayKey } from './trip.ts';
 
 let store: Prefs | null = null;
 let prefs: Prefs | null = null;
+let early: Prefs | null = null;
 
 const CRASHES = 5;
 
@@ -84,20 +85,34 @@ export function clear(): void {
 
 // ------------------------------------------------------------------ crash notes
 
+/**
+ * Where crash notes go, from the moment the app starts (1.43: Crash.install runs before the
+ * screens, so a crash while they are still loading is recorded too). The counts wait for install().
+ */
+export function keepCrashesIn(where: Prefs): void {
+  early = where;
+}
+
+function kept(): Prefs | null {
+  return store ?? early;
+}
+
 /** Keep a crash's message and stack, the last five. */
 export function crash(body: string, now = Date.now()): void {
-  if (!store) return;
-  store.put('crash:' + now, body.substring(0, 8000));
-  const keys = Object.keys(store.all?.() ?? {})
+  const s = kept();
+  if (!s) return;
+  s.put('crash:' + now, body.substring(0, 8000));
+  const keys = Object.keys(s.all?.() ?? {})
     .filter((k) => k.startsWith('crash:'))
     .sort();
-  for (const k of keys.slice(0, Math.max(0, keys.length - CRASHES))) store.remove?.(k);
+  for (const k of keys.slice(0, Math.max(0, keys.length - CRASHES))) s.remove?.(k);
 }
 
 /** The crash notes, newest first, named like the Android app's files. */
 export function crashes(): { name: string; body: string }[] {
-  if (!store) return [];
-  return Object.entries(store.all?.() ?? {})
+  const s = kept();
+  if (!s) return [];
+  return Object.entries(s.all?.() ?? {})
     .filter(([k]) => k.startsWith('crash:'))
     .sort((a, b) => (a[0] < b[0] ? 1 : -1))
     .map(([k, v]) => {
@@ -108,6 +123,7 @@ export function crashes(): { name: string; body: string }[] {
 }
 
 export function clearCrashes(): void {
-  if (!store) return;
-  for (const k of Object.keys(store.all?.() ?? {})) if (k.startsWith('crash:')) store.remove?.(k);
+  const s = kept();
+  if (!s) return;
+  for (const k of Object.keys(s.all?.() ?? {})) if (k.startsWith('crash:')) s.remove?.(k);
 }

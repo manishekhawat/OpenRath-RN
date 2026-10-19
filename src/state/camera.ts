@@ -14,6 +14,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Alert, Platform } from 'react-native';
 
 import * as Dashcam from '../logic/dashcam';
+import * as Diag from '../logic/diag';
 import * as Features from '../logic/features';
 import { f, t } from '../logic/i18n';
 import type { Prefs } from '../logic/prefs';
@@ -178,6 +179,7 @@ export function clipDone(uri: string | undefined, name: string, prefs: Prefs) {
     previous = new File(dest.uri);
     if (keep) set({ status: Dashcam.STATUS.saved });
   } catch (e) {
+    Diag.note('dashcam clip', e);
     set({ status: Dashcam.STATUS.error(String((e as Error)?.message ?? e)) });
   }
   prune(prefs);
@@ -254,6 +256,7 @@ export async function toGallery(file: File): Promise<string> {
     await MediaLibrary.Asset.create(file.uri);
     return t('Saved to the gallery');
   } catch (e) {
+    Diag.note('clip to the gallery', e);
     return f("Couldn't save it: %1$s", String((e as Error)?.message ?? e));
   }
 }

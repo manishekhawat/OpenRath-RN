@@ -10,6 +10,7 @@ import * as Linking from 'expo-linking';
 import * as Speech from 'expo-speech';
 import { Alert, Platform, ToastAndroid } from 'react-native';
 
+import * as Diag from '../logic/diag';
 import { t } from '../logic/i18n';
 import { Speaking } from '../logic/sound';
 
@@ -74,7 +75,8 @@ export async function hasVoice(): Promise<boolean> {
   if (voices != null && (voices || Date.now() - voicesAt < 60000)) return voices;
   try {
     voices = (await Speech.getAvailableVoicesAsync()).length > 0;
-  } catch {
+  } catch (e) {
+    Diag.note('voice list', e);
     voices = true; // can't tell: try speaking
   }
   voicesAt = Date.now();
@@ -98,7 +100,8 @@ export async function getVoice() {
     } else if (Platform.OS === 'android') {
       await IntentLauncher.startActivityAsync('com.android.settings.TTS_SETTINGS');
     }
-  } catch {
+  } catch (e) {
+    Diag.note('voice settings', e);
     if (Platform.OS === 'android') IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.SETTINGS).catch(() => {});
   }
   voices = null;

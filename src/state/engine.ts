@@ -19,6 +19,7 @@ import { Alert, AppState, Platform, ToastAndroid } from 'react-native';
 
 import * as Bg from '../logic/background';
 import * as Cab from '../logic/cab';
+import * as Diag from '../logic/diag';
 import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
 import { dist } from '../logic/geo';
@@ -196,7 +197,8 @@ async function save(s: Trip.TripState, closed?: { day: string; row: number[] }) 
     let hist: Trip.History = {};
     try {
       hist = JSON.parse((await AsyncStorage.getItem(HIST_KEY)) ?? '{}');
-    } catch {
+    } catch (e) {
+      Diag.note('drive history', e);
       // a corrupt blob would otherwise stop every closed day from being kept: start again from empty
     }
     hist[closed.day] = closed.row;

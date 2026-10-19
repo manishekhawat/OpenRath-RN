@@ -6,6 +6,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
+import * as Diag from '../logic/diag';
 import * as Tracks from '../logic/tracks';
 
 function dir(): Directory {
@@ -35,7 +36,8 @@ export function days(): string[] {
     const d = dir();
     if (!d.exists) return [];
     return Tracks.days(d.list().filter((x) => x instanceof File).map((x) => x.name));
-  } catch {
+  } catch (e) {
+    Diag.note('route files', e);
     return [];
   }
 }

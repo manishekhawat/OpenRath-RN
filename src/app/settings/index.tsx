@@ -24,6 +24,7 @@ import * as Care from '../../logic/care';
 import * as ChildLock from '../../logic/childlock';
 import * as Chores from '../../logic/chores';
 import * as Dashcam from '../../logic/dashcam';
+import * as Diag from '../../logic/diag';
 import * as Features from '../../logic/features';
 import * as Fuel from '../../logic/fuel';
 import * as Holidays from '../../logic/holidays';
@@ -370,6 +371,7 @@ export default function Settings() {
   add('Help', 'Version', 'OpenRath ' + VERSION + (Features.dev(prefs) ? t(', developer mode') : ''), versionTapped);
   add('Help', 'About and licences', 'free and open source (GPL-3.0)', '/settings/about');
   add('Help', 'Privacy', "what leaves the unit, and what doesn't", '/settings/about?show=privacy');
+  add('Help', 'Diagnostics', f('%1$s errors caught since the app started', String(Diag.lines().length)), '/settings/diagnostics');
   add('Help', 'Crash reports', f('%1$s saved', String(Reports.crashes().length)), '/settings/reports');
   add('Help', 'Usage report', 'see it and share it', '/settings/reports', on('reports'));
 

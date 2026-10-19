@@ -10,6 +10,8 @@ import * as Motion from '../logic/motion';
 import * as Reports from '../logic/reports';
 // defines the background trip task as the app starts, before Android hands it any fixes
 import '../state/background';
+// records crashes and the errors carried on from, from the moment the app starts (1.43)
+import '../state/crash';
 import { DriveProvider } from '../state/drive';
 import { useLook } from '../state/look';
 import { PlayerProvider } from '../state/player';
