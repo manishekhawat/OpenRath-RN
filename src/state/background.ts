@@ -21,6 +21,9 @@ import * as Store from './store';
 
 export const TASK = 'openrath-drive';
 
+/** How long the car has been standing still, in fixes (Bg.parkedRun). */
+let parked = 0;
+
 TaskManager.defineTask<{ locations: Location.LocationObject[] }>(TASK, async ({ data, error }) => {
   if (error) {
     Engine.setGps(error.message);
@@ -32,7 +35,16 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(TASK, async ({ 
     Location.stopLocationUpdatesAsync(TASK).catch(() => {});
     return;
   }
-  await Engine.feed(data?.locations ?? []);
+  const fixes = data?.locations ?? [];
+  await Engine.feed(fixes);
+  // on a head unit that stays powered the GPS and its notification would otherwise run until the
+  // next reboot: once the car has stood still for a few minutes let go of them, and leave starting
+  // again to sync(), which runs whenever the app comes back on screen
+  parked = Bg.parkedRun(parked, fixes.length, Engine.snapshot().trip.kmh);
+  if (Bg.parkedLongEnough(parked)) {
+    parked = 0;
+    Location.stopLocationUpdatesAsync(TASK).catch(() => {});
+  }
 });
 
 let mode: Bg.Source = 'none';
@@ -98,7 +110,7 @@ async function stopTask() {
   }
 }
 
-async function use(target: Bg.Source) {
+async function switchTo(target: Bg.Source) {
   if (target !== 'watch' && sub) {
     sub.remove();
     sub = null;
@@ -132,17 +144,17 @@ async function reconcile(force: boolean) {
   first = false;
   if (fg.status !== 'granted') {
     Engine.setGps('denied');
-    await use('none');
+    await switchTo('none');
     return;
   }
   if (Engine.snapshot().gps === 'denied') Engine.setGps('');
   const p = Store.prefs;
   let bg = await allowed();
   // start counting first, so the explanation never holds up the trip computer
-  await use(Bg.source(true, Bg.wanted(p), bg));
+  await switchTo(Bg.source(true, Bg.wanted(p), bg));
   if (Bg.shouldAsk(p, bg, onScreen(), force)) {
     bg = await ask();
-    if (bg) await use(Bg.source(true, Bg.wanted(p), bg));
+    if (bg) await switchTo(Bg.source(true, Bg.wanted(p), bg));
   }
 }
 
@@ -174,7 +186,10 @@ export function restart(): Promise<Bg.Source> {
   return sync();
 }
 
-/** The app is closing: the watch stops with it; the task (and its notification) goes on. */
+/**
+ * The app is closing: the watch stops with it; the task (and its notification) goes on, until the
+ * car has been parked for a few minutes and the task lets go of the GPS itself.
+ */
 export function detach(): Promise<Bg.Source> {
   const next = chain
     .then(() => {

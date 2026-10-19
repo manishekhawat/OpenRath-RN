@@ -69,6 +69,35 @@ export function fresh<T extends { timestamp: number }>(batch: readonly T[], last
   return out;
 }
 
+// ------------------------------------------------------------------ letting go of the GPS when parked
+
+/**
+ * The trip computer counts a car under this as standing still (Trip.feed's parking check), so the
+ * background task uses the same line to tell a parked car from a crawling one.
+ */
+export const PARKED_KMH = 8;
+
+/**
+ * Standing-still fixes before the task gives up the GPS: it asks for one a second, so this is
+ * about five minutes. That is well past the 90 s at which the parking spot is written, and long
+ * enough not to let go at a level crossing or a long red light.
+ */
+export const PARKED_FIXES = 300;
+
+/**
+ * The run of standing-still fixes after a batch of them: back to zero as soon as the car moves.
+ * Without this the task would keep the GPS and its notification going until the unit is rebooted,
+ * as it is deliberately left running when the app goes away.
+ */
+export function parkedRun(run: number, fixes: number, kmh: number): number {
+  return kmh > PARKED_KMH ? 0 : run + Math.max(0, fixes);
+}
+
+/** Parked long enough that the GPS is only draining the unit: stop the task until the app is back. */
+export function parkedLongEnough(run: number): boolean {
+  return run >= PARKED_FIXES;
+}
+
 /** A note for the screen that came up while the app was behind another one (Cab notes, new badges). */
 export interface Queued {
   kind: 'note';

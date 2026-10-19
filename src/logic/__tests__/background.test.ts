@@ -74,3 +74,15 @@ test('status line', () => {
   assert.match(bg.statusText(true, false, 'watch'), /tap to allow/);
   assert.equal(bg.statusText(true, null, 'watch'), 'on');
 });
+
+test('the task lets go once the car has stood still long enough', () => {
+  // a fix above walking pace starts the count again
+  assert.equal(bg.parkedRun(120, 1, 30), 0);
+  assert.equal(bg.parkedRun(0, 1, 0), 1);
+  // a batch of fixes counts for all of them
+  assert.equal(bg.parkedRun(10, 4, 2), 14);
+  assert.equal(bg.parkedRun(10, -2, 2), 10, 'a batch of none changes nothing');
+  assert.equal(bg.parkedLongEnough(bg.PARKED_FIXES - 1), false);
+  assert.equal(bg.parkedLongEnough(bg.PARKED_FIXES), true);
+  assert.equal(bg.parkedLongEnough(bg.parkedRun(bg.PARKED_FIXES, 1, 40)), false, 'driving on keeps it running');
+});
