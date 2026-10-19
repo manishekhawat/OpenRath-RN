@@ -85,13 +85,10 @@ test('dashcam: harsh braking keeps the clip', () => {
   start.feed(10, 1000);
   assert.equal(start.feed(25, 2000), false, 'a hard start keeps nothing');
   assert.equal(start.feed(5, 3000), false, '...and holds off braking for 5 s, as Drive.java');
-  // a crash-like stop, measured over less than half a second, counts when accident help is on
-  const crash = new dashcam.BrakeWatch();
-  crash.feed(60, 1000);
-  assert.equal(crash.feed(0, 1400, false), false);
-  const crash2 = new dashcam.BrakeWatch();
-  crash2.feed(60, 1000);
-  assert.equal(crash2.feed(0, 1400, true), true);
+  // 1.42 keeps clips on harsh braking only: a stop measured over less than half a second is ignored
+  const hard = new dashcam.BrakeWatch();
+  hard.feed(60, 1000);
+  assert.equal(hard.feed(0, 1400), false, 'too short a gap to measure');
 });
 
 test('dashcam: a knock from the accelerometer', () => {
@@ -128,7 +125,8 @@ test('parking photo', () => {
   assert.equal(snap.plan(p, true, false), 'ask');
   assert.equal(snap.plan(p, null, true), 'ask', 'permission not asked yet');
   assert.equal(snap.plan(p, false, true), 'none', 'camera refused');
-  p.put('feat:parkPhoto', 'off');
+  // the parking photo is part of the Parking switch since 1.35
+  p.put('feat:parking', 'off');
   assert.equal(snap.plan(p, true, true), 'none');
   assert.deepEqual(snap.rotate(['latest.jpg', 'previous.jpg']), [{ from: 'latest.jpg', to: 'previous.jpg' }]);
   assert.deepEqual(snap.rotate([]), []);

@@ -227,7 +227,7 @@ export function DashcamView({ full = false, style }: { full?: boolean; style?: S
           <Pressable style={styles.center} onPress={on && !granted ? allow : undefined}>
             <Text style={{ color: '#FFFFFF', textAlign: 'center' }}>
               {!on
-                ? t('The dashcam is off: turn it on in Settings > Features')
+                ? t('Turn on the dashcam in Settings > Driving')
                 : !granted
                   ? t('Tap to allow the camera')
                   : needCamera
@@ -247,7 +247,7 @@ export function DashcamView({ full = false, style }: { full?: boolean; style?: S
   if (on && perm && !granted) {
     return (
       <Box title={t('DASHCAM')} style={style} onPress={allow}>
-        <Text style={{ color: look.text }}>{t('needs camera permission: tap to allow it')}</Text>
+        <Text style={{ color: look.text }}>{t('needs camera permission: open Settings once to allow it')}</Text>
       </Box>
     );
   }

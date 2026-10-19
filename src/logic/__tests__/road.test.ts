@@ -1,7 +1,8 @@
 /// <reference types="node" />
 /**
- * The road helpers: highway, hill, fog, monsoon, the road ahead, learnt spots, the 0–100 timer and
- * the break reminder (the matching checks from Tests.java, and a few more).
+ * The road helpers: highway, fog, monsoon, the road ahead, learnt spots, the 0–100 timer and the
+ * break reminder (the matching checks from Tests.java, and a few more).
+ * The hill tips, the wrong-way and overtaking warnings went in 1.35.
  * Run with `node --test src/logic/__tests__/road.test.ts`.
  */
 import assert from 'node:assert/strict';
@@ -12,7 +13,6 @@ import * as ahead from '../ahead.ts';
 import * as errands from '../errands.ts';
 import * as fog from '../fog.ts';
 import * as highway from '../highway.ts';
-import * as hill from '../hill.ts';
 import * as monsoon from '../monsoon.ts';
 import { memoryPrefs } from '../prefs.ts';
 import * as rest from '../rest.ts';
@@ -43,42 +43,6 @@ test('highway: a dip under 75 starts the two minutes again', () => {
   hw.feed(70, 60000);
   assert.equal(hw.feed(90, 121000), 0);
   assert.equal(hw.feed(90, 241000), 1);
-});
-
-test('hill: a 10 % climb speaks once, flat road stays quiet, descent tips', () => {
-  const h = new hill.Hill();
-  let said: string | null = null;
-  let times = 0;
-  for (let m = 0; m <= 1000; m += 20) {
-    const t = h.feed(m, 500 + m * 0.1);
-    if (t) {
-      said = t;
-      times++;
-    }
-  }
-  assert.equal(times, 1);
-  assert.ok(said?.startsWith('Steep climb'));
-  near(0.1, h.grade(), 0.01);
-
-  const flat = new hill.Hill();
-  let any: string | null = null;
-  for (let m = 0; m <= 2000; m += 20) any = flat.feed(m, 200 + (m % 40 === 0 ? 4 : -4)) ?? any;
-  assert.equal(any, null);
-
-  const down = new hill.Hill();
-  let d: string | null = null;
-  for (let m = 0; m <= 1000; m += 20) d = down.feed(m, 900 - m * 0.08) ?? d;
-  assert.ok(d && d.includes('lower gear') && d.includes('right of way'));
-});
-
-test('hill: not enough road yet, and a restarted count', () => {
-  const h = new hill.Hill();
-  assert.equal(h.feed(0, 100), null);
-  assert.ok(Number.isNaN(h.grade()));
-  h.feed(300, 130);
-  assert.ok(Number.isNaN(h.grade()));
-  h.feed(10, 100); // the metres went backwards: a new count
-  assert.ok(Number.isNaN(h.grade()));
 });
 
 test('fog: bend text, guide speed and switch', () => {
@@ -116,7 +80,8 @@ test('monsoon: marking spots, one per 100 m, saved as in the Android version', (
   assert.equal(p.str('floodSpots', ''), '[["28.6","77.2",1],["28.61","77.2",3]]');
   assert.equal(monsoon.spots(p).length, 2);
   assert.equal(monsoon.check(p, new Set(), true, 28.597, 77.2, 0, 40)?.startsWith('Waterlogging reported ahead'), true);
-  p.put('feat:monsoon', 'off');
+  // monsoon warnings are part of the Weather alerts switch since 1.35
+  p.put('feat:rain', 'off');
   assert.equal(monsoon.check(p, new Set(), true, 28.597, 77.2, 0, 40), null);
   monsoon.clear(p);
   assert.equal(monsoon.spots(p).length, 0);
@@ -124,7 +89,7 @@ test('monsoon: marking spots, one per 100 m, saved as in the Android version', (
   assert.equal(monsoon.spots(p).length, 0);
 });
 
-test('ahead: one-way roads and bends', () => {
+test('ahead: the road under the car, and bends', () => {
   // a road drawn north along 77.2 for 1 km
   const north: [number, number][] = [
     [28.6, 77.2],
@@ -134,11 +99,7 @@ test('ahead: one-way roads and bends', () => {
   const n = ahead.nearest(north, 28.603, 77.2001)!;
   assert.ok(n.d < 15, String(n.d));
   near(0, n.bearing % 360, 1);
-  assert.ok(ahead.against(1, n.bearing, 180));
-  assert.ok(!ahead.against(1, n.bearing, 2));
-  assert.ok(ahead.against(-1, n.bearing, 0));
-  assert.ok(!ahead.against(0, n.bearing, 180));
-  assert.ok(!ahead.against(1, n.bearing, -1));
+  assert.equal(ahead.turn(10, 350), 20);
   assert.equal(ahead.nearest([[28.6, 77.2]], 28.6, 77.2), null);
 
   // a road north then turning east: the bend is ahead going north, none going south
@@ -156,17 +117,13 @@ test('ahead: one-way roads and bends', () => {
   assert.equal(ahead.nextBend(bend, 28.6005, 77.2, -1, 400), null);
 });
 
-test('ahead: school hours, toll text, overtaking', () => {
+test('ahead: school hours and toll text', () => {
   assert.ok(ahead.schoolHours(day(2026, 10, 12, 8, 0)));
   assert.ok(!ahead.schoolHours(day(2026, 10, 11, 8, 0)));
   assert.ok(!ahead.schoolHours(day(2026, 10, 12, 18, 0)));
   assert.equal(ahead.tollText(2050, 100, ''), 'Toll plaza in 2 kilometres, about 100 rupees. Keep to the FASTag lane.');
   assert.equal(ahead.tollText(640, 0, 'Kherki Daula'), 'Toll plaza, Kherki Daula, in 600 metres. Keep to the FASTag lane.');
   assert.equal(ahead.tollText(1000, 0, ''), 'Toll plaza in 1 kilometre. Keep to the FASTag lane.');
-  assert.equal(ahead.noOvertake(0, 2, 60), true);
-  assert.equal(ahead.noOvertake(1, 2, 60), false);
-  assert.equal(ahead.noOvertake(0, 4, 60), false);
-  assert.equal(ahead.noOvertake(0, 0, 30), false);
 });
 
 test('ahead: Overpass query and answer', () => {
@@ -191,7 +148,7 @@ test('ahead: Overpass query and answer', () => {
   assert.equal(got.roads[0].name, 'MG Road');
 });
 
-test('ahead: feed warns once about a toll and a wrong-way drive', async () => {
+test('ahead: feed warns once about a toll plaza', async () => {
   const a = new ahead.Ahead();
   const answer = JSON.stringify({
     elements: [
@@ -204,7 +161,7 @@ test('ahead: feed warns once about a toll and a wrong-way drive', async () => {
     asked++;
     return answer;
   };
-  const want = { toll: true, wrong: true, zones: true, fog: false, overtake: false, tollRate: 100 };
+  const want = { toll: true, zones: true, fog: false, tollRate: 100 };
   const t0 = day(2026, 10, 12, 18, 0).getTime();
   assert.deepEqual(a.feed(28.6, 77.2, 0, 40, want, net, new Date(t0)), []);
   await new Promise((r) => setTimeout(r, 0));
@@ -216,14 +173,8 @@ test('ahead: feed warns once about a toll and a wrong-way drive', async () => {
   assert.equal(a.view.road, 'MG Road');
   assert.equal(ahead.line(a.view), 'Toll plaza in 1.7 km');
   assert.deepEqual(a.feed(28.6, 77.2, 0, 40, want, net, new Date(t0 + 2000)), []);
-  // going south on the northbound one-way: the third fix in a row warns
-  const south = (k: number) => a.feed(28.61, 77.2, 180, 30, want, net, new Date(t0 + 3000 + k * 1000));
-  assert.deepEqual(south(0), []);
-  assert.deepEqual(south(1), []);
-  assert.deepEqual(south(2), ['Careful, this looks like a one-way street, MG Road, and you may be going against the traffic.']);
-  assert.deepEqual(south(3), []);
   a.reset();
-  const off = { toll: false, wrong: false, zones: false, fog: false, overtake: false, tollRate: 0 };
+  const off = { toll: false, zones: false, fog: false, tollRate: 0 };
   assert.deepEqual(a.feed(28.6, 77.2, 0, 40, off, net, new Date(t0 + 9000)), []);
   assert.equal(a.view.tollM, -1);
 });
@@ -334,13 +285,6 @@ test('rest: the drive clock and the break reminder', () => {
   assert.equal(rest.restText(130), "You've been driving for 2 hours. Time for a short break. Looking for a stop ahead.");
   assert.equal(rest.breakText(120), '2 hours of driving');
   assert.equal(rest.breakText(90), '1.5 hours of driving');
-});
-
-test('rest: accident help crash test', () => {
-  assert.ok(rest.crash(60, 2, 1000));
-  assert.ok(!rest.crash(60, 30, 1000));
-  assert.ok(!rest.crash(30, 0, 1000));
-  assert.ok(!rest.crash(60, 0, 5000));
 });
 
 test('sky: rain and fog from the saved weather', () => {

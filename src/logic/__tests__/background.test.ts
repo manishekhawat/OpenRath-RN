@@ -52,15 +52,14 @@ test('fresh: newer fixes only, oldest first, each once', () => {
   assert.equal(bg.fresh([fix(0)], 9000, 9000).length, 0);
 });
 
-test('due: a recent SOS first, stale ones dropped; notes once each, the newest kept', () => {
+test('due: notes once each, the newest kept', () => {
   const now = 1_000_000;
-  const sos = (at: number): bg.Queued => ({ kind: 'sos', text: '/sos?crash=1&at=' + at, at });
   const note = (text: string, at: number): bg.Queued => ({ kind: 'note', text, at });
-  assert.deepEqual(bg.due([sos(now - 3 * 60000)], now), [], 'too old for a countdown that texts by itself');
-  const d = bg.due([note('a', now - 5000), sos(now - 60000), sos(now - 30000), note('b', now - 2000), note('a', now - 1000)], now);
+  assert.deepEqual(bg.due([], now), []);
+  const d = bg.due([note('a', now - 5000), note('b', now - 2000), note('a', now - 1000)], now);
   assert.deepEqual(
     d.map((q) => q.text),
-    ['/sos?crash=1&at=' + (now - 30000), 'b', 'a'],
+    ['b', 'a'],
   );
   const many = Array.from({ length: 8 }, (_, i) => note('n' + i, now - 100 + i));
   assert.deepEqual(

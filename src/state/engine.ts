@@ -192,9 +192,10 @@ function tick() {
   const now = Date.now();
   lastTick = now;
   refreshSpeed();
-  const t = snap.trip;
-  for (const n of Cab.tick(prefs, now, t.kmh, t.last?.t ?? 0)) {
-    show({ kind: 'note', text: n.text, at: now });
+  const tr = snap.trip;
+  for (const n of Cab.tick(prefs, now, tr.kmh, tr.last?.t ?? 0)) {
+    // spoken prompts stay English (as in Java), the screen gets the translated words
+    show({ kind: 'note', text: n.shown, at: now });
     if (n.speak) say(n.text);
   }
 }
