@@ -5,6 +5,14 @@ GitHub does the building: the `release` workflow runs when a tag like `v1.43.0` 
 it the first time means making a signing key and giving GitHub a copy of it, which is steps 2 and
 3 below. After that a release is one `git push`.
 
+**Which way to sign.** Letting GitHub sign is the recommended one, and what the steps below
+describe: the build is the same every time, there is nothing to remember on release day, and the
+key can only be read by a job running on a `v*` tag. Signing offline, with the key never leaving
+your own machine, is stricter and the right choice if the key is shared with anyone or you would
+rather GitHub never held it; it costs you a build on your own machine for every release, and the
+Android SDK installed there. The last section has those commands. Either way, a build signed with
+Android's debug key is never published: anyone holding that key could forge an update.
+
 ## 1. Check the version is ready
 
 ```sh
@@ -32,9 +40,16 @@ keytool -genkeypair -v -keystore openrath-release.keystore -alias openrath \
 ```
 
 It asks for a keystore password, your name and organisation, then a key password (pressing Enter
-reuses the keystore password). Keep the file and both passwords somewhere you will still have them
-in ten years, and keep them out of this repository — `.gitignore` already ignores `*.jks`, `*.p12`
-and `*.key`, but a `.keystore` file is best kept in another folder entirely.
+reuses the keystore password).
+
+- Keep the keystore and both passwords offline, and back them up in two separate places, for
+  example two encrypted USB sticks kept apart. Not in a synced or shared folder, and not beside
+  the source.
+- Never commit it. `.gitignore` covers `*.keystore`, `*.jks`, `*.p12`, `*.key` and `signing.json`,
+  but the safest place for it is another folder entirely.
+- If the key is lost, everyone who installed OpenRath has to uninstall it before they can take an
+  update, losing their settings unless they have a backup. If it leaks, say so publicly and move
+  to a new key.
 
 ## 3. Give GitHub the key (once)
 
@@ -43,15 +58,25 @@ tags may use, so a workflow running on a branch cannot read it.
 
 1. On GitHub: **Settings > Environments > New environment**, name it `release`.
 2. Under **Deployment branches and tags**, choose *Selected branches and tags* and add the rule
-   `v*`.
+   `v*`. Adding yourself under **Required reviewers** as well means every release waits for you to
+   approve it before the key is used.
 3. Still in that environment, **Add environment secret** four times:
 
 | Secret | Value |
 | --- | --- |
-| `RELEASE_KEYSTORE_B64` | the keystore as one line of base64: `base64 -w0 openrath-release.keystore` (macOS: `base64 -i openrath-release.keystore`) |
+| `RELEASE_KEYSTORE_B64` | the keystore as one line of base64 (see below) |
 | `RELEASE_STORE_PASS` | the keystore password |
 | `RELEASE_KEY_ALIAS` | `openrath`, or whatever `-alias` you used |
 | `RELEASE_KEY_PASS` | the key password |
+
+For the base64 text:
+
+```sh
+base64 -w0 openrath-release.keystore > keystore.b64      # Linux
+base64 -i openrath-release.keystore -o keystore.b64      # macOS
+```
+
+Paste what is in `keystore.b64` into the secret, then delete `keystore.b64`.
 
 ## 4. Tag it
 
@@ -97,6 +122,39 @@ sha256sum openrath-rn-v1.43.0.apk > SHA256SUMS
 gh release create v1.43.0 openrath-rn-v1.43.0.apk SHA256SUMS \
   --title "OpenRath (React Native) 1.43.0" --notes-file notes.md --verify-tag
 ```
+
+## Checking a download
+
+Anyone installing a release should check what they got. Download the APK and `SHA256SUMS` from the
+same release into one folder:
+
+```sh
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+It should say `OK` for the APK. Then check who signed it, with `apksigner` from the Android SDK
+build-tools:
+
+```sh
+apksigner verify --print-certs openrath-rn-v1.43.0.apk
+```
+
+The `Signer #1 certificate SHA-256 digest` line must match the certificate this project signs
+with. Every release's notes print that digest. Once the first release is out, paste the digest
+here as well, so it can be checked against the repository and not only against the release it came
+with. If the two do not match, do not install the APK, and report it as `SECURITY.md` describes.
+
+## Building the same APK yourself
+
+The source zip on each release is the tagged commit. The release job builds it on `ubuntu-24.04`
+with Node 22, Temurin JDK 17, the Android SDK that image ships, and `npm ci`, which installs
+exactly what `package-lock.json` pins.
+
+Your APK will not be byte-for-byte identical to the published one: Gradle and the React Native
+build write timestamps and paths into the archive, and your signature is your own. Compare the
+contents instead — unzip both and look at `classes.dex`, `resources.arsc` and the files under
+`assets/`. The JavaScript bundle under `assets/` is the one to look at hardest, because that is
+where this app's own code ends up.
 
 ## Installing it on a stereo
 
