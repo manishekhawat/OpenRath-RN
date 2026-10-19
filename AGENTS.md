@@ -15,13 +15,29 @@ Use `bunx` instead of `npx` if the project uses bun (`bun.lock` present).
 ```bash
 npx expo install <package>  # ALWAYS use instead of npm/yarn/pnpm/bun add — resolves SDK-compatible versions
 npx expo start              # start the dev server
-npx expo lint               # lint
-npx tsc --noEmit            # typecheck
+npm test                    # the 176 logic checks (needs Node 22.18 or newer)
+npm run typecheck           # tsc --noEmit
+npm run lint                # eslint, config in eslint.config.js
+npm run map                 # rebuild src/map/mapHtml.ts from assets/map
 npx expo-doctor             # diagnose dependency and config issues
 npx expo install --fix      # fix incompatible package versions
 ```
 
-Run lint and typecheck before declaring any task done.
+Run the tests, the typecheck and the lint before declaring any task done.
+
+## This project's own conventions
+
+- `src/logic` holds everything with no screen: plain TypeScript, no React, React Native or Expo
+  imports, and no imports from `src/state`. That is what lets `npm test` run it under plain Node.
+  Files there import their siblings WITH the `.ts` extension; files anywhere else import without one.
+- `src/state` holds the stores. The drive engine (`src/state/engine.ts`) does the per-fix work
+  outside React and publishes snapshots; screens read it through `useSyncExternalStore`, so GPS work
+  keeps running when a screen unmounts or the app goes to the background.
+- `src/map/mapHtml.ts` and `src/data/hi.json` are generated. Change the source (`assets/map`, or the
+  Android project's string files) and re-run the generator; never edit the output by hand.
+- Every string the driver sees goes through `t()` or `f()` from `src/logic/i18n.ts`, so the app can
+  be read in Hindi.
+- This is a port of an Android app: when behaviour is in question, the Java source decides.
 
 ## Navigation & Routing
 

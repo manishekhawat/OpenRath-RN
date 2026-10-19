@@ -1,0 +1,31 @@
+# What a push has to pass. The type check and the tests take ten seconds between them; the export is
+# the slow one, and the only step that runs Metro, so it is what catches a missing asset or a layout
+# picture that no longer resolves. The last step re-runs the map generator and fails if the checked-in
+# map page has drifted from assets/map.
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run lint
+      - name: Bundle for Android
+        run: npx expo export --platform android --output-dir /tmp/export
+        env:
+          CI: '1'
+      - name: The map page matches assets/map
+        run: |
+          npm run map
+          git diff --exit-code src/map/mapHtml.ts

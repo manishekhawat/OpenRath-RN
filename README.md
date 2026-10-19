@@ -20,12 +20,14 @@ How it maps to the Android code, and the parts that still need native Android co
 
 ## Run it
 
-You need Node 20 or newer, and for a device build the Android SDK (or an Expo account for EAS Build).
+You need Node 22.18 or newer, because `npm test` runs TypeScript straight through Node, and for a
+device build the Android SDK (or an Expo account for EAS Build).
 
 ```sh
 npm install
 npm test            # the logic checks carried over from the Android version
 npm run typecheck
+npm run lint
 npx expo run:android   # build and install on a connected stereo or phone
 ```
 
@@ -53,7 +55,7 @@ src/
 assets/map/     the original Leaflet map page and its libraries
 assets/layouts/ the picture layouts' backgrounds, drawn by the Android project's art/scenes.py
 scripts/        build-map.mjs, and hindi.py to rebuild src/data/hi.json from the Android project's
-                res/values and res/values-hi string files
+                string files: `python3 scripts/hindi.py <OpenRath>/res src/data/hi.json`
 ```
 
 ## Licence

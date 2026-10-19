@@ -1,6 +1,9 @@
 {
   "name": "openrath",
   "version": "1.42.0",
+  "engines": {
+    "node": ">=22.18"
+  },
   "main": "index.js",
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -24,6 +27,7 @@
     "expo-sensors": "~57.0.3",
     "expo-sharing": "~57.0.23",
     "expo-speech": "~57.0.3",
+    "expo-splash-screen": "~57.0.10",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
     "expo-task-manager": "~57.0.21",
@@ -39,8 +43,10 @@
     "react-native-webview": "13.16.1"
   },
   "devDependencies": {
-    "@types/node": "^22.20.5",
+    "@types/node": "~22.20.5",
     "@types/react": "~19.2.2",
+    "eslint": "~9.39.5",
+    "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -50,7 +56,8 @@
     "web": "expo start --web",
     "map": "node scripts/build-map.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/logic/__tests__/*.test.ts"
+    "test": "node --test \"src/logic/__tests__/**/*.test.ts\"",
+    "lint": "expo lint"
   },
   "private": true,
   "license": "GPL-3.0-or-later"
