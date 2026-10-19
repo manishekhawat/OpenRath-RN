@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security problem
+    url: https://github.com/manishekhawat/OpenRath-RN/security/policy
+    about: Please report security problems privately to the maintainer, not in a public issue. See SECURITY.md.
+  - name: The Android version
+    url: https://github.com/manishekhawat/OpenRath
+    about: Features are designed in the Java version first. Open feature ideas there unless they are about this port.

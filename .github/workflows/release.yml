@@ -1,0 +1,110 @@
+# Builds a signed release when a tag like v1.43.0 is pushed (see RELEASING.md).
+# It never signs with the debug key Android builds use by default. Without the four RELEASE_*
+# secrets it builds nothing and passes with a note: the release is then made by hand with an APK
+# signed offline. The secrets belong to the "release" environment, which only v* tags may use, so a
+# workflow on any other branch cannot read the key.
+name: release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    environment: release
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09   # v5
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444   # v5
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961   # v5
+        with: { distribution: temurin, java-version: '17' }
+      - name: The tag matches package.json
+        run: |
+          TAG=${GITHUB_REF_NAME}
+          VER=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "v$VER" ]; then
+            echo "::error::Tag $TAG does not match version $VER in package.json"
+            exit 1
+          fi
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "VER=$VER" >> $GITHUB_ENV
+      - name: Release key
+        env:
+          KS_B64: ${{ secrets.RELEASE_KEYSTORE_B64 }}
+          STORE_PASS: ${{ secrets.RELEASE_STORE_PASS }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.RELEASE_KEY_PASS }}
+        run: |
+          if [ -z "$KS_B64" ] || [ -z "$STORE_PASS" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASS" ]; then
+            echo "::notice::No release secrets: this release is signed offline and uploaded by hand (RELEASING.md)."
+            echo "SIGNED=no" >> $GITHUB_ENV
+            exit 0
+          fi
+          echo "SIGNED=yes" >> $GITHUB_ENV
+          (umask 077; echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.keystore")
+      - name: Checks
+        if: env.SIGNED == 'yes'
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run lint
+      - name: APK
+        if: env.SIGNED == 'yes'
+        run: |
+          npx expo prebuild --platform android --no-install
+          (cd android && ./gradlew assembleRelease --no-daemon)
+          find android/app/build/outputs/apk/release -name '*.apk'
+      # gradle signs a release build with Android's own debug key unless the project says
+      # otherwise; the signature is replaced here with the real one, from the key above
+      - name: Sign it
+        if: env.SIGNED == 'yes'
+        env:
+          STORE_PASS: ${{ secrets.RELEASE_STORE_PASS }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.RELEASE_KEY_PASS }}
+        run: |
+          TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          IN=$(find android/app/build/outputs/apk/release -name '*.apk' | head -1)
+          "$TOOLS/zipalign" -p -f 4 "$IN" "openrath-rn-$TAG.apk"
+          "$TOOLS/apksigner" sign --ks "$RUNNER_TEMP/release.keystore" --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "env:STORE_PASS" --key-pass "env:KEY_PASS" "openrath-rn-$TAG.apk"
+          "$TOOLS/apksigner" verify --print-certs "openrath-rn-$TAG.apk"
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.keystore"
+      - name: Files and notes
+        if: env.SIGNED == 'yes'
+        run: |
+          git archive --format=zip --prefix=openrath-rn/ -o "openrath-rn-$TAG-source.zip" HEAD
+          sha256sum "openrath-rn-$TAG.apk" "openrath-rn-$TAG-source.zip" > SHA256SUMS
+          cat SHA256SUMS
+          # the CHANGELOG section for this version, from its "## X.Y" heading to the next one
+          awk -v v="$VER" '
+            /^## / { if (on) exit; if ($2 == v || $2 == substr(v, 1, length(v) - 2)) on = 1 }
+            on' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then echo "See CHANGELOG.md." > notes.md; fi
+          TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          CERT=$("$TOOLS/apksigner" verify --print-certs "openrath-rn-$TAG.apk" \
+                 | sed -n 's/.*certificate SHA-256 digest: //p' | head -1)
+          {
+            echo
+            echo "## Checking the download"
+            echo
+            echo '`sha256sum -c SHA256SUMS` checks the files. The APK is signed with the certificate whose SHA-256 is:'
+            echo
+            echo '```'
+            echo "$CERT"
+            echo '```'
+          } >> notes.md
+      - name: GitHub release
+        if: env.SIGNED == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" "openrath-rn-$TAG.apk" "openrath-rn-$TAG-source.zip" SHA256SUMS \
+            --title "OpenRath (React Native) $VER" --notes-file notes.md --verify-tag

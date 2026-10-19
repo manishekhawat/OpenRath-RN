@@ -1,0 +1,65 @@
+name: Stereo report
+description: Tell us how this port runs on your unit, so others with the same stereo know what to expect.
+labels: [stereo]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports from real units are the most useful help of all. Fill in what you can.
+  - type: input
+    id: unit
+    attributes:
+      label: Stereo make and model
+      description: As written on the box or in the stereo's About screen.
+      placeholder: Topway TS7, FYT UIS7862, Joying JY-..., Teyes CC3...
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+      placeholder: "10"
+    validations:
+      required: true
+  - type: input
+    id: screen
+    attributes:
+      label: Screen size and resolution
+      placeholder: 10.1 inch, 1280 x 720
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: OpenRath version
+      placeholder: "1.43"
+    validations:
+      required: true
+  - type: checkboxes
+    id: works
+    attributes:
+      label: What works
+      description: Tick what you tried and found working.
+      options:
+        - label: Home screen fits the screen
+        - label: OpenRath stays the home app after switching the car on
+        - label: Speed and the trip computer
+        - label: Weather and news
+        - label: The map, search and guidance
+        - label: Music and online radio
+        - label: Voice commands
+        - label: Spoken voice (read aloud, guidance)
+        - label: Dashcam and parking photo
+        - label: Opening other apps from the dock and the app drawer
+  - type: textarea
+    id: notworking
+    attributes:
+      label: What doesn't work
+      description: Anything you tried that didn't work, and what happened. Features that need native code are listed in PORTING.md.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: A photo of Settings > Help > Diagnostics.
+    validations:
+      required: true

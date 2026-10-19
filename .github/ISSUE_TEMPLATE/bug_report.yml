@@ -1,0 +1,56 @@
+name: Bug report
+description: Something in OpenRath doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting this. Security problems go privately to the maintainer instead (see SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: OpenRath version
+      description: Settings > About and licences.
+      placeholder: "1.43"
+    validations:
+      required: true
+  - type: input
+    id: unit
+    attributes:
+      label: Stereo or phone, make and model
+      placeholder: Topway TS7, Joying 10.1", Teyes CC3, Pixel 7...
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+      placeholder: "10"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to make it happen again
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        A photo of Settings > Help > Diagnostics, which lists the version, the GPS and the errors the app carried on from.
+  - type: textarea
+    id: crash
+    attributes:
+      label: Crash note
+      description: If the app closed on its own, the note from Settings > Help > Diagnostics.
+      render: text

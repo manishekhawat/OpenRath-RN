@@ -1,6 +1,15 @@
 {
   "name": "openrath",
   "version": "1.43.0",
+  "description": "A free home screen for Android car stereos: the React Native (Expo) edition of OpenRath.",
+  "homepage": "https://github.com/manishekhawat/OpenRath-RN",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/manishekhawat/OpenRath-RN.git"
+  },
+  "bugs": {
+    "url": "https://github.com/manishekhawat/OpenRath-RN/issues"
+  },
   "engines": {
     "node": ">=22.18"
   },

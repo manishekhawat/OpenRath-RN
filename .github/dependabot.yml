@@ -1,0 +1,14 @@
+# Keeps the npm packages and the actions used by the checks workflow up to date. Expo's own
+# packages are pinned to the SDK, so a pull request that moves one of them off the SDK's version
+# is closed rather than merged; `npx expo install --check` says what the SDK wants.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
