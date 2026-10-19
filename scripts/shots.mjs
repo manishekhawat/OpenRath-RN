@@ -44,7 +44,6 @@ const CAR = {
   permsExplained: 'yes',
   restoreAsked: 'yes',
   level: 'custom',
-  welcome: 'Manish',
   carBrand: 'maruti',
   carBrandName: 'Maruti Suzuki',
   carModel: 'Swift Dzire',
@@ -135,6 +134,9 @@ const SCREENS = [
   ['/settings/diagnostics', 'settings-diagnostics'],
   ['/settings/about', 'settings-about'],
 ];
+
+/** The opening logo's own view: its accessibility label is the app's name. */
+const LOGO = '[aria-label="OpenRath"]';
 
 /** Screens that need longer than the usual wait: the map draws nothing until a few fixes are in. */
 const SLOW = { map: 9000 };
@@ -243,11 +245,20 @@ async function main() {
   // ---- the wheel rolling in when the app opens, frame by frame
   if (wanted('intro')) {
     console.log('The opening logo…');
+    await rm(frames, { recursive: true, force: true });   // a shorter run must not keep older frames
+    await mkdir(frames, { recursive: true });
     const intro = await open(context, '/', { 'openrath:prefs': JSON.stringify({ ...CAR, 'feat:intro': 'on' }) });
-    await intro.waitForTimeout(250);   // the first paint; a black frame is no way to open
-    for (let i = 0; i < 30; i++) {
+    // the logo's own view carries the fade that hands over to the dashboard, so the frames stop
+    // the moment its opacity drops: the animation is the wheel and the name, nothing behind them
+    await intro.waitForSelector(`${LOGO} svg path`, { timeout: 20000 });
+    const playing = () =>
+      intro.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        return !!el && Number(getComputedStyle(el).opacity) > 0.99;
+      }, LOGO);
+    for (let i = 0; i < 40 && (await playing()); i++) {
       await intro.screenshot({ path: join(frames, String(i).padStart(2, '0') + '.png') });
-      await intro.waitForTimeout(75);
+      await intro.waitForTimeout(55);
     }
     await intro.close();
   }
@@ -304,7 +315,9 @@ async function main() {
   // ---- the frames into the opening logo's animation
   if (!wanted('intro')) return;
   const list = (await readdir(frames)).filter((n) => n.endsWith('.png')).sort();
-  await writeFile(join(frames, 'list.txt'), list.map((n) => `file '${join(frames, n)}'\nduration 0.09`).join('\n') + '\n');
+  // the last frame holds, so the finished wheel and name are readable before it starts again
+  const held = (n, i) => `file '${join(frames, n)}'\nduration ${i === list.length - 1 ? '0.9' : '0.09'}`;
+  await writeFile(join(frames, 'list.txt'), list.map(held).join('\n') + '\n');
   const gif = spawnSync(
     'ffmpeg',
     ['-y', '-f', 'concat', '-safe', '0', '-i', join(frames, 'list.txt'), '-vf', 'scale=512:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse', join(root, 'docs', 'opening-logo.gif')],
