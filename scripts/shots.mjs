@@ -138,6 +138,16 @@ const SCREENS = [
 /** The opening logo's own view: its accessibility label is the app's name. */
 const LOGO = '[aria-label="OpenRath"]';
 
+/**
+ * The opening logo's animation, with the frames and pauses of the Android project's own
+ * docs/opening-logo.gif: 25 frames a second at 512 x 300, a pause on the finished wheel, the
+ * fade, then a rest on the empty screen before it starts again.
+ */
+const LOGO_FRAME = 40;
+const LOGO_HOLD = 0.2;
+const LOGO_REST = 0.48;
+const LOGO_SIZE = { width: 512, height: 300 };
+
 /** Screens that need longer than the usual wait: the map draws nothing until a few fixes are in. */
 const SLOW = { map: 9000 };
 
@@ -243,24 +253,48 @@ async function main() {
   const context = await browser.newContext({ viewport: { width: 1024, height: 600 }, deviceScaleFactor: 1 });
 
   // ---- the wheel rolling in when the app opens, frame by frame
+  let hold = 0;   // the last frame of the finished logo, which pauses there before the fade
   if (wanted('intro')) {
     console.log('The opening logo…');
     await rm(frames, { recursive: true, force: true });   // a shorter run must not keep older frames
     await mkdir(frames, { recursive: true });
-    const intro = await open(context, '/', { 'openrath:prefs': JSON.stringify({ ...CAR, 'feat:intro': 'on' }) });
-    // the logo's own view carries the fade that hands over to the dashboard, so the frames stop
-    // the moment its opacity drops: the animation is the wheel and the name, nothing behind them
+    // the animation's own size, which is also a quarter of the pixels of a screen shot: the
+    // browser photographs it fast enough to keep up with 25 frames a second
+    const small = await browser.newContext({ viewport: LOGO_SIZE, deviceScaleFactor: 1 });
+    await small.addInitScript((seed) => {
+      for (const [k, v] of Object.entries(seed)) window.localStorage.setItem(k, v);
+    }, { 'openrath:prefs': JSON.stringify({ ...CAR, 'feat:intro': 'on' }) });
+    const intro = await small.newPage();
+    // the app's clock, so each frame is 40 ms of the animation however long the photograph takes
+    await intro.clock.install();
+    await intro.goto(`http://127.0.0.1:${port}/`, { waitUntil: 'load' });
     await intro.waitForSelector(`${LOGO} svg path`, { timeout: 20000 });
-    const playing = () =>
+    // the logo fades to let the dashboard through. The animation is the wheel and the name, so a
+    // sheet of the logo's own colour goes behind it and the fade ends on an empty screen instead.
+    await intro.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      const sheet = document.createElement('div');
+      sheet.style.cssText = `position:fixed;inset:0;background:${getComputedStyle(el).backgroundColor};`;
+      el.parentNode.insertBefore(sheet, el);
+    }, LOGO);
+    /** How far through the fade the logo is: 1 before it starts, null once it has gone. */
+    const showing = () =>
       intro.evaluate((sel) => {
         const el = document.querySelector(sel);
-        return !!el && Number(getComputedStyle(el).opacity) > 0.99;
+        return el ? Number(getComputedStyle(el).opacity) : null;
       }, LOGO);
-    for (let i = 0; i < 40 && (await playing()); i++) {
+    const clock = () => intro.evaluate(() => Date.now());
+    const began = await clock();
+    for (let i = 0; i < 80; i++) {
+      const seen = await showing();
+      if (seen === null) break;
       await intro.screenshot({ path: join(frames, String(i).padStart(2, '0') + '.png') });
-      await intro.waitForTimeout(55);
+      if (seen > 0.999) hold = i;
+      // the clock runs while the picture is taken, so it is only wound on by what is left
+      const by = began + (i + 1) * LOGO_FRAME - (await clock());
+      if (by > 0) await intro.clock.runFor(by);
     }
-    await intro.close();
+    await small.close();
   }
 
   // ---- the setup steps, as a stereo shows them the first time (the step it is on is remembered)
@@ -315,9 +349,13 @@ async function main() {
   // ---- the frames into the opening logo's animation
   if (!wanted('intro')) return;
   const list = (await readdir(frames)).filter((n) => n.endsWith('.png')).sort();
-  // the last frame holds, so the finished wheel and name are readable before it starts again
-  const held = (n, i) => `file '${join(frames, n)}'\nduration ${i === list.length - 1 ? '0.9' : '0.09'}`;
-  await writeFile(join(frames, 'list.txt'), list.map(held).join('\n') + '\n');
+  const held = (n, i) => {
+    const extra = (i === hold ? LOGO_HOLD : 0) + (i === list.length - 1 ? LOGO_REST : 0);
+    return `file '${join(frames, n)}'\nduration ${(LOGO_FRAME / 1000 + extra).toFixed(2)}`;
+  };
+  // ffmpeg's concat leaves out the last entry's own length, so the final frame is named twice
+  const entries = [...list.map(held), `file '${join(frames, list[list.length - 1])}'\nduration 0.04`];
+  await writeFile(join(frames, 'list.txt'), entries.join('\n') + '\n');
   const gif = spawnSync(
     'ffmpeg',
     ['-y', '-f', 'concat', '-safe', '0', '-i', join(frames, 'list.txt'), '-vf', 'scale=512:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse', join(root, 'docs', 'opening-logo.gif')],
