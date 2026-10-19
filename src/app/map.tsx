@@ -35,7 +35,7 @@ import * as Car from '../logic/car';
 import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
 import { mapsLink } from '../logic/geo';
-import { t } from '../logic/i18n';
+import { f, t } from '../logic/i18n';
 import { num } from '../logic/prefs';
 import * as Wake from '../logic/wake';
 import { MAP_HTML } from '../map/mapHtml';
@@ -270,9 +270,16 @@ export default function MapScreen() {
         if (at) setPark(Number(at[0]), Number(at[1]));
         break;
       }
-      case 'call':
-        Linking.openURL('tel:' + String(a[0]).replace(/[^0-9+]/g, '')).catch(() => {});
+      case 'call': {
+        // 1.43: a tap on a phone number asks first, so the map can't ring a stranger (MapCard.confirmCall)
+        const n = String(a[0] ?? '').replace(/[^0-9+]/g, '');
+        if (!n) break;
+        Alert.alert(f('Call %1$s?', n), undefined, [
+          { text: t('Cancel'), style: 'cancel' },
+          { text: t('Call'), onPress: () => Linking.openURL('tel:' + n).catch(() => {}) },
+        ]);
         break;
+      }
       case 'saveService':
         // "Mine" on a service centre: kept for the service booking reminder
         prefs.put('myService', short(a[0]).replace(/\|/g, ' ') + '|' + short(a[1]));
