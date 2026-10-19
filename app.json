@@ -40,7 +40,10 @@
         "FOREGROUND_SERVICE_LOCATION",
         "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "CAMERA",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "READ_CALENDAR",
+        "VIBRATE",
+        "ACCESS_WIFI_STATE"
       ],
       "intentFilters": [
         {
@@ -88,6 +91,13 @@
         {
           "photosPermission": "OpenRath saves dashcam clips and parking photos to your gallery.",
           "savePhotosPermission": "OpenRath saves dashcam clips and parking photos to your gallery."
+        }
+      ],
+      "expo-video",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "OpenRath shows today's and the next few days' events in the calendar box."
         }
       ]
     ]
