@@ -188,6 +188,16 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 1.42: with the car set up but no level picked, ask once, a few seconds in (HomeActivity.onResume)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (Car.ready(prefs) && !Features.levelPicked(prefs)) router.push('/settings/level?first=1');
+    }, 5000);
+    return () => clearTimeout(t);
+    // once per dashboard visit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // night-drive mode comes back on the next drive after it is tapped away
   const [nightOff, setNightOff] = useState(false);
   useEffect(() => {

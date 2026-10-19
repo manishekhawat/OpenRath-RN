@@ -2,7 +2,7 @@
   "expo": {
     "name": "OpenRath",
     "slug": "openrath",
-    "version": "1.30.0",
+    "version": "1.42.0",
     "scheme": "openrath",
     "orientation": "default",
     "icon": "./assets/icon.png",
