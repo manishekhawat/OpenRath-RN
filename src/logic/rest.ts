@@ -1,8 +1,9 @@
 /**
  * The drive clock behind the break reminder (the parts of Coach.Tracker and Drive.restStop the
- * road helpers need), and the crash-like stop test of Rescue.java. A drive starts above 8 km/h
- * and ends after ten minutes standing still; its end is also when road warnings may repeat.
+ * road helpers need). A drive starts above 8 km/h and ends after ten minutes standing still; its
+ * end is also when road warnings may repeat.
  */
+import { f } from './i18n.ts';
 import { num, type Prefs } from './prefs.ts';
 
 /** a stop this long ends the drive */
@@ -61,11 +62,5 @@ export function restText(mins: number): string {
 
 /** "2 hours of driving" or "1.5 hours of driving", for Settings. */
 export function breakText(min: number): string {
-  return min % 60 === 0 ? min / 60 + ' hours of driving' : (min / 60).toFixed(1) + ' hours of driving';
-}
-
-/** A crash-like stop: at least 40 km/h before, under 8 now, at more than 25 km/h lost per second. */
-export function crash(before: number, now: number, ms: number): boolean {
-  if (ms <= 0 || ms > 2000 || before < 40 || now > 8) return false;
-  return (before - now) / (ms / 1000) > 25;
+  return f('%1$s hours of driving', min % 60 === 0 ? String(min / 60) : (min / 60).toFixed(1));
 }

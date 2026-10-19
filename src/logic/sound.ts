@@ -1,4 +1,5 @@
 import * as Features from './features.ts';
+import { f, hindi, t } from './i18n.ts';
 import { num, type Prefs } from './prefs.ts';
 import { extraSteps } from './tracks.ts';
 
@@ -116,9 +117,12 @@ export function quietLevel(base: number, cap: number): number {
   return base > cap ? Math.max(1, cap) : base;
 }
 
-/** "10 pm", "midnight", "noon". */
+/** "10 pm", "midnight", "noon"; in Hindi the part of the day ("रात 2 बजे"), which am/pm alone doesn't tell. */
 export function hour(h: number): string {
-  return h === 0 ? 'midnight' : h === 12 ? 'noon' : (h % 12) + (h < 12 ? ' am' : ' pm');
+  if (h === 0) return t('midnight');
+  if (h === 12) return t('noon');
+  if (hindi()) return f(h < 4 || h >= 20 ? '%1$s at night' : h < 12 ? '%1$s in the morning' : h < 16 ? '%1$s in the afternoon' : '%1$s in the evening', h % 12);
+  return (h % 12) + (h < 12 ? ' am' : ' pm');
 }
 
 export const QUIET_FROM = [20, 21, 22, 23, 0];

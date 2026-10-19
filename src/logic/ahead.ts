@@ -1,11 +1,12 @@
 /**
  * What's on the road ahead (port of Ahead.java), from OpenStreetMap through the Overpass API:
- * toll plazas (a countdown with the expected toll), one-way streets (a warning when driving
- * against them), schools and hospitals (slow down, no horn), overtaking before hidden bends, and
- * in fog the next bend on this road. Every GPS fix goes to feed(); the map data is fetched again
- * every few hundred metres, in the background.
+ * toll plazas (a countdown with the expected toll), schools and hospitals (slow down, no horn),
+ * and in fog the next bend on this road. Every GPS fix goes to feed(); the map data is fetched
+ * again every few hundred metres, in the background. (The wrong-way and overtaking warnings were
+ * removed in 1.35: map data gave false alarms.)
  */
 import { bearing, dist, ahead as isAhead } from './geo.ts';
+import { f, t } from './i18n.ts';
 
 /** A place ahead to speak about once: a toll plaza, school or hospital. */
 export interface Spot {
@@ -65,13 +66,6 @@ export function nearest(
 /** The difference between two bearings, 0–180 degrees. */
 export function turn(a: number, b: number): number {
   return Math.abs(((((a - b) % 360) + 540) % 360) - 180);
-}
-
-/** Whether a heading goes against a one-way road whose drawn direction is roadBearing. */
-export function against(oneway: number, roadBearing: number, heading: number): boolean {
-  if (oneway === 0 || heading < 0) return false;
-  const flow = oneway > 0 ? roadBearing : (roadBearing + 180) % 360;
-  return turn(flow, heading) > 145;
 }
 
 /**
@@ -145,11 +139,6 @@ export function tollText(m: number, rupees: number, name: string): string {
   );
 }
 
-/** A road where a hidden bend makes overtaking risky: two-way, at most one lane each way, at speed. */
-export function noOvertake(oneway: number, lanes: number, kmh: number): boolean {
-  return oneway === 0 && lanes <= 2 && kmh >= 45;
-}
-
 // ------------------------------------------------------------------ Overpass
 
 export const OVERPASS = 'https://overpass-api.de/api/interpreter';
@@ -207,10 +196,8 @@ export type Fetch = (query: string) => Promise<string>;
 /** Which warnings are switched on, and the toll per plaza (0 = don't say a price). */
 export interface Wants {
   toll: boolean;
-  wrong: boolean;
   zones: boolean;
   fog: boolean;
-  overtake: boolean;
   tollRate: number;
 }
 
@@ -238,8 +225,6 @@ export class Ahead {
   private qLon = 0;
   private qAt = 0;
   private busy = false;
-  private againstFixes = 0;
-  private wrongAt = 0;
 
   /** For tests: whether a fetch is running. */
   get fetching(): boolean {
@@ -254,10 +239,10 @@ export class Ahead {
     const say: string[] = [];
     const v: View = { tollM: -1, tollName: '', zone: '', road: '', oneway: false, bendM: -1, bendDir: 0 };
     this.view = v;
-    if (!(want.toll || want.wrong || want.zones || want.fog || want.overtake)) return say;
-    const t = now.getTime();
+    if (!(want.toll || want.zones || want.fog)) return say;
+    const ms = now.getTime();
     const far = this.qAt === 0 || dist(this.qLat, this.qLon, lat, lon) > 350;
-    if (!this.busy && kmh > 3 && (far || t - this.qAt > 180000) && t - this.qAt > 10000) this.fetch(lat, lon, want.toll || want.zones, net, t);
+    if (!this.busy && kmh > 3 && (far || ms - this.qAt > 180000) && ms - this.qAt > 10000) this.fetch(lat, lon, want.toll || want.zones, net, ms);
 
     const once = (id: string) => (this.told.has(id) ? false : (this.told.add(id), true));
     for (const s of this.spots) {
@@ -276,40 +261,23 @@ export class Ahead {
     // the road under the car: the nearest mapped road within 12 m
     let on: Road | null = null;
     let onD = 12;
-    let onBearing = 0;
     for (const r of this.roads) {
       const n = nearest(r.pts, lat, lon);
       if (n && n.d < onD) {
         onD = n.d;
         on = r;
-        onBearing = n.bearing;
       }
     }
     if (on) {
       v.road = on.name;
       v.oneway = on.oneway !== 0;
     }
-    if (want.wrong && on && kmh > 12 && against(on.oneway, onBearing, heading)) {
-      this.againstFixes++;
-      if (this.againstFixes >= 3 && t - this.wrongAt > 60000) {
-        this.wrongAt = t;
-        say.push(
-          'Careful, this looks like a one-way street' + (on.name === '' ? '' : ', ' + on.name) + ', and you may be going against the traffic.',
-        );
-      }
-    } else this.againstFixes = 0;
-    const cell = Math.round(lat * 2000) + ',' + Math.round(lon * 2000);
     if (want.fog && on) {
       const b = nextBend(on.pts, lat, lon, heading, 400);
       v.bendM = b ? b.m : -1;
       v.bendDir = b ? b.dir : 0;
-      if (b && b.m < 250 && b.m > 40 && kmh > 10 && once('bend' + cell))
+      if (b && b.m < 250 && b.m > 40 && kmh > 10 && once('bend' + Math.round(lat * 2000) + ',' + Math.round(lon * 2000)))
         say.push((b.sharp > 60 ? 'Sharp bend ' : 'Bend ') + (b.dir > 0 ? 'to the right' : 'to the left') + ' ahead.');
-    }
-    // overtaking: on a two-way road of one lane each way, a bend close ahead hides what's coming
-    if (want.overtake && on && noOvertake(on.oneway, on.lanes, kmh)) {
-      const b = nextBend(on.pts, lat, lon, heading, 300);
-      if (b && b.m < 250 && b.m > 50 && b.sharp >= 30 && once('pass' + cell)) say.push("Bend ahead. Don't overtake here.");
     }
     return say;
   }
@@ -317,7 +285,6 @@ export class Ahead {
   /** A new drive: places can be announced again. */
   reset(): void {
     this.told.clear();
-    this.againstFixes = 0;
   }
 
   private fetch(lat: number, lon: number, places: boolean, net: Fetch, now: number): void {
@@ -342,11 +309,11 @@ export class Ahead {
 
 /** The short line for the dashboard: the most useful thing about the road ahead, or "". */
 export function line(v: View): string {
-  if (v.zone === 'hospital') return 'Hospital ahead · no horn';
-  if (v.zone === 'school') return 'School ahead · slow down';
+  if (v.zone === 'hospital') return t('Hospital ahead · no horn');
+  if (v.zone === 'school') return t('School ahead · slow down');
   if (v.tollM >= 0) {
     const where = v.tollM >= 950 ? (v.tollM / 1000).toFixed(1) + ' km' : Math.round(v.tollM / 100) * 100 + ' m';
-    return 'Toll plaza' + (v.tollName ? ' ' + v.tollName : '') + ' in ' + where;
+    return v.tollName ? f('Toll plaza %1$s in %2$s', v.tollName, where) : f('Toll plaza in %1$s', where);
   }
   return '';
 }

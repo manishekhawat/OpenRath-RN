@@ -21,19 +21,19 @@ import * as Tracks from '../logic/tracks';
 import type { FeedResult, TripState } from '../logic/trip';
 import * as TrackFiles from './tracks';
 
-/** Builds the coach's drives; a finished one (over a km) is saved to the 'drives' pref. */
+/** Builds the coach's drives; a finished one (over a km) is saved to the 'drives' pref (the coach is part of "Fuel and mileage" since 1.35). */
 export const coachTracker = {
   tracker: new Coach.Tracker(),
   /** Returns the drive a ten-minute stop just finished, or null. */
   feed(prefs: Prefs, t: number, kmh: number, movedKm: number, hardStart: boolean, hardBrake: boolean, lat: number, lon: number): Coach.Trip | null {
     const done = this.tracker.feed(t, kmh, movedKm, hardStart, hardBrake, lat, lon);
-    if (done && (Features.on(prefs, 'coach') || Features.on(prefs, 'commute'))) Coach.save(prefs, done);
+    if (done && Features.on(prefs, 'fuelPrice')) Coach.save(prefs, done);
     return done;
   },
   /** The app is closing: keep the drive so far. */
   end(prefs: Prefs, now: number = Date.now()): void {
     const done = this.tracker.close(now);
-    if (Features.on(prefs, 'coach') || Features.on(prefs, 'commute')) Coach.save(prefs, done);
+    if (Features.on(prefs, 'fuelPrice')) Coach.save(prefs, done);
   },
   /** Minutes at the wheel since the last long stop (for the break reminder). */
   drivingMinutes(now: number = Date.now()): number {

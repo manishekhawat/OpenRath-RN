@@ -10,8 +10,8 @@
  * the rules). A USB camera, or recording with the screen off, needs native code.
  */
 import * as Features from './features.ts';
+import { f, t } from './i18n.ts';
 import { num, type Prefs } from './prefs.ts';
-import { crash } from './rescue.ts';
 
 /** Seconds in a clip (MediaRecorder.setMaxDuration(60000) in the Android version). */
 export const CLIP_SECONDS = 60;
@@ -40,7 +40,7 @@ export function nextSpace(p: Prefs): number {
 }
 
 export function spaceText(p: Prefs): string {
-  return spaceGB(p) + ' GB, oldest clips deleted first';
+  return f('%1$s GB, oldest clips deleted first', spaceGB(p));
 }
 
 /**
@@ -76,7 +76,7 @@ export function joltG(p: Prefs): number {
 
 export function joltText(p: Prefs): string {
   const g = joltG(p);
-  return g <= 0 ? 'off: only harsh braking keeps a clip' : `a knock over ${g} g keeps the clip (lower is more sensitive)`;
+  return g <= 0 ? t('off: only harsh braking keeps a clip') : f('a knock over %1$s g keeps the clip (lower is more sensitive)', g);
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -131,7 +131,7 @@ export function prune(files: { name: string; size: number }[], capGB: number, cu
   return out;
 }
 
-/** The status line the Android version showed in Settings. */
+/** The status line the Android version showed in Settings (kept in English; shown through statusText). */
 export const STATUS = {
   off: 'off',
   recording: 'recording',
@@ -143,40 +143,41 @@ export const STATUS = {
   error: (msg: string) => 'camera error: ' + msg,
 };
 
+/** A status in the chosen language ("camera error: …" keeps the camera's own words). */
+export function statusText(status: string): string {
+  const err = 'camera error: ';
+  return status.startsWith(err) ? f('camera error: %1$s', status.slice(err.length)) : t(status);
+}
+
 /** The Settings row's value: the status when the dashcam is switched on. */
 export function rowText(p: Prefs, status: string): string {
-  return Features.on(p, 'dashcam') ? status : 'off (switch above)';
+  return Features.on(p, 'dashcam') ? statusText(status) : t('off (switch above)');
 }
 
 /** "3 saved in dashcam/saved" for the "Save the clip now" row. */
 export function savedText(n: number): string {
-  return `${n} saved in ${DIR}/${SAVED}`;
+  return f('%1$s saved in %2$s', n, `${DIR}/${SAVED}`);
 }
 
 /** What the "save the clip" voice command and button say. */
 export function protectText(on: boolean, recording: boolean): string {
-  if (!on) return 'Turn on the dashcam in Settings > Driving';
-  return recording ? 'Clip saved' : "The dashcam isn't recording right now";
+  if (!on) return t('Turn on the dashcam in Settings > Driving');
+  return recording ? t('Clip saved') : t("The dashcam isn't recording right now");
 }
 
 /**
  * Harsh braking from the GPS speed, as Drive.java fed each fix: more than 12 km/h lost per
- * second from over 20 km/h, measured over half a second to 2.5 s, at most once in 5 s; and a
- * crash-like stop (Rescue.crash) when accident help is on.
+ * second from over 20 km/h, measured over half a second to 2.5 s, at most once in 5 s. (1.42
+ * keeps clips on harsh braking only: the crash-like stop went with accident help.)
  */
 export class BrakeWatch {
   private prevKmh = 0;
   private prevAt = 0;
   private lastHarsh = -Infinity;
-  private crashAt = -Infinity;
 
-  feed(kmh: number, now: number, accidentHelp = false): boolean {
+  feed(kmh: number, now: number): boolean {
     let hit = false;
     const dt = now - this.prevAt;
-    if (this.prevAt !== 0 && accidentHelp && crash(this.prevKmh, kmh, dt) && now - this.crashAt > 120000) {
-      this.crashAt = now;
-      hit = true;
-    }
     if (this.prevAt !== 0 && dt <= 2500 && dt >= 500 && now - this.lastHarsh > 5000) {
       const rate = (kmh - this.prevKmh) / (dt / 1000);
       if (rate < -12 && this.prevKmh > 20) {

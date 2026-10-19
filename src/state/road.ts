@@ -1,9 +1,8 @@
 /**
- * The road helpers of the Drive service, fed one GPS fix at a time: the 0–100 timer, crash-like
- * stops, learnt speed breakers and waits, the break reminder, monsoon spots, the road ahead
- * (tolls, one-way streets, schools and hospitals, overtaking, bends in fog), hill tips and
- * highway mode. Each speaks through `speak` when its switch in Settings > Features is on, and
- * the dashboard reads what to show from `view`.
+ * The road helpers of the Drive service, fed one GPS fix at a time: the 0–100 timer, learnt speed
+ * breakers and waits, the break reminder, monsoon spots, the road ahead (tolls, schools and
+ * hospitals, bends in fog) and highway mode. Each speaks through `speak` when its switch in
+ * Settings > Features is on, and the dashboard reads what to show from `view`.
  *
  * Plain TypeScript with no React, so the drive engine (engine.ts) keeps one, on screen and behind
  * other apps alike.
@@ -15,7 +14,6 @@ import * as Features from '../logic/features';
 import * as Fog from '../logic/fog';
 import { dist } from '../logic/geo';
 import * as Highway from '../logic/highway';
-import { Hill } from '../logic/hill';
 import * as Monsoon from '../logic/monsoon';
 import { num, type Prefs } from '../logic/prefs';
 import * as Rest from '../logic/rest';
@@ -42,14 +40,10 @@ export interface RoadView {
   bendDir: number;
   /** raining, or rain due within the hour (for monsoon mode) */
   wet: boolean;
-  /** the road's slope from GPS height (+ uphill), NaN until known */
-  grade: number;
   /** the latest finished 0–100 run */
   accel: { t100: number; t60: number; record: boolean; at: number } | null;
   /** when the break reminder last spoke this drive, 0 = not yet */
   restAt: number;
-  /** a crash-like stop with accident help on, 0 = none; the dashboard can show the countdown */
-  crashAt: number;
 }
 
 export interface RoadFix {
@@ -58,12 +52,6 @@ export interface RoadFix {
   kmh: number;
   /** degrees, -1 when not known (or too slow to tell) */
   heading: number;
-  /** metres above sea level, null when the GPS gives none */
-  altitude: number | null;
-  /** metres, null when not known */
-  accuracy: number | null;
-  /** km driven since the app started, from the trip computer */
-  driveKm: number;
   t: number;
 }
 
@@ -79,10 +67,8 @@ export const EMPTY: RoadView = {
   bendM: -1,
   bendDir: 0,
   wet: false,
-  grade: NaN,
   accel: null,
   restAt: 0,
-  crashAt: 0,
 };
 
 const SAVE_MS = 15000;
@@ -92,7 +78,6 @@ export class RoadWatch {
   private speak: (text: string) => void;
   private net: Ahead.Fetch;
   private ahead = new Ahead.Ahead();
-  private hill = new Hill();
   private highway = new Highway.Highway();
   private timer = new Accel.Timer();
   private clock = new Rest.DriveClock();
@@ -139,9 +124,6 @@ export class RoadWatch {
         this.speak(r.text);
       }
     }
-    if (this.prevAt !== 0 && Rest.crash(this.prevKmh, kmh, now - this.prevAt) && now - v.crashAt > 120000 && Features.on(p, 'accidentHelp')) {
-      v.crashAt = now;
-    }
     if (kmh > 8 && this.driveId === 0) this.driveId = now;
     if (f.heading >= 0) this.lastHeading = f.heading;
     // a sharp slow-down: maybe a speed breaker; three drives at the same spot make it one
@@ -160,7 +142,6 @@ export class RoadWatch {
       v.restAt = 0;
       this.floodTold.clear();
       this.ahead.reset();
-      this.hill.reset();
       this.driveId = 0;
       this.spotTold.clear();
       v.fogHidden = false;
@@ -176,7 +157,7 @@ export class RoadWatch {
     const flood = Monsoon.check(p, this.floodTold, this.sky.wet, f.lat, f.lon, f.heading, kmh);
     if (flood) this.tell(v, flood, now);
 
-    // the road ahead: tolls, one-way streets, schools and hospitals, bends in fog
+    // the road ahead: tolls, schools and hospitals, bends in fog
     v.fog = Fog.now(p, this.sky.fog);
     v.fogGuide = Fog.guide(p);
     const said = this.ahead.feed(
@@ -185,11 +166,9 @@ export class RoadWatch {
       f.heading,
       kmh,
       {
-        toll: Features.on(p, 'tollAhead'),
-        wrong: Features.on(p, 'wrongWay'),
+        toll: Features.on(p, 'tolls'),
         zones: Features.on(p, 'zones'),
         fog: v.fog,
-        overtake: Features.on(p, 'overtake'),
         tollRate: Features.on(p, 'tolls') ? num(p, 'tollRate', 100) : 0,
       },
       this.net,
@@ -199,13 +178,6 @@ export class RoadWatch {
     v.line = Ahead.line(this.ahead.view);
     v.bendM = this.ahead.view.bendM;
     v.bendDir = this.ahead.view.bendDir;
-
-    // hill (ghat) roads, from the GPS height
-    if (Features.on(p, 'hill') && f.altitude != null && f.accuracy != null && f.accuracy < 30 && kmh > 8) {
-      const tip = this.hill.feed(f.driveKm * 1000, f.altitude);
-      if (tip) this.tell(v, tip, now);
-    }
-    v.grade = Features.on(p, 'hill') ? this.hill.grade() : NaN;
 
     // highway mode: messages wait while cruising
     if (Features.on(p, 'highway')) {
@@ -271,9 +243,10 @@ export class RoadWatch {
   /** Speed breakers and stops learnt from earlier drives: learn more, and warn about the ones ahead. */
   private learnt(v: RoadView, f: RoadFix, now: number) {
     const p = this.prefs;
+    // one switch since 1.35 ("Road learning"): speed breakers and waiting times
     const wantBumps = Features.on(p, 'bumps');
-    const wantWaits = Features.on(p, 'waits');
-    if (!wantBumps && !wantWaits) return;
+    const wantWaits = wantBumps;
+    if (!wantBumps) return;
     this.loadSpots();
     const kmh = f.kmh;
     // a stop: how long it lasted, when the car moves on

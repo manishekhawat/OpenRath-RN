@@ -1,6 +1,7 @@
 /**
  * Holidays when the highways out of town fill up (port of Holidays.java): India's national and
- * main festival holidays, and the long weekends they make. Moving festivals are listed to 2027.
+ * main festival holidays, for Settings and the start-up summary. Moving festivals are listed to
+ * 2027. (The holiday traffic warning on the dashboard was removed in 1.35.)
  */
 
 /** [yyyy-mm-dd, name, days of heavy traffic before it] */
@@ -26,7 +27,6 @@ export interface Day {
 }
 
 const day = (y: number, m: number, d: number) => new Date(y, m - 1, d);
-const addDays = (d: Date, n: number) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
 
 export function of(year: number): Day[] {
   const out: Day[] = FIXED.map(([m, d, name]) => ({ date: day(year, m, d), name, lead: 1 }));
@@ -35,28 +35,6 @@ export function of(year: number): Day[] {
     if (y === year) out.push({ date: day(y, m, d), name, lead });
   }
   return out;
-}
-
-const FRI = 5, MON = 1, THU = 4, TUE = 2;
-
-/** The holiday rush on this day, as "the Diwali long weekend" or "Holi", or null. */
-export function rush(today: Date): string | null {
-  const t = day(today.getFullYear(), today.getMonth() + 1, today.getDate());
-  const all = [...of(t.getFullYear()), ...of(t.getFullYear() + 1)];
-  for (const h of all) {
-    const wd = h.date.getDay();
-    const longWeekend = wd === FRI || wd === MON || wd === THU || wd === TUE;
-    let from = addDays(h.date, -h.lead);
-    let to = h.date;
-    if (longWeekend) {
-      if (wd === FRI) to = addDays(to, 2);
-      else if (wd === THU) to = addDays(to, 3);
-      else if (wd === MON) from = addDays(from, -3);
-      else from = addDays(from, -4);
-    }
-    if (t >= from && t <= to) return longWeekend ? `the ${h.name} long weekend` : h.name;
-  }
-  return null;
 }
 
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

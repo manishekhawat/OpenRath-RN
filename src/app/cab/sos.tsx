@@ -1,5 +1,5 @@
 /**
- * One-tap SOS (Cab.sos): five seconds to cancel a mistaken tap, then the SOS text with the car's
+ * One-tap SOS (CabSos.sos): five seconds to cancel a mistaken tap, then the SOS text with the car's
  * location goes to the two contacts. An app can't send a text by itself here, so the messaging
  * app opens with it filled in, and a QR code lets the driver's phone send it (as the Android
  * version did on stereos without a SIM); a button calls the first contact.
@@ -11,7 +11,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { QrCode } from '../../components/Qr';
 import { Button, Screen } from '../../components/ui';
-import * as Cab from '../../logic/cab';
+import * as CabSos from '../../logic/cabSos';
+import { f, t } from '../../logic/i18n';
 import { useDrive } from '../../state/drive';
 import { useLook } from '../../state/look';
 import { usePrefs } from '../../state/prefs';
@@ -20,17 +21,17 @@ export default function Sos() {
   const { prefs } = usePrefs();
   const look = useLook();
   const { trip } = useDrive();
-  const c1 = Cab.contact(prefs, 1);
-  const c2 = Cab.contact(prefs, 2);
+  const c1 = CabSos.contact(prefs, 1);
+  const c2 = CabSos.contact(prefs, 2);
   const [left, setLeft] = useState(5);
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
     if (!c1 && !c2) return;
     if (left <= 0) {
-      const text = Cab.sosText(prefs, trip.lat, trip.lon, Date.now());
+      const text = CabSos.sosText(prefs, trip.lat, trip.lon, Date.now());
       setMsg(text);
-      Linking.openURL(Cab.sosSms(prefs, text)).catch(() => {});
+      Linking.openURL(CabSos.sosSms(prefs, text)).catch(() => {});
       return;
     }
     const id = setTimeout(() => setLeft((n) => n - 1), 1000);
@@ -40,36 +41,36 @@ export default function Sos() {
 
   if (!c1 && !c2) {
     return (
-      <Screen title="No SOS contacts yet">
-        <Text style={{ color: look.text, marginBottom: 12 }}>Add two people to text in an emergency.</Text>
-        <Button label="Add them" kind="primary" onPress={() => router.replace('/cab/settings')} />
-        <Button label="Call 112" kind="danger" onPress={() => Linking.openURL('tel:112')} />
+      <Screen title={t('No SOS contacts yet')}>
+        <Text style={{ color: look.text, marginBottom: 12 }}>{t('Add two people to text in an emergency.')}</Text>
+        <Button label={t('Add them')} kind="primary" onPress={() => router.replace('/cab/settings')} />
+        <Button label={t('Call 112')} kind="danger" onPress={() => Linking.openURL('tel:112')} />
       </Screen>
     );
   }
   const first = (c1 ?? c2) as [string, string];
-  const who = Cab.sosWho(prefs);
+  const who = CabSos.sosWho(prefs);
   return (
     <SafeAreaView style={styles.page}>
       {msg === '' ? (
         <>
-          <Text style={styles.info}>Sending SOS with your location to {who}</Text>
+          <Text style={styles.info}>{f('Sending SOS with your location to %1$s', who)}</Text>
           <Text style={styles.count}>{left}</Text>
         </>
       ) : (
         <>
-          <Text style={styles.info}>{'SOS for ' + who + ':\n\n' + msg}</Text>
-          <Text style={styles.small}>Scan the code with your phone to send the SOS text.</Text>
+          <Text style={styles.info}>{msg}</Text>
+          <Text style={styles.small}>{t('Scan to send the SOS text from your phone.')}</Text>
           <View style={{ marginVertical: 12 }}>
-            <QrCode text={Cab.sosQr(prefs, msg)} size={220} />
+            <QrCode text={CabSos.sosQr(prefs, msg)} size={220} />
           </View>
           <View style={styles.row}>
-            <Big label="Send the text" colour="#7A1F1F" onPress={() => Linking.openURL(Cab.sosSms(prefs, msg)).catch(() => {})} />
-            <Big label={'Call ' + first[0]} colour="#1F6F45" onPress={() => Linking.openURL('tel:' + first[1]).catch(() => {})} />
+            <Big label={t('SOS text')} colour="#7A1F1F" onPress={() => Linking.openURL(CabSos.sosSms(prefs, msg)).catch(() => {})} />
+            <Big label={t('Call') + ' ' + first[0]} colour="#1F6F45" onPress={() => Linking.openURL('tel:' + first[1]).catch(() => {})} />
           </View>
         </>
       )}
-      <Big label={msg === '' ? 'Cancel' : 'Close'} colour="#33363C" onPress={() => router.back()} />
+      <Big label={t(msg === '' ? 'Cancel' : 'Close')} colour="#33363C" onPress={() => router.back()} />
     </SafeAreaView>
   );
 }

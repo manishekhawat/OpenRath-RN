@@ -1,9 +1,11 @@
 /**
  * The settings for the screens: the store in store.ts (which the background trip task shares),
  * with a version number so components that call usePrefs() re-render when anything changes.
+ * The language (Hindi or English, 'lang') is read once the settings are in, before any screen shows.
  */
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import * as I18n from '../logic/i18n';
 import type { Prefs } from '../logic/prefs';
 import * as Store from './store';
 
@@ -22,6 +24,7 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const off = Store.subscribe(() => setVersion(Store.version()));
     Store.load().then(() => {
+      I18n.load(Store.prefs);
       setVersion(Store.version());
       setLoaded(true);
     });

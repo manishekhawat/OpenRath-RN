@@ -1,28 +1,52 @@
 /**
- * The active theme, from Settings > Theme: one of the five built in, or a theme pack the owner
+ * The active theme, from Settings > Theme: one of the eight built in, or a theme pack the owner
  * imported (a folder in the app's documents, themes/<name>, holding theme.json and any
  * background.jpg/png; the Android version kept them in OpenRath/themes on the unit's storage).
+ * "Theme changes by itself" (ThemeAuto) is checked here every 15 seconds while a screen shows,
+ * with the car's last position from the drive engine.
  */
 import { Directory, File, Paths } from 'expo-file-system';
 import { strFromU8 } from 'fflate';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
 import auto from '../data/theme-auto.json';
+import electric from '../data/theme-electric.json';
 import genz from '../data/theme-genz.json';
 import light from '../data/theme-light.json';
 import magmaGrey from '../data/theme-magma-grey.json';
 import minimal from '../data/theme-minimal.json';
-import { brokenPack, chosen, DEFAULT, folderName, lookOf, packOf, parseJson, zipFiles, type Look, type Pack, type ThemeJson } from '../logic/theme';
+import mission from '../data/theme-mission.json';
+import roadster from '../data/theme-roadster.json';
+import {
+  brokenPack,
+  chosen,
+  DEFAULT,
+  folderName,
+  getOverride,
+  lookOf,
+  packOf,
+  parseJson,
+  setOverride,
+  zipFiles,
+  type Look,
+  type Pack,
+  type ThemeJson,
+} from '../logic/theme';
+import * as ThemeAuto from '../logic/themeauto';
 import type { Prefs } from '../logic/prefs';
+import * as Engine from './engine';
 import { usePrefs } from './prefs';
 
-/** The five themes built into the app; ids start with @ as in the Android version. */
+/** The themes built into the app (Theme.BUILT_IN); ids start with @ as in the Android version. */
 export const BUILT_IN: { id: string; json: ThemeJson }[] = [
   { id: '@magma-grey', json: magmaGrey },
   { id: '@light', json: light },
   { id: '@minimal', json: minimal },
   { id: '@auto', json: auto },
   { id: '@genz', json: genz },
+  { id: '@mission', json: mission },
+  { id: '@electric', json: electric },
+  { id: '@roadster', json: roadster },
 ];
 export const DEFAULT_THEME = DEFAULT;
 
@@ -59,7 +83,7 @@ export function installed(): Pack[] {
   return out;
 }
 
-/** Every theme: the built-in five first, then the imported ones. */
+/** Every theme: the built-in ones first, then the imported ones. */
 export function available(): Pack[] {
   return [...BUILT_IN.map((t) => packOf(t.id, t.json, null)), ...installed()];
 }
@@ -98,11 +122,42 @@ export function lookFor(p: Pack): Look {
   return bg ? { ...l, backgroundImage: bg } : l;
 }
 
+// ------------------------------------------------------------------ the theme changing by itself
+
+const autoListeners = new Set<() => void>();
+let autoTimer: ReturnType<typeof setInterval> | null = null;
+let autoPrefs: Prefs | null = null;
+
+/** ThemeAuto.check: switch the theme on screen when it should change. */
+export function checkAuto(p: Prefs): void {
+  const trip = Engine.snapshot().trip;
+  const want = ThemeAuto.want(p, trip.lat, trip.lon, Date.now());
+  if (want === getOverride()) return;
+  setOverride(want);
+  for (const fn of [...autoListeners]) fn();
+}
+
+function subscribeAuto(fn: () => void): () => void {
+  autoListeners.add(fn);
+  if (!autoTimer) autoTimer = setInterval(() => autoPrefs && checkAuto(autoPrefs), ThemeAuto.EVERY_MS);
+  return () => {
+    autoListeners.delete(fn);
+    if (autoListeners.size === 0 && autoTimer) {
+      clearInterval(autoTimer);
+      autoTimer = null;
+    }
+  };
+}
+
 export function useLook(): Look {
   const { prefs, version } = usePrefs();
+  autoPrefs = prefs;
+  const over = useSyncExternalStore(subscribeAuto, getOverride);
+  // a change in Settings (the switch, the night theme) shows at once
+  useEffect(() => checkAuto(prefs), [prefs, version]);
   const id = chosen(prefs);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => lookFor(pack(id)), [id, version]);
+  return useMemo(() => lookFor(pack(id)), [id, version, over]);
 }
 
 /**

@@ -4,6 +4,7 @@
  * this road, with a reminder about lamps and gaps. The bend itself comes from ahead.ts.
  */
 import * as Features from './features.ts';
+import { f, t } from './i18n.ts';
 import { num, type Prefs } from './prefs.ts';
 
 /** The guide speed in fog, km/h. */
@@ -22,13 +23,21 @@ export function now(p: Prefs, weatherFog: boolean): boolean {
 /** "Bend to the right in 150 m", "Bend to the left now", or "" when the road isn't known. */
 export function bendText(m: number, dir: number): string {
   if (m < 0) return '';
-  if (m < 25) return dir > 0 ? 'Bend to the right now' : 'Bend to the left now';
-  return (dir > 0 ? 'Bend to the right in ' : 'Bend to the left in ') + Math.round(m / 10) * 10 + ' m';
+  if (m < 25) return dir > 0 ? t('Bend to the right now') : t('Bend to the left now');
+  return f(dir > 0 ? 'Bend to the right in %1$s m' : 'Bend to the left in %1$s m', Math.round(m / 10) * 10);
 }
 
 /** The line under the speed: "Fog: keep below 40 km/h", or "Fog: slow down to 40" when faster. */
 export function guideText(kmh: number, guideKmh: number): string {
-  return Math.round(kmh) > guideKmh ? 'Fog: slow down to ' + guideKmh : 'Fog: keep below ' + guideKmh + ' km/h';
+  return Math.round(kmh) > guideKmh ? f('Fog: slow down to %1$s', guideKmh) : f('Fog: keep below %1$s km/h', guideKmh);
 }
 
-export const LAMPS_TEXT = 'Low beams and fog lamps on  ·  keep a long gap';
+/** The reminder under the guide speed. */
+export function lampsText(): string {
+  return t('Low beams and fog lamps on  ·  keep a long gap');
+}
+
+/** "keep below 40 km/h", for Settings. */
+export function guideRow(p: Prefs): string {
+  return f('keep below %1$s km/h', guide(p));
+}

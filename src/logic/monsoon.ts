@@ -8,6 +8,7 @@
  */
 import * as Features from './features.ts';
 import { ahead, dist } from './geo.ts';
+import { t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 
 export interface FloodSpot {
@@ -37,13 +38,13 @@ export function spots(p: Prefs): FloodSpot[] {
  * "Marked as a waterlogging spot", "This spot is already marked" or "No GPS position yet".
  */
 export function mark(p: Prefs, lat: number, lon: number, now: number): string {
-  if (lat === 0 && lon === 0) return 'No GPS position yet';
+  if (lat === 0 && lon === 0) return t('No GPS position yet');
   const l = spots(p);
-  for (const s of l) if (dist(s.lat, s.lon, lat, lon) < 100) return 'This spot is already marked';
+  for (const s of l) if (dist(s.lat, s.lon, lat, lon) < 100) return t('This spot is already marked');
   l.push({ lat, lon, at: now });
   const keep = l.slice(Math.max(0, l.length - 200)).map((s) => [String(s.lat), String(s.lon), Math.trunc(s.at)]);
   p.put('floodSpots', JSON.stringify(keep));
-  return 'Marked as a waterlogging spot';
+  return t('Marked as a waterlogging spot');
 }
 
 export function clear(p: Prefs): void {
@@ -52,7 +53,7 @@ export function clear(p: Prefs): void {
 
 /** What to say now, or null: only in rain, once per spot per drive (`told`), for spots within 700 m ahead. */
 export function check(p: Prefs, told: Set<string>, wet: boolean, lat: number, lon: number, heading: number, kmh: number): string | null {
-  if (!Features.on(p, 'monsoon')) return null;
+  if (!Features.on(p, 'rain')) return null;
   return warning(spots(p), told, wet, lat, lon, heading, kmh);
 }
 

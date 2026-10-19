@@ -9,12 +9,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 
+import * as Achievements from '../logic/achievements';
 import * as Bg from '../logic/background';
-import type * as Trip from '../logic/trip';
+import * as Features from '../logic/features';
+import * as Trip from '../logic/trip';
+import * as Wake from '../logic/wake';
 import * as Background from './background';
 import * as Engine from './engine';
 import { usePrefs } from './prefs';
 import type { RoadView } from './road';
+import * as Store from './store';
 
 export { say } from './engine';
 
@@ -28,7 +32,7 @@ export interface DriveState {
   alertError: string;
   /** "", "denied" or a message about the GPS */
   gps: string;
-  /** the road helpers' view: road-ahead line, highway and fog modes, 0–100 result, break and crash times */
+  /** the road helpers' view: road-ahead line, highway and fog modes, 0–100 result, break time */
   road: RoadView;
   /** a message came in: true when highway mode holds it back until the car slows down */
   holdMessage: () => boolean;
@@ -38,9 +42,44 @@ export interface DriveState {
   hideFog: () => void;
   setPark: (lat: number, lon: number) => void;
   resetToday: () => void;
+  /** km/h after correction, filter and smoothing; -1 when there is no fix in the last 10 s */
+  speedShown: number;
+  /** this drive's summary once stopped 5 s, when stopSummary is on */
+  stopped: { km: number; sec: number; avgKmh: number; topKmh: number } | null;
+  /** when the last fix came in (Date.now()), 0 = none yet */
+  fixAt: number;
+  /** "Park here" from a live fix only; returns the message to show */
+  parkHere: () => string;
+  /** a GPS fix from the last 30 s, or null (for saving a place where the car is) */
+  liveFix: () => { lat: number; lon: number } | null;
 }
 
 const DriveContext = createContext<DriveState | null>(null);
+
+/** The driving log for the badges: the closed days, and today so far (as Drive.history kept it). */
+async function badgeLog(): Promise<Trip.History> {
+  const hist = await history();
+  const s = Engine.snapshot().trip;
+  hist[s.day] = [Math.round(s.todayKm * 10) / 10, s.todaySec, s.todayBrakes, s.todayAccels, s.todaySpeedSec, Trip.score(s)];
+  return hist;
+}
+
+/** Everything that goes stale in deep sleep, started again (Wake.woke). */
+function woke() {
+  Store.prefs.put('sleptAt', String(Date.now() - 2 * Wake.SLEPT_MS)); // so the music carries on
+  Background.restart();
+  Wake.woke();
+}
+
+/** The dashboard's 15-second check (Wake.watch): deep sleep, and new badges at most once an hour. */
+function check(watch: Wake.Watch) {
+  const [e, u] = Wake.clocks();
+  if (watch.feed(e, u) && Features.on(Store.prefs, 'wake')) woke();
+  if (Features.on(Store.prefs, 'achievements'))
+    badgeLog()
+      .then((h) => Achievements.check(Store.prefs, h, Date.now()).forEach((id) => Engine.note(Achievements.newText(id))))
+      .catch(() => {});
+}
 
 export function DriveProvider({ children }: { children: ReactNode }) {
   const { prefs } = usePrefs();
@@ -53,13 +92,21 @@ export function DriveProvider({ children }: { children: ReactNode }) {
     Engine.ready();
     Engine.startTick();
     Engine.attach(true);
+    // the sleep watch runs while on screen; coming back checks too (the unit may have slept meanwhile)
+    const watch = new Wake.Watch();
+    check(watch);
+    const timer = setInterval(() => {
+      if (AppState.currentState === 'active') check(watch);
+    }, Wake.CHECK_MS);
     const sub = AppState.addEventListener('change', (st) => {
       if (st === 'active') {
         Engine.foreground();
         Background.sync();
+        check(watch);
       } else if (st === 'background') Engine.persist();
     });
     return () => {
+      clearInterval(timer);
       sub.remove();
       Engine.attach(false);
       Background.detach().then((m) => Engine.close(m === 'task'));
@@ -79,6 +126,8 @@ export function DriveProvider({ children }: { children: ReactNode }) {
       hideFog: Engine.hideFog,
       setPark: Engine.setPark,
       resetToday: Engine.resetToday,
+      parkHere: Engine.parkHere,
+      liveFix: Engine.liveFix,
     }),
     [snap],
   );

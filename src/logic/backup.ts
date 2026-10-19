@@ -13,9 +13,12 @@
  * computer, parking spot and day-by-day history, which this app keeps outside the settings;
  * "player" (the Android music player) has nothing to restore here and is left out of backups made
  * here, so restoring one on Android keeps its player as it is.
+ * Since 1.35 a backup's old switch names ("feat:tollAhead") are kept as they are: Features.on
+ * reads the switch each became part of, and the names of removed features are ignored.
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
+import { t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 import type { History, TripState } from './trip.ts';
 
@@ -198,12 +201,12 @@ export function unzip(bytes: Uint8Array): Opened {
   try {
     files = unzipSync(bytes);
   } catch {
-    throw new Error('not an OpenRath backup');
+    throw new Error(t('not an OpenRath backup'));
   }
   const je = files['backup.json'];
-  if (!je) throw new Error('not an OpenRath backup');
+  if (!je) throw new Error(t('not an OpenRath backup'));
   const json = JSON.parse(strFromU8(je)) as BackupJson;
-  if (!json || typeof json.prefs !== 'object' || json.prefs == null) throw new Error('not an OpenRath backup');
+  if (!json || typeof json.prefs !== 'object' || json.prefs == null) throw new Error(t('not an OpenRath backup'));
   const pictures: Record<string, Uint8Array> = {};
   for (const [n, b] of Object.entries(files)) {
     if (!n.startsWith('custom/') || n.endsWith('/')) continue;

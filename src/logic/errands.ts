@@ -1,22 +1,10 @@
 import { band } from './air.ts';
+import { f } from './i18n.ts';
 
 /**
- * Small helpers with no platform types (port of Errands.java): car wash, cost split by UPI,
- * paid parking reminder, start-up greeting, the fuel leak check and the weekly report.
+ * Small helpers with no platform types (port of Errands.java): cost split by UPI, paid parking
+ * reminder, the start-up summary (spoken, so in English), the fuel leak check and the weekly report.
  */
-
-/** Whether to suggest a wash: `every` days since the last one and no rain in the next days. */
-export function washDue(lastWash: number, now: number, every: number, forecastIcons: string[] | null): boolean {
-  if (lastWash <= 0) return false;
-  const days = Math.floor((now - lastWash) / 86400000);
-  if (days < every) return false;
-  if (forecastIcons) {
-    for (let i = 0; i < forecastIcons.length && i < 3; i++) {
-      if (forecastIcons[i] === 'w_rain' || forecastIcons[i] === 'w_storm') return false;
-    }
-  }
-  return true;
-}
 
 /** Each person's share in rupees, rounded up to the next rupee. */
 export function share(total: number, people: number): number {
@@ -143,14 +131,15 @@ const inr = (v: number) => Math.round(v).toLocaleString('en-US');
 /** The week's report as lines; empty parts are skipped. */
 export function weekly(km: number, seconds: number, fuelRs: number, tollRs: number, score: number, best: string, worst: string): string {
   const lines: string[] = [];
-  let first = `Driven: ${Math.round(km)} km in ${Math.floor(seconds / 3600)} h ${String(Math.floor((seconds % 3600) / 60)).padStart(2, '0')} min`;
-  if (km > 0 && seconds > 0) first += ` (average ${Math.round(km / (seconds / 3600))} km/h)`;
+  let first = f('Driven: %1$s km in %2$s h %3$s min', Math.round(km).toFixed(0), Math.floor(seconds / 3600),
+    String(Math.floor((seconds % 3600) / 60)).padStart(2, '0'));
+  if (km > 0 && seconds > 0) first += f(' (average %1$s km/h)', Math.round(km / (seconds / 3600)).toFixed(0));
   lines.push(first);
-  if (fuelRs > 0) lines.push(`Petrol: ₹${inr(fuelRs)}` + (km > 0 ? ` (₹${(fuelRs / km).toFixed(1)} a km)` : ''));
-  if (tollRs > 0) lines.push(`Tolls: ₹${inr(tollRs)}`);
-  if (score >= 0) lines.push(`Driving score: ${score} out of 100`);
-  if (best) lines.push('Best drive: ' + best);
-  if (worst) lines.push('Needs work: ' + worst);
+  if (fuelRs > 0) lines.push(f('Petrol: ₹%1$s', inr(fuelRs)) + (km > 0 ? f(' (₹%1$s a km)', (fuelRs / km).toFixed(1)) : ''));
+  if (tollRs > 0) lines.push(f('Tolls: ₹%1$s', inr(tollRs)));
+  if (score >= 0) lines.push(f('Driving score: %1$s out of 100', score));
+  if (best) lines.push(f('Best drive: %1$s', best));
+  if (worst) lines.push(f('Needs work: %1$s', worst));
   return lines.join('\n');
 }
 

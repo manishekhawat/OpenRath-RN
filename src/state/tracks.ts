@@ -86,5 +86,5 @@ export async function exportGpx(day: string): Promise<File> {
 export async function shareGpx(day: string): Promise<void> {
   const f = await exportGpx(day);
   if (!(await Sharing.isAvailableAsync())) throw new Error('sharing is not available on this device; saved as ' + f.uri);
-  await Sharing.shareAsync(f.uri, { mimeType: 'application/gpx+xml', dialogTitle: 'Drives on ' + day, UTI: 'com.topografix.gpx' });
+  await Sharing.shareAsync(f.uri, { mimeType: 'application/gpx+xml', dialogTitle: f.name, UTI: 'com.topografix.gpx' });
 }

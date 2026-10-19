@@ -8,6 +8,7 @@ import { useMemo } from 'react';
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 
+import { t } from '../logic/i18n';
 import * as Qr from '../logic/qr';
 
 /** The code at most `size` wide; every module a whole number of points. */
@@ -22,7 +23,7 @@ export function QrCode({ text, size, onPress }: { text: string; size: number; on
     </Svg>
   );
   return onPress ? (
-    <Pressable onPress={onPress} accessibilityLabel="QR code, tap to show it full screen">
+    <Pressable onPress={onPress} accessibilityLabel={t('QR code, tap to show it full screen')}>
       {code}
     </Pressable>
   ) : (
@@ -44,10 +45,10 @@ function Sheet({ title, text, caption, onClose }: { title: string; text: string;
         <QrCode text={text} size={size} />
       </View>
       <View style={[styles.words, landscape ? { flex: 1 } : null]}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.caption}>{caption + '\n\nHold the phone about 30 cm away, straight on.'}</Text>
+        <Text style={styles.title}>{t(title)}</Text>
+        <Text style={styles.caption}>{t(caption) + '\n\n' + t('Hold the phone about 30 cm away, straight on.')}</Text>
         <Pressable onPress={onClose} style={styles.done} accessibilityRole="button">
-          <Text style={styles.doneText}>Done</Text>
+          <Text style={styles.doneText}>{t('Done')}</Text>
         </Pressable>
       </View>
     </View>

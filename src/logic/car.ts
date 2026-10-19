@@ -3,6 +3,7 @@
  * the first start. The name beside the logo, fuel words and expected mileage all follow it.
  */
 import { colourPref, SHAPES } from './car3d.ts';
+import { t } from './i18n.ts';
 import { num, type Prefs } from './prefs.ts';
 
 export const FUELS = ['petrol', 'diesel', 'cng', 'hybrid', 'ev'] as const;
@@ -122,5 +123,5 @@ export function summary(p: Prefs): string {
   const s = (brandName(p) + ' ' + model(p)).trim();
   const f = fuel(p);
   const i = (FUELS as readonly string[]).indexOf(f);
-  return (s === '' ? 'not set' : s) + ', ' + (i < 0 ? f : FUEL_NAMES[i]).toLowerCase();
+  return (s === '' ? t('not set') : s) + ', ' + (i < 0 ? f : t(FUEL_NAMES[i])).toLowerCase();
 }

@@ -13,7 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { QrSheet } from '../../components/Qr';
 import * as Cab from '../../logic/cab';
+import * as CabMeter from '../../logic/cabMeter';
+import { ratesText } from '../../logic/cabSettings';
 import * as Errands from '../../logic/errands';
+import { f, t } from '../../logic/i18n';
 import { say, useDrive } from '../../state/drive';
 import { usePrefs } from '../../state/prefs';
 
@@ -31,12 +34,12 @@ export function useCabTick() {
   }, []);
 }
 
-/** Log a ride, and say the target when it is passed. */
+/** Log a ride, and say the target (in English) when it is passed. */
 export function logRide(prefs: Parameters<typeof Cab.addRide>[0], v: Parameters<typeof Cab.addRide>[1]) {
   const msg = Cab.addRide(prefs, v, Date.now());
   if (msg) {
-    toast(msg);
-    if (!Cab.quiet(prefs)) say(msg.replace('₹', 'rupees '));
+    toast(msg.shown);
+    if (msg.speak) say(msg.text.replace('₹', 'rupees '));
   }
 }
 
@@ -44,12 +47,12 @@ export default function Meter() {
   const { prefs } = usePrefs();
   const { trip } = useDrive();
   const { action } = useLocalSearchParams<{ action?: string }>();
-  const [done, setDone] = useState<Cab.Stopped | null>(null);
+  const [done, setDone] = useState<CabMeter.Stopped | null>(null);
   const [qr, setQr] = useState(false);
   useCabTick();
 
   const stop = () => {
-    const s = Cab.stopMeter(prefs, trip.odoKm, Date.now());
+    const s = CabMeter.stopMeter(prefs, trip.odoKm, Date.now());
     if (s) setDone(s);
   };
 
@@ -58,10 +61,10 @@ export default function Meter() {
   useEffect(() => {
     if (!action || handled.current === action) return;
     handled.current = action;
-    if (action === 'start' && !Cab.running(prefs)) Cab.startMeter(prefs, trip.odoKm, trip.lat, trip.lon, Date.now());
+    if (action === 'start' && !CabMeter.running(prefs)) CabMeter.startMeter(prefs, trip.odoKm, trip.lat, trip.lon, Date.now());
     if (action === 'stop') {
-      if (Cab.running(prefs)) stop();
-      else toast('The meter is not running');
+      if (CabMeter.running(prefs)) stop();
+      else toast(t("The fare meter isn't running"));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [action]);
@@ -78,27 +81,27 @@ export default function Meter() {
       <SafeAreaView style={styles.page}>
         <Text style={styles.head}>FARE  ·  किराया</Text>
         <Text style={styles.fare}>{Cab.rs(done.fare)}</Text>
-        <Text style={styles.info}>{done.said + (log ? '\n\nSave it to the earnings log?' : '')}</Text>
+        <Text style={styles.info}>{done.said + (log ? '\n\n' + t('Save it to the earnings log?') : '')}</Text>
         <View style={styles.row}>
-          <Big label={log ? 'Paid in cash' : 'OK'} colour="#1F6F45" onPress={() => {
+          <Big label={t(log ? 'Paid in cash' : 'OK')} colour="#1F6F45" onPress={() => {
             save('Cash');
             router.back();
           }} />
-          <Big label={Errands.validVpa(upi) ? 'UPI QR' : 'Paid by UPI'} colour="#33363C" onPress={() => {
+          <Big label={t(Errands.validVpa(upi) ? 'UPI QR' : 'Paid by UPI')} colour="#33363C" onPress={() => {
             save('UPI');
             if (Errands.validVpa(upi)) setQr(true);
             else {
-              toast('Set your UPI id in Settings > Cab driver to show a QR code');
+              toast(t('Set your UPI id in Settings > Cab driver to show a QR code'));
               router.back();
             }
           }} />
-          {log ? <Big label="Don't save" colour="#33363C" onPress={() => router.back()} /> : null}
+          {log ? <Big label={t("Don't save")} colour="#33363C" onPress={() => router.back()} /> : null}
         </View>
         <QrSheet
           visible={qr}
-          title={'Pay ' + Cab.rs(done.fare)}
+          title={f('Pay %1$s', Cab.rs(done.fare))}
           text={Errands.upiLink(upi, prefs.str('upiName', ''), done.fare, 'Cab fare')}
-          caption={'Scan with any UPI app (GPay, PhonePe, Paytm, BHIM); the fare is filled in. Pays ' + upi + '.'}
+          caption={f('Scan with any UPI app (GPay, PhonePe, Paytm, BHIM); the fare is filled in. Pays %1$s.', upi)}
           onClose={() => {
             setQr(false);
             router.back();
@@ -108,14 +111,14 @@ export default function Meter() {
     );
   }
 
-  if (!Cab.running(prefs)) {
+  if (!CabMeter.running(prefs)) {
     return (
       <SafeAreaView style={styles.page}>
-        <Text style={styles.head}>FARE METER</Text>
-        <Text style={styles.info}>{Cab.ratesText(Cab.rates(prefs))}</Text>
+        <Text style={styles.head}>FARE  ·  किराया</Text>
+        <Text style={styles.info}>{ratesText(CabMeter.rates(prefs))}</Text>
         <View style={styles.row}>
-          <Big label="Hide" colour="#33363C" onPress={() => router.back()} />
-          <Big label="Start the fare meter" colour="#1F6F45" onPress={() => Cab.startMeter(prefs, trip.odoKm, trip.lat, trip.lon, Date.now())} />
+          <Big label={t('Hide')} colour="#33363C" onPress={() => router.back()} />
+          <Big label={t('Start the fare meter')} colour="#1F6F45" onPress={() => CabMeter.startMeter(prefs, trip.odoKm, trip.lat, trip.lon, Date.now())} />
         </View>
       </SafeAreaView>
     );
@@ -124,13 +127,13 @@ export default function Meter() {
   return (
     <SafeAreaView style={styles.page}>
       <Text style={styles.head}>FARE  ·  किराया</Text>
-      <Text style={styles.fare} adjustsFontSizeToFit numberOfLines={1}>{Cab.rs(Cab.fareNow(prefs, trip.odoKm, now))}</Text>
-      <Text style={styles.info}>{Cab.meterInfo(prefs, trip.odoKm, now)}</Text>
+      <Text style={styles.fare} adjustsFontSizeToFit numberOfLines={1}>{Cab.rs(CabMeter.fareNow(prefs, trip.odoKm, now))}</Text>
+      <Text style={styles.info}>{CabMeter.meterInfo(prefs, trip.odoKm, now)}</Text>
       <View style={styles.row}>
-        <Big label="Hide" colour="#33363C" onPress={() => router.back()} />
-        <Big label="Stop and charge" colour="#1F6F45" onPress={stop} />
+        <Big label={t('Hide')} colour="#33363C" onPress={() => router.back()} />
+        <Big label={t('Stop and charge')} colour="#1F6F45" onPress={stop} />
       </View>
-      {Cab.quiet(prefs) ? <Text style={styles.small}>Quiet ride on</Text> : null}
+      {Cab.quiet(prefs) ? <Text style={styles.small}>{t('Quiet ride')}</Text> : null}
     </SafeAreaView>
   );
 }

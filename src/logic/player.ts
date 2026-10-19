@@ -207,7 +207,7 @@ export function gaveUp(mode: Mode): string {
 export function idle(mode: Mode): { title: string; sub: string } {
   return mode === WEB
     ? { title: 'Online radio', sub: 'Tap play for Indian stations' }
-    : { title: 'Music files', sub: 'Tap play for music on the unit, or add some on the music page' };
+    : { title: 'Music files', sub: 'Tap play for music on the unit or USB' };
 }
 
 /** "1:05", "1:02:09": a position or length in seconds. */
@@ -218,4 +218,100 @@ export function clock(sec: number): string {
   const m = Math.floor((s % 3600) / 60);
   const ss = String(s % 60).padStart(2, '0');
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+
+// ------------------------------------------------------------------ drag to seek (1.39)
+
+/** Where a track is now, in ms: the last reported position moved on by the time since, at the play speed (ArtColour.position). */
+export function position(pos: number, reportedAt: number, speed: number, now: number, duration: number): number {
+  const p = pos + Math.trunc((now - reportedAt) * speed);
+  return Math.max(0, duration > 0 ? Math.min(duration, p) : p);
+}
+
+/** "3:07" or "1:02:03", from milliseconds (ArtColour.clock). */
+export function clockMs(ms: number): string {
+  return clock(Math.max(0, Math.floor(ms / 1000)));
+}
+
+/** The seek bar shows for songs of a known length, when the feature is on (radio has no length). */
+export function seekable(p: Prefs, mode: Mode | null, durationSec: number): boolean {
+  return mode === FILES && durationSec > 0 && Features.on(p, 'seek');
+}
+
+/** Where a drag at `x` along a bar `width` wide lands, in seconds. */
+export function seekTo(x: number, width: number, durationSec: number): number {
+  if (width <= 0 || durationSec <= 0) return 0;
+  return Math.max(0, Math.min(1, x / width)) * durationSec;
+}
+
+// ------------------------------------------------------------------ album cover colours (1.39)
+
+/**
+ * The colour the music box takes from the album cover (ArtColour.pick): the most vivid of its
+ * common colours, kept dark enough that white text stays readable on it. Pixels as ARGB numbers;
+ * 0 when the cover is grey or empty. Not used yet: the app's own player has no covers (the media
+ * library gives audio no artwork, and reading an image's pixels needs native code), and other
+ * apps' covers need notification access.
+ */
+export function artColour(px: ArrayLike<number> | null): number {
+  if (px == null || px.length === 0) return 0;
+  // 4 levels per channel = 64 bins; each bin weighs how often and how vivid its colour is
+  const weight = new Float64Array(64);
+  const sum = Array.from({ length: 64 }, () => [0, 0, 0]);
+  const n = new Int32Array(64);
+  for (let i = 0; i < px.length; i++) {
+    const p = px[i];
+    if (p >>> 24 < 128) continue;
+    const r = (p >> 16) & 0xff;
+    const g = (p >> 8) & 0xff;
+    const b = p & 0xff;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    if (max < 40) continue; // near black
+    const sat = max === 0 ? 0 : (max - min) / max;
+    const bin = (r >> 6) * 16 + (g >> 6) * 4 + (b >> 6);
+    weight[bin] += 0.2 + sat * sat;
+    sum[bin][0] += r;
+    sum[bin][1] += g;
+    sum[bin][2] += b;
+    n[bin]++;
+  }
+  let best = -1;
+  for (let i = 0; i < 64; i++) if (n[i] > 0 && (best < 0 || weight[i] > weight[best])) best = i;
+  if (best < 0) return 0;
+  let r = Math.trunc(sum[best][0] / n[best]);
+  let g = Math.trunc(sum[best][1] / n[best]);
+  let b = Math.trunc(sum[best][2] / n[best]);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  if (max - min < 30) return 0; // grey: keep the theme's own panel
+  // darken so the brightest channel is at most 150
+  if (max > 150) {
+    r = Math.trunc((r * 150) / max);
+    g = Math.trunc((g * 150) / max);
+    b = Math.trunc((b * 150) / max);
+  }
+  return (0xff000000 | (r << 16) | (g << 8) | b) >>> 0;
+}
+
+// ------------------------------------------------------------------ phone projection (1.36)
+
+/** Words in the package name or label of projection apps (Projection.WORDS). */
+export const PROJECTION_WORDS = ['zlink', 'autokit', 'carplay', 'carbit', 'phonelink', 'phone link', 'easyconn', 'androidauto', 'android auto', 'auto link', 'autolink', 'carlink'];
+
+/** True when this package name or label looks like a wireless CarPlay / Android Auto app. */
+export function looksLikeProjection(pkg: string | null, label: string | null): boolean {
+  const s = ((pkg ?? '') + ' ' + (label ?? '')).toLowerCase();
+  // the phone's own Android Auto app, if it's here, can't receive a phone
+  if (s.includes('com.google.android.projection.gearhead')) return false;
+  return PROJECTION_WORDS.some((w) => s.includes(w));
+}
+
+/**
+ * The projection app the music box's CARPLAY / AUTO button opens ('app:projection', as
+ * Prefs.app), or "" when none is chosen. Android also found one by itself among the installed
+ * apps; listing apps needs native code, so here it is chosen by package name.
+ */
+export function projectionApp(p: Prefs): string {
+  return Features.on(p, 'projection') ? p.str('app:projection', '').trim() : '';
 }

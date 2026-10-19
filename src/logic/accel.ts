@@ -3,6 +3,7 @@
  * from GPS (or OBD-II) speed, and keeps the latest and best times in the settings: "accelLast"
  * as "t100|t60|time" and "accelBest" as "t100", as in the Android version.
  */
+import { f, t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 
 export class Timer {
@@ -74,9 +75,9 @@ export function done(p: Prefs, t100: number, t60: number, now: number): { text: 
 /** For Settings: "last 9.4 s (0–60 5.1 s)  ·  best 8.9 s", or "no full run yet". */
 export function summary(p: Prefs): string {
   const last = p.str('accelLast', '');
-  if (last === '') return 'no full run yet';
+  if (last === '') return t('no full run yet');
   const lf = last.split('|');
-  return 'last ' + lf[0] + ' s' + (lf.length > 1 && lf[1] !== '' ? ' (0–60 ' + lf[1] + ' s)' : '') + '  ·  best ' + p.str('accelBest', '-') + ' s';
+  return f('last %1$s s', lf[0]) + (lf.length > 1 && lf[1] !== '' ? ' (0–60 ' + lf[1] + ' s)' : '') + f('  ·  best %1$s s', p.str('accelBest', '-'));
 }
 
 export function forget(p: Prefs): void {

@@ -7,6 +7,7 @@
 import * as Car from './car.ts';
 import { clock } from './errands.ts';
 import { fmt, log, price, stats } from './fuel.ts';
+import { f, t as tr } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 
 /** Petrol burnt standing still with the engine running, litres per hour. */
@@ -33,7 +34,7 @@ export interface Trip {
   fastSec: number;
   starts: number;
   brakes: number;
-  // where it started and ended (0 when not known), for the commute insights
+  // where it started and ended (0 when not known)
   sLat: number;
   sLon: number;
   eLat: number;
@@ -171,20 +172,20 @@ export function reasons(t: Trip, w: number[]): string {
   const parts: string[] = [];
   for (const x of r) {
     if (x.v < 0.02) continue;
-    if (x.i === 0) parts.push(Math.trunc(t.idleSec / 60) + ' min idling');
-    else if (x.i === 1) parts.push(t.starts + (t.starts === 1 ? ' hard start' : ' hard starts'));
-    else parts.push(Math.max(1, Math.trunc(t.fastSec / 60)) + ' min above 90 km/h');
+    if (x.i === 0) parts.push(f('%1$s min idling', Math.trunc(t.idleSec / 60)));
+    else if (x.i === 1) parts.push(f(t.starts === 1 ? '%1$s hard start' : '%1$s hard starts', t.starts));
+    else parts.push(f('%1$s min above 90 km/h', Math.max(1, Math.trunc(t.fastSec / 60))));
   }
-  return parts.length === 0 ? 'smooth drive' : parts.join(', ');
+  return parts.length === 0 ? tr('smooth drive') : parts.join(', ');
 }
 
 /** The one tip for the habit that cost most overall. */
 export function tip(sum: number[]): string {
   const worst = sum[0] >= sum[1] && sum[0] >= sum[2] ? 0 : sum[1] >= sum[2] ? 1 : 2;
-  if (total(sum) < 0.05) return 'Your driving is already easy on fuel.';
-  if (worst === 0) return 'Idling costs the most. Switch off for waits longer than a minute, like level crossings.';
-  if (worst === 1) return 'Hard starts cost the most. Pull away gently and change up by 2,000 rpm.';
-  return 'Speed costs the most. Holding 80 instead of 100 km/h saves about a fifth of the fuel on the highway.';
+  if (total(sum) < 0.05) return tr('Your driving is already easy on fuel.');
+  if (worst === 0) return tr('Idling costs the most. Switch off for waits longer than a minute, like level crossings.');
+  if (worst === 1) return tr('Hard starts cost the most. Pull away gently and change up by 2,000 rpm.');
+  return tr('Speed costs the most. Holding 80 instead of 100 km/h saves about a fifth of the fuel on the highway.');
 }
 
 export function trips(p: Prefs): Trip[] {
@@ -252,29 +253,50 @@ export function summarize(p: Prefs): Summary {
 
 /** "Your last 12 drives used about 0.8 litres more than they needed (about ₹84)." */
 export function headline(s: Summary): string {
-  let b = `Your last ${s.all.length} drives used about ${total(s.sum).toFixed(1)} litres more than they needed`;
-  if (s.price > 0) b += ` (about ₹${Math.round(total(s.sum) * s.price)})`;
+  let b = f('Your last %1$s drives used about %2$s litres more than they needed', s.all.length, total(s.sum).toFixed(1));
+  if (s.price > 0) b += ' ' + f('(about ₹%1$s)', Math.round(total(s.sum) * s.price));
   return b + '.';
 }
 
 /** One drive's line under the reasons: "  (about 0.12 l, ₹13 extra)", or "" when it was smooth. */
 export function extra(w: number[], pricePerL: number): string {
   if (total(w) < 0.02) return '';
-  return `  (about ${total(w).toFixed(2)} l` + (pricePerL > 0 ? `, ₹${Math.round(total(w) * pricePerL)}` : '') + ' extra)';
+  const l = total(w).toFixed(2);
+  return '  (' + (pricePerL > 0 ? f('about %1$s l, ₹%2$s extra', l, Math.round(total(w) * pricePerL)) : f('about %1$s l extra', l)) + ')';
 }
 
 export const EMPTY =
   'No drives recorded yet. After your next drive of a kilometre or more, this shows which drives used the most extra fuel, and why.';
 
+/** What the coach says before any drive is recorded. */
+export function empty(): string {
+  return tr(EMPTY);
+}
+
+/** "The drives that used the most extra fuel:" */
+export function worstHeading(): string {
+  return tr('The drives that used the most extra fuel:');
+}
+
+/** "12.4 km, 25 min" */
+export function kmMin(t: Trip): string {
+  return f('%1$s km, %2$s min', t.km.toFixed(1), minutes(t));
+}
+
+/** "Estimates for a 1.2 litre petrol engine, using 18.0 km/l." */
+export function footnote(kmpl: number): string {
+  return f('Estimates for a 1.2 litre petrol engine, using %1$s km/l.', fmt(kmpl));
+}
+
 /** The whole coach text, as the Android version's dialog showed it. */
 export function report(p: Prefs): string {
   const s = summarize(p);
-  if (s.all.length === 0) return EMPTY;
-  let b = headline(s) + '\n\n' + tip(s.sum) + '\n\nThe drives that used the most extra fuel:\n';
+  if (s.all.length === 0) return empty();
+  let b = headline(s) + '\n\n' + tip(s.sum) + '\n\n' + worstHeading() + '\n';
   for (const t of s.sorted.slice(0, 8)) {
     const w = waste(t, s.kmpl);
-    b += `\n• ${when(t.start)}  ·  ${t.km.toFixed(1)} km, ${minutes(t)} min`;
+    b += `\n• ${when(t.start)}  ·  ${kmMin(t)}`;
     b += '\n   ' + reasons(t, w) + extra(w, s.price);
   }
-  return b + `\n\nEstimates for a 1.2 litre petrol engine, using ${fmt(s.kmpl)} km/l.`;
+  return b + '\n\n' + footnote(s.kmpl);
 }

@@ -6,6 +6,7 @@ import { Linking, Text } from 'react-native';
 
 import { Row, Screen } from '../../components/ui';
 import * as Cab from '../../logic/cab';
+import { t } from '../../logic/i18n';
 import { dist } from '../../logic/geo';
 import { useDrive } from '../../state/drive';
 import { useLook } from '../../state/look';
@@ -21,10 +22,10 @@ export default function Hotspots() {
 
   if (spots.length === 0) {
     return (
-      <Screen title="Pickup hotspots">
+      <Screen title={t('Pickup hotspots')}>
         <Text style={{ color: look.text, lineHeight: 22 }}>
-          Not enough rides around this hour yet. Each ride you log (or meter) remembers where it started; places with two or more
-          rides around this time of day show here.
+          {t('Not enough rides around this hour yet. Each ride you log (or meter) remembers where it started; ' +
+            'places with two or more rides around this time of day show here.')}
         </Text>
       </Screen>
     );
@@ -32,13 +33,13 @@ export default function Hotspots() {
   // the Android version drove there with its own map; here Google Maps (or any map app) gets the directions
   const go = (lat: number, lon: number) =>
     Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(5)},${lon.toFixed(5)}&travelmode=driving`).catch(() =>
-      toast('Needs a map app (Google Maps, Organic Maps or OsmAnd)'),
+      toast(t('Needs a map app (Google Maps, Organic Maps or OsmAnd)')),
     );
   return (
-    <Screen title="Where you got rides at this hour (tap to drive there)">
-      {spots.map(([lat, lon, n]) => {
-        const far = trip.lat === 0 ? '' : (dist(trip.lat, trip.lon, lat, lon) / 1000).toFixed(1) + ' km away  ·  ';
-        return <Row key={lat + ',' + lon} name={far + Math.round(n) + ' rides around ' + hour + ':00'} value={Cab.where(lat, lon)} onPress={() => go(lat, lon)} />;
+    <Screen title={t('Where you got rides at this hour (tap to drive there)')}>
+      {spots.map((s) => {
+        const far = trip.lat === 0 ? null : dist(trip.lat, trip.lon, s[0], s[1]) / 1000;
+        return <Row key={s[0] + ',' + s[1]} name={Cab.hotspotRow(s, hour, far)} onPress={() => go(s[0], s[1])} />;
       })}
     </Screen>
   );

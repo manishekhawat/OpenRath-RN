@@ -3,6 +3,7 @@
  * location source runs, the batch of fixes a background task hands over, and what waits for the
  * screen while the app is behind maps or music. The GPS and task side is src/state/background.ts.
  */
+import { t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 
 /** The switch in Settings > Road helpers, on unless turned off. */
@@ -46,10 +47,10 @@ export function shouldAsk(p: Prefs, background: boolean, onScreen: boolean, forc
 
 /** The settings row's line. */
 export function statusText(want: boolean, background: boolean | null, src: Source): string {
-  if (!want) return 'off: trips count only while OpenRath is on screen';
-  if (src === 'task') return 'on: counting while maps or music are open';
-  if (background === false) return 'on, but location isn\'t allowed all the time; tap to allow';
-  return 'on';
+  if (!want) return t('off: trips count only while OpenRath is on screen');
+  if (src === 'task') return t('on: counting while maps or music are open');
+  if (background === false) return t("on, but location isn't allowed all the time; tap to allow");
+  return t('on');
 }
 
 /**
@@ -68,28 +69,23 @@ export function fresh<T extends { timestamp: number }>(batch: readonly T[], last
   return out;
 }
 
-/** Something for the screen that came up while the app was behind another one. */
+/** A note for the screen that came up while the app was behind another one (Cab notes, new badges). */
 export interface Queued {
-  kind: 'sos' | 'note';
-  /** the SOS screen's link, or the note's text */
+  kind: 'note';
   text: string;
   at: number;
 }
 
-/** A crash older than this isn't worth a countdown that texts the contact by itself. */
-export const SOS_STALE_MS = 2 * 60000;
 /** Notes kept for the return to the screen, the newest. */
 export const NOTES_KEPT = 5;
 
-/** What to show on coming back: the latest SOS if it is recent, and the newest notes, each once. */
-export function due(queue: readonly Queued[], now: number): Queued[] {
-  const sos = queue.filter((q) => q.kind === 'sos' && now - q.at <= SOS_STALE_MS).slice(-1);
+/** What to show on coming back: the newest notes, each once. */
+export function due(queue: readonly Queued[], _now: number): Queued[] {
   const notes: Queued[] = [];
   for (const q of queue) {
-    if (q.kind !== 'note') continue;
     const i = notes.findIndex((n) => n.text === q.text);
     if (i >= 0) notes.splice(i, 1);
     notes.push(q);
   }
-  return [...sos, ...notes.slice(-NOTES_KEPT)];
+  return notes.slice(-NOTES_KEPT);
 }

@@ -3,6 +3,7 @@
  * speed and Settings needs the owner's PIN. The Android version also capped the music volume;
  * that needs native audio code (see PORTING.md).
  */
+import { f } from './i18n.ts';
 import { num, type Prefs } from './prefs.ts';
 
 export function on(p: Prefs): boolean {
@@ -35,5 +36,5 @@ export function validPin(pin: string): boolean {
 }
 
 export function onText(p: Prefs): string {
-  return `Valet mode is on: volume up to ${volumeCap(p)}%, warning above ${speed(p)} km/h, Settings locked`;
+  return f('Valet mode is on: volume up to %1$s%%, warning above %2$s km/h, Settings locked', volumeCap(p), speed(p));
 }

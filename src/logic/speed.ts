@@ -1,9 +1,12 @@
 /**
  * Speed limits and speed cameras from OpenStreetMap through the free Overpass API (the pure
  * parts of Drive.speedAlerts). Many Indian roads have no limit tagged, so a limit shows only
- * where the map has one.
+ * where the map has one. Also the speed shown (Fixes.java): replayed fixes skipped, the smooth
+ * number, the speed filter and the speed correction.
  */
 import { ahead, dist } from './geo.ts';
+import { f, t } from './i18n.ts';
+import { num, type Prefs } from './prefs.ts';
 
 export interface Camera {
   lat: number;
@@ -66,4 +69,75 @@ export function nearestCamera(lat: number, lon: number, heading: number, kmh: nu
 /** Above the limit (with 3 km/h grace), or above the owner's warning speed anywhere. */
 export function isOver(kmh: number, limit: number, warnAt: number): boolean {
   return (limit > 0 && kmh > limit + 3) || (warnAt > 0 && kmh > warnAt);
+}
+
+// ------------------------------------------------------------------ the speed shown (Fixes.java, 1.38–1.39)
+
+/** Below this the car is standing still: GPS drift at a red light reads 1–2 km/h. */
+export const STILL_KMH = 2;
+/** No fix for this long: the speed shows "--". */
+export const FIX_TIMEOUT_MS = 10000;
+
+/**
+ * True when a fix can be used: real coordinates, and not older than the last fix used (0 = none
+ * yet). Android can hand back an old cached fix when location updates restart; it is skipped
+ * instead of adding a jump to the trip or a spike to the speed.
+ */
+export function usable(lat: number, lon: number, fixT: number, lastT: number): boolean {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return false;
+  if (lat === 0 && lon === 0) return false;
+  return lastT === 0 || fixT === 0 || fixT >= lastT;
+}
+
+/**
+ * The speed to show: eased towards the new reading over about a third of a second, so it doesn't
+ * jump digit to digit, and 0 below `stillKmh` (the speed filter) so it doesn't crawl at a red light.
+ */
+export function smooth(shown: number, raw: number, dtMs: number, stillKmh: number = STILL_KMH): number {
+  if (raw < stillKmh) return 0;
+  if (shown <= 0 || dtMs <= 0 || dtMs > 5000) return raw;
+  const a = 1 - Math.exp(-dtMs / 350);
+  return shown + a * (raw - shown);
+}
+
+/**
+ * GPS speed with the owner's correction, in percent (-10 to +10), so it matches the car's own
+ * speedometer, which usually reads a few percent high (Drive.corrected).
+ */
+export function corrected(kmh: number, percent: number): number {
+  const p = Math.max(-10, Math.min(10, percent));
+  return (kmh * (100 + p)) / 100;
+}
+
+/** Settings > Driving > Speed correction ('speedFix', percent). */
+export function fix(p: Prefs): number {
+  return num(p, 'speedFix', 0);
+}
+
+export const FIX_CHOICES = [-5, -3, -2, 0, 2, 3, 4, 5, 6, 8, 10];
+
+/** "off" or "GPS speed +3%". */
+export function fixText(percent: number): string {
+  return percent === 0 ? t('off') : f('GPS speed %1$s%%', (percent > 0 ? '+' : '') + percent);
+}
+
+/** One choice in the list: "off", "+3%" or "-2%". */
+export function fixChoice(percent: number): string {
+  return percent === 0 ? t('off') : (percent > 0 ? '+' : '') + percent + '%';
+}
+
+/** Settings > Driving > Speed filter ('speedFilter', km/h): the speed shows 0 below it. */
+export function filter(p: Prefs): number {
+  return num(p, 'speedFilter', STILL_KMH);
+}
+
+export const FILTER_CHOICES = [0, 2, 3, 4, 5, 6, 8];
+
+/** "off" or "0 below 4 km/h". */
+export function filterText(kmh: number): string {
+  return kmh === 0 ? t('off') : f('0 below %1$s km/h', kmh);
+}
+
+export function filterChoice(kmh: number): string {
+  return kmh === 0 ? t('off') : kmh + ' km/h';
 }

@@ -13,6 +13,7 @@ import { Alert, Image, Modal, Platform, Pressable, StyleSheet, Text, View } from
 
 import { Button, Heading, Row, Screen } from '../components/ui';
 import * as Features from '../logic/features';
+import { f, t } from '../logic/i18n';
 import * as Wallet from '../logic/wallet';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
@@ -59,7 +60,7 @@ async function openPdf(f: File) {
 }
 
 async function share(f: File) {
-  if (!(await Sharing.isAvailableAsync())) return Alert.alert('Sharing is not available on this unit');
+  if (!(await Sharing.isAvailableAsync())) return Alert.alert(t('Sharing is not available on this unit'));
   await Sharing.shareAsync(f.uri, { mimeType: Wallet.mime(f.name), dialogTitle: f.name });
 }
 
@@ -74,9 +75,9 @@ function Viewer({ files, start, onClose }: { files: { i: number; name: string }[
       <Pressable style={styles.viewer} onPress={next}>
         {Wallet.isPdf(cur.name) ? (
           <View style={{ alignItems: 'center', gap: 12 }}>
-            <Text style={{ color: '#FFFFFF', fontSize: 22 }}>{Wallet.NAMES[cur.i]} is a PDF</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 22 }}>{f('%1$s is a PDF', t(Wallet.NAMES[cur.i]))}</Text>
             <Pressable onPress={() => openPdf(file)} style={styles.open}>
-              <Text style={{ color: '#FFFFFF', fontSize: 18 }}>Open it</Text>
+              <Text style={{ color: '#FFFFFF', fontSize: 18 }}>{t('Open it')}</Text>
             </Pressable>
           </View>
         ) : (
@@ -85,7 +86,7 @@ function Viewer({ files, start, onClose }: { files: { i: number; name: string }[
         <View style={styles.label}>
           <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '500' }}>{Wallet.label(cur.i, at, files.length)}</Text>
         </View>
-        <Pressable onPress={onClose} style={styles.close} hitSlop={12} accessibilityLabel="Close">
+        <Pressable onPress={onClose} style={styles.close} hitSlop={12} accessibilityLabel={t('Close')}>
           <Text style={{ color: '#FFFFFF', fontSize: 28 }}>×</Text>
         </Pressable>
       </Pressable>
@@ -107,9 +108,9 @@ export default function WalletScreen() {
   const done = (i: number) => {
     setEditing(null);
     refresh();
-    Alert.alert(Wallet.NAMES[i] + ' saved');
+    Alert.alert(f('%1$s saved', t(Wallet.NAMES[i])));
   };
-  const failed = (e: unknown) => Alert.alert("Couldn't use that file", String((e as Error)?.message ?? e));
+  const failed = (e: unknown) => Alert.alert(f("Couldn't use that photo: %1$s", String((e as Error)?.message ?? e)));
 
   const fromGallery = async (i: number) => {
     try {
@@ -126,7 +127,7 @@ export default function WalletScreen() {
   const fromCamera = async (i: number) => {
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) return Alert.alert('Allow the camera to photograph the document');
+      if (!perm.granted) return Alert.alert(t('Allow the camera to photograph the document'));
       const r = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.9 });
       if (r.canceled || !r.assets[0]) return;
       await keep(i, r.assets[0].uri, 'photo.jpg', r.assets[0].mimeType);
@@ -158,7 +159,7 @@ export default function WalletScreen() {
         const i = Wallet.which(a.name, true);
         if (i < 0) continue;
         await keep(i, a.uri, a.name, a.mimeType);
-        got.push(Wallet.NAMES[i]);
+        got.push(t(Wallet.NAMES[i]));
       }
       refresh();
       Alert.alert(Wallet.importText(got));
@@ -172,49 +173,49 @@ export default function WalletScreen() {
     if (n) new File(folder(), n).delete();
     setEditing(null);
     refresh();
-    Alert.alert(Wallet.NAMES[i] + ' removed');
+    Alert.alert(f('%1$s removed', t(Wallet.NAMES[i])));
   };
 
   if (!Features.on(prefs, 'wallet')) {
     return (
-      <Screen title="Car documents">
-        <Text style={{ color: look.textDim }}>Turn on "Car documents wallet" in Settings &gt; Features.</Text>
+      <Screen title={t('Car documents')}>
+        <Text style={{ color: look.textDim }}>{t('Turn on the documents wallet in Settings > Car')}</Text>
       </Screen>
     );
   }
 
   return (
-    <Screen title="Car documents">
+    <Screen title={t('Car documents')}>
       <Text style={{ color: look.textDim, marginBottom: 8 }}>
-        Kept inside the app, so they show with no network, to show at a check. {Wallet.countText(names())}.
+        {t('Kept inside the app, so they show with no network, to show at a check.')} {Wallet.countText(names())}.
       </Text>
-      {files.length > 0 ? <Button label="Show the documents" kind="primary" onPress={() => setShowing(files[0].i)} /> : null}
-      <Heading>Documents</Heading>
+      {files.length > 0 ? <Button label={t('Show the documents')} kind="primary" onPress={() => setShowing(files[0].i)} /> : null}
+      <Heading>{t('Documents')}</Heading>
       {Wallet.DOCS.map((_, i) => (
         <View key={i}>
           <Row
-            name={Wallet.NAMES[i]}
-            value={have[i] ? (Wallet.isPdf(have[i]) ? 'PDF' : 'Photo') : 'not added'}
+            name={t(Wallet.NAMES[i])}
+            value={have[i] ? (Wallet.isPdf(have[i]) ? 'PDF' : t('Photo')) : t('  (not added)').trim()}
             onPress={() => setEditing(editing === i ? null : i)}
           />
           {editing === i ? (
             <View style={{ marginVertical: 8 }}>
               {have[i] ? (
                 <>
-                  <Button label="Show" kind="primary" onPress={() => setShowing(i)} />
-                  <Button label="Share" onPress={() => share(new File(folder(), have[i] as string)).catch(failed)} />
+                  <Button label={t('Show')} kind="primary" onPress={() => setShowing(i)} />
+                  <Button label={t('Share')} onPress={() => share(new File(folder(), have[i] as string)).catch(failed)} />
                 </>
               ) : null}
-              <Button label={have[i] ? 'Replace with a photo from the gallery' : 'Add a photo from the gallery'} onPress={() => fromGallery(i)} />
-              <Button label="Take a photo" onPress={() => fromCamera(i)} />
-              <Button label="Pick a file (photo or PDF)" onPress={() => fromFiles(i)} />
-              {have[i] ? <Button label="Remove" kind="danger" onPress={() => remove(i)} /> : null}
+              <Button label={have[i] ? t('Replace with a photo from the gallery') : t('Add a photo from the gallery')} onPress={() => fromGallery(i)} />
+              <Button label={t('Take a photo')} onPress={() => fromCamera(i)} />
+              <Button label={t('Pick a file (photo or PDF)')} onPress={() => fromFiles(i)} />
+              {have[i] ? <Button label={t('Remove')} kind="danger" onPress={() => remove(i)} /> : null}
             </View>
           ) : null}
         </View>
       ))}
-      <Heading>Several at once</Heading>
-      <Row name="Import by file name" value="Pick files named rc, insurance, puc or licence (.jpg, .png or .pdf)" onPress={importMany} />
+      <Heading>{t('Several at once')}</Heading>
+      <Row name={t('Import by file name')} value={t('Pick files named rc, insurance, puc or licence (.jpg, .png or .pdf)')} onPress={importMany} />
       {showing != null && files.length > 0 ? <Viewer files={files} start={showing} onClose={() => setShowing(null)} /> : null}
     </Screen>
   );

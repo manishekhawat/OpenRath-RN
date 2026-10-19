@@ -5,6 +5,7 @@
  * 'documents' folder (the time, so a replaced picture never shows from the image cache); the
  * screen does the file work, this the naming.
  */
+import { f, t } from './i18n.ts';
 
 export const DOCS = ['rc', 'insurance', 'puc', 'licence'];
 export const NAMES = ['RC (registration)', 'Insurance', 'PUC certificate', 'Driving licence'];
@@ -78,17 +79,17 @@ export function index(names: string[]): (string | null)[] {
 
 /** "2 of 4 added", for the Settings row. */
 export function countText(names: string[]): string {
-  return index(names).filter((n) => n != null).length + ' of 4 added';
+  return f('%1$s of 4 added', index(names).filter((n) => n != null).length);
 }
 
 /** Under the picture while showing: the name, and how to get to the next one. */
 export function label(i: number, at: number, have: number): string {
-  return NAMES[i] + (have > 1 ? '   ·   tap for the next (' + (at + 1) + ' of ' + have + ')' : '');
+  return t(NAMES[i]) + (have > 1 ? f('   ·   tap for the next (%1$s of %2$s)', at + 1, have) : '');
 }
 
 /** What an import of several files found, by name. */
 export function importText(got: string[]): string {
   return got.length === 0
-    ? 'Nothing to import. Pick files named rc, insurance, puc or licence (.jpg, .png or .pdf).'
-    : 'Imported: ' + got.join(', ') + '.';
+    ? t('Nothing to import. Pick files named rc, insurance, puc or licence (.jpg, .png or .pdf).')
+    : f('Imported: %1$s.', got.join(', '));
 }

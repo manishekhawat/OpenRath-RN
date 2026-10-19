@@ -8,6 +8,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StylePro
 
 import { Screen } from '../components/ui';
 import * as Features from '../logic/features';
+import { f, t } from '../logic/i18n';
 import { dist } from '../logic/geo';
 import * as Kids from '../logic/kids';
 import { useDrive } from '../state/drive';
@@ -50,8 +51,8 @@ function Ask({ title, value, hint, onDone }: { title: string; value: string; hin
       <Text style={styles.askTitle}>{title}</Text>
       <TextInput value={v} onChangeText={setV} placeholder={hint} placeholderTextColor="#8FA0B6" autoFocus selectTextOnFocus style={styles.input} />
       <View style={{ flexDirection: 'row', gap: 10 }}>
-        <Pill label="OK" colour={ON} style={{ flex: 1, height: 48 }} onPress={() => onDone(v.trim())} />
-        <Pill label="Cancel" colour={IDLE} style={{ flex: 1, height: 48 }} onPress={() => onDone(null)} />
+        <Pill label={t('OK')} colour={ON} style={{ flex: 1, height: 48 }} onPress={() => onDone(v.trim())} />
+        <Pill label={t('Cancel')} colour={IDLE} style={{ flex: 1, height: 48 }} onPress={() => onDone(null)} />
       </View>
     </View>
   );
@@ -65,12 +66,12 @@ function Colours() {
   return (
     <View style={styles.body}>
       <View style={[styles.card, { backgroundColor: hex }]}>
-        <Text style={{ fontSize: 64, fontWeight: '500', color: Kids.light(name) ? PAGE : '#FFFFFF' }}>{name} car</Text>
+        <Text style={{ fontSize: 64, fontWeight: '500', color: Kids.light(name) ? PAGE : '#FFFFFF' }}>{f('%1$s car', t(name))}</Text>
       </View>
-      <Text style={styles.hint}>Who sees a car this colour first? Tap your name.</Text>
+      <Text style={styles.hint}>{t('Who sees a car this colour first? Tap your name.')}</Text>
       {renaming != null ? (
         <Ask
-          title="Player's name"
+          title={t("Player's name")}
           value={Kids.player(prefs, renaming)}
           onDone={(v) => {
             if (v) Kids.rename(prefs, renaming, v);
@@ -95,7 +96,7 @@ function Colours() {
           ))}
         </View>
       )}
-      <Text style={styles.foot}>Long-press a name to change it. Scores start again each day.</Text>
+      <Text style={styles.foot}>{t('Long-press a name to change it. Scores start again each day.')}</Text>
     </View>
   );
 }
@@ -110,7 +111,7 @@ function Plates() {
         {Kids.STATES.map(([code, state]) => (
           <Pill
             key={code}
-            label={code + '\n' + state}
+            label={code + '\n' + t(state)}
             size={15}
             colour={got.includes(code) ? GOT : IDLE}
             style={styles.plate}
@@ -130,22 +131,22 @@ function Far() {
   if (ts.length === 0) {
     return (
       <View style={[styles.body, { justifyContent: 'center' }]}>
-        <Text style={{ color: '#FFFFFF', fontSize: 22, textAlign: 'center' }}>Search for a place on the map first,{'\n'}or save Home or Office there.</Text>
+        <Text style={{ color: '#FFFFFF', fontSize: 22, textAlign: 'center' }}>{t('Search for a place on the map first,\nor save Home or Office there.')}</Text>
       </View>
     );
   }
   const at = Kids.targetIndex(prefs, ts.length);
-  const t = ts[at];
-  const m = trip.lat === 0 && trip.lon === 0 ? -1 : dist(trip.lat, trip.lon, t.lat, t.lon);
+  const target = ts[at];
+  const m = trip.lat === 0 && trip.lon === 0 ? -1 : dist(trip.lat, trip.lon, target.lat, target.lon);
   const hasDest = prefs.str('dest', '') !== '' || prefs.str('lastDest', '') !== '';
   return (
     <View style={[styles.body, { justifyContent: 'center', alignItems: 'center' }]}>
       <Text style={{ color: '#FFFFFF', fontSize: 150, fontWeight: '300' }}>{Kids.km(m)}</Text>
       {naming ? (
         <Ask
-          title="Call this place"
+          title={t('Call this place')}
           value={prefs.str('destNick', '')}
-          hint="e.g. Nani's house"
+          hint={t("e.g. Nani's house")}
           onDone={(v) => {
             if (v != null) prefs.put('destNick', v);
             setNaming(false);
@@ -158,11 +159,11 @@ function Far() {
             if (at === 0 && hasDest) setNaming(true);
           }}
         >
-          <Text style={{ color: '#C8D2E0', fontSize: 30, textAlign: 'center' }}>km to {t.name}</Text>
+          <Text style={{ color: '#C8D2E0', fontSize: 30, textAlign: 'center' }}>{f('km to %1$s', t(target.name))}</Text>
         </Pressable>
       )}
       <Text style={[styles.foot, { marginTop: 12 }]}>
-        Straight-line distance; the road is a little longer.  Tap the place to change it, long-press to give it a name.
+        {t('Straight-line distance; the road is a little longer.  Tap the place to change it, long-press to give it a name.')}
       </Text>
     </View>
   );
@@ -175,17 +176,17 @@ export default function KidsScreen() {
   const [tab, setTab] = useState(0);
   if (!Features.on(prefs, 'kids')) {
     return (
-      <Screen title="Trip games">
-        <Text style={{ color: '#8FA0B6' }}>Turn on "Trip games for children" in Settings &gt; Features.</Text>
+      <Screen title={t('Trip games for children')}>
+        <Text style={{ color: '#8FA0B6' }}>{t('Turn on trip games in Settings > Family')}</Text>
       </Screen>
     );
   }
   return (
-    <Screen title="Trip games" scroll={false}>
+    <Screen title={t('Trip games for children')} scroll={false}>
       <View style={{ flex: 1, backgroundColor: PAGE }}>
         <View style={styles.tabs}>
           {TABS.map((n, i) => (
-            <Pill key={n} label={n} colour={i === tab ? ON : IDLE} style={{ flex: 1, height: 54 }} onPress={() => setTab(i)} />
+            <Pill key={n} label={t(n)} colour={i === tab ? ON : IDLE} style={{ flex: 1, height: 54 }} onPress={() => setTab(i)} />
           ))}
         </View>
         <View style={{ flex: 1 }}>{tab === 0 ? <Colours /> : tab === 1 ? <Plates /> : <Far />}</View>

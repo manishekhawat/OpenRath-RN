@@ -1,8 +1,11 @@
+import * as CarAnswer from './caranswer.ts';
+
 /**
- * Voice commands in English, Hindi and Hinglish (port of Voice.java): "FM 91.1", "call Mom",
- * "mummy ko call karo", "take me home", "घर ले चलो", "गाना चलाओ", "volume badhao". Anything that
- * isn't a command is treated as a place to search for on the map. parse() has no React Native
- * types, so it is unit-tested; MicButton listens and acts on what it returns.
+ * Voice commands in English, Hindi and Hinglish (port of Voice.java, 1.42): "FM 91.1", "call Mom",
+ * "mummy ko call karo", "take me home", "घर ले चलो", "गाना चलाओ", "volume badhao", and questions
+ * about the car ("how far today?", "कितना पेट्रोल है"). Anything that isn't a command is treated as
+ * a place to search for on the map. parse() has no React Native types, so it is unit-tested;
+ * MicButton listens and acts on what it returns.
  */
 
 export interface Command {
@@ -73,6 +76,10 @@ export function parse(heard: string | null | undefined): Command | null {
   if (has(s, "(\\b360\\b|three sixty|bird'?s eye|तीन सौ साठ)")) return c('view360');
   // the news: "read the news", "headlines", "aaj ki khabar", "समाचार सुनाओ"
   if (has(s, '(\\bnews\\b|headlines|khabar|khabre|khabren|samachar|समाचार|खबर|ख़बर|न्यूज़|न्यूज)')) return c('news');
+
+  // questions about the car: fuel, engine, faults, battery, today's distance
+  const ask = CarAnswer.topic(s);
+  if (ask != null) return c('ask', ask);
 
   // volume
   if (has(s, '(volume|awaaz|awaz|आवाज़|आवाज)') || has(s, '^(louder|quieter|softer)')) {
@@ -167,4 +174,14 @@ export function pick(said: string[]): Command | null {
     if (x.kind !== 'search') return x;
   }
   return cmd;
+}
+
+/**
+ * Where to put the floating mic (Floaters.place): the saved spot ('micX', 'micY', as a share of
+ * the screen) less half the button, kept on screen. Returns [x, y] of its top-left corner.
+ */
+export function place(fx: number, fy: number, w: number, h: number, size: number): [number, number] {
+  const x = Math.max(0, Math.min(w - size, fx * w - size / 2));
+  const y = Math.max(0, Math.min(h - size, fy * h - size / 2));
+  return [x, y];
 }

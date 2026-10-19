@@ -1,6 +1,6 @@
 /**
  * The everyday helpers (Chores.java): split a trip's cost by UPI QR code, a paid-parking reminder
- * on the phone, the car wash reminder, a QR code for passengers to join the guest Wi-Fi, and one
+ * on the phone, a QR code for passengers to join the guest Wi-Fi, and one
  * for family to follow the trip. ?open=split|parkTimer|parkPhoto|hotspot|share puts that one
  * first ("share" also shows its code at once).
  */
@@ -13,14 +13,14 @@ import { QrSheet } from '../components/Qr';
 import { Button, Choice, Field, Heading, Row, Screen } from '../components/ui';
 import * as Chores from '../logic/chores';
 import { validVpa } from '../logic/errands';
-import { num } from '../logic/prefs';
+import { t } from '../logic/i18n';
 import { useDrive } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 
 /** Open the unit's hotspot settings: the tether screen if the unit has one, else wireless settings. */
 async function hotspotSettings() {
-  if (Platform.OS !== 'android') return Alert.alert("Open the phone's Settings > Personal Hotspot");
+  if (Platform.OS !== 'android') return Alert.alert(t("Open the unit's Settings > Network > Hotspot"));
   const tries: [string, IntentLauncher.IntentLauncherParams?][] = [
     ['android.intent.action.MAIN', { packageName: 'com.android.settings', className: 'com.android.settings.TetherSettings' }],
     ['android.intent.action.MAIN', { packageName: 'com.android.settings', className: 'com.android.settings.Settings$TetherSettingsActivity' }],
@@ -34,10 +34,10 @@ async function hotspotSettings() {
       // try the next
     }
   }
-  Alert.alert("Open the unit's Settings > Network > Hotspot");
+  Alert.alert(t("Open the unit's Settings > Network > Hotspot"));
 }
 
-const SECTIONS = ['split', 'parkTimer', 'wash', 'hotspot', 'share'] as const;
+const SECTIONS = ['split', 'parkTimer', 'hotspot', 'share'] as const;
 type Section = (typeof SECTIONS)[number];
 
 /** ?open= from the voice commands: the section to put first (no parking photo yet: the parking section). */
@@ -61,9 +61,8 @@ export default function ChoresScreen() {
   const [total, setTotal] = useState(fill > 0 ? String(Math.round(fill)) : '');
   const [people, setPeople] = useState(prefs.str('splitPeople', '2'));
 
-  // parking, wash, Wi-Fi
+  // parking, Wi-Fi
   const [mins, setMins] = useState('60');
-  const [washDays, setWashDays] = useState(String(num(prefs, 'washDays', 14)));
   const [apName, setApName] = useState(prefs.str('apName', ''));
   const [apPass, setApPass] = useState(prefs.str('apPass', ''));
 
@@ -96,7 +95,7 @@ export default function ChoresScreen() {
       if (bad) return Alert.alert(bad);
     }
     const c = Chores.hotspot(prefs);
-    if (!c) return Alert.alert('Hotspot name (as set on the unit)', 'e.g. MyCar');
+    if (!c) return Alert.alert(t('Hotspot name (as set on the unit)'), t('e.g. MyCar'));
     setCode(c);
   };
 
@@ -113,69 +112,48 @@ export default function ChoresScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const saveWashDays = (v: string) => {
-    setWashDays(v);
-    const n = parseInt(v, 10);
-    if (n > 0) prefs.put('washDays', String(n));
-  };
-
-  const fillNote = fill > 0 ? ' (last fill-up shown)' : '';
   const sections: Record<Section, ReactNode> = {
     share: (
       <>
-        <Heading>Share the trip by QR code</Heading>
+        <Heading>{t('Share the trip by QR code')}</Heading>
         <Text style={{ color: look.textDim, marginBottom: 6 }}>
-          A code family scan to see where you are and the route; nothing is sent online.
+          {t('A code family scan to see where you are and the route; nothing is sent online')}
         </Text>
-        <Button label="Show the code" kind="primary" onPress={shareTrip} />
+        <Button label={t('Show the code')} kind="primary" onPress={shareTrip} />
       </>
     ),
     split: (
       <>
-        <Heading>Split the cost by UPI</Heading>
-        <Field label="Your UPI id (like name@okbank)" value={upi} onChange={setUpi} placeholder="name@bank" />
+        <Heading>{t('Split the cost by UPI')}</Heading>
+        <Field label={t('Your UPI id (like name@okbank)')} value={upi} onChange={setUpi} placeholder="name@bank" />
         {upi.trim() !== '' && !validVpa(upi) ? (
-          <Text style={{ color: '#E5484D', marginTop: -6, marginBottom: 8 }}>That doesn't look like a UPI id (name@bank)</Text>
+          <Text style={{ color: '#E5484D', marginTop: -6, marginBottom: 8 }}>{t("That doesn't look like a UPI id (name@bank)")}</Text>
         ) : null}
-        <Field label="Name shown to the payer (optional)" value={upiName} onChange={setUpiName} />
-        <Field label={'Total to split, ₹' + fillNote} value={total} onChange={setTotal} numeric />
-        <Field label="How many people, you included?" value={people} onChange={setPeople} numeric />
-        <Button label="Show the code" kind="primary" onPress={split} />
+        <Field label={t('Name shown to the payer (optional)')} value={upiName} onChange={setUpiName} />
+        <Field label={fill > 0 ? t('Total to split, ₹ (last fill-up shown)') : t('Total to split, ₹')} value={total} onChange={setTotal} numeric />
+        <Field label={t('How many people, you included?')} value={people} onChange={setPeople} numeric />
+        <Button label={t('Show the code')} kind="primary" onPress={split} />
       </>
     ),
     parkTimer: (
       <>
-        <Heading>Paid parking reminder</Heading>
-        <Row name="Parking" value={Chores.parkingRow(prefs)} />
-        <Text style={{ color: look.textDim, marginTop: 8 }}>Parking paid for</Text>
+        <Heading>{t('Paid parking reminder')}</Heading>
+        <Row name={t('Parking')} value={Chores.parkingRow(prefs)} />
+        <Text style={{ color: look.textDim, marginTop: 8 }}>{t('Parking paid for')}</Text>
         <View style={{ marginTop: 6 }}>
-          <Choice options={Chores.PARK_MINUTES.map((m, i) => ({ id: String(m), label: Chores.PARK_LABELS[i] }))} value={mins} onChange={setMins} />
+          <Choice options={Chores.PARK_MINUTES.map((m, i) => ({ id: String(m), label: t(Chores.PARK_LABELS[i]) }))} value={mins} onChange={setMins} />
         </View>
-        <Button label="Show the code for my phone" kind="primary" onPress={park} />
-      </>
-    ),
-    wash: (
-      <>
-        <Heading>Car wash reminder</Heading>
-        <Row name="Car wash" value={Chores.washRow(prefs)} />
-        <Field label="Remind every (days)" value={washDays} onChange={saveWashDays} numeric />
-        <Button
-          label="Washed today"
-          onPress={() => {
-            Chores.washed(prefs);
-            Alert.alert('Noted', `The next reminder comes in ${num(prefs, 'washDays', 14)} days, when no rain is due.`);
-          }}
-        />
+        <Button label={t('Show the code for my phone')} kind="primary" onPress={park} />
       </>
     ),
     hotspot: (
       <>
-        <Heading>Guest Wi-Fi</Heading>
-        <Text style={{ color: look.textDim, marginBottom: 10 }}>{Chores.HOTSPOT_NOTE}</Text>
-        <Field label="Hotspot name (as set on the unit)" value={apName} onChange={setApName} placeholder="e.g. MyCar" />
-        <Field label="Hotspot password" value={apPass} onChange={setApPass} />
-        <Button label="Show the code" kind="primary" onPress={wifi} />
-        <Button label="Hotspot settings" onPress={hotspotSettings} />
+        <Heading>{t('Guest Wi-Fi')}</Heading>
+        <Text style={{ color: look.textDim, marginBottom: 10 }}>{Chores.hotspotNote()}</Text>
+        <Field label={t('Hotspot name (as set on the unit)')} value={apName} onChange={setApName} placeholder={t('e.g. MyCar')} />
+        <Field label={t('Hotspot password')} value={apPass} onChange={setApPass} />
+        <Button label={t('Show the code')} kind="primary" onPress={wifi} />
+        <Button label={t('Hotspot settings')} onPress={hotspotSettings} />
       </>
     ),
   };
@@ -183,7 +161,7 @@ export default function ChoresScreen() {
   const order = [first, ...SECTIONS.filter((k) => k !== first)];
 
   return (
-    <Screen title="Everyday helpers">
+    <Screen title={t('Everyday helpers')}>
       {order.map((k) => (
         <View key={k}>{sections[k]}</View>
       ))}

@@ -3,6 +3,7 @@
  * tank was filled. Mileage per tank uses the standard "full to full" method.
  */
 import { fullTankKmpl as kmplOf } from './errands.ts';
+import { f, t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 
 export interface FillUp {
@@ -117,11 +118,15 @@ export function price(p: Prefs): number {
 
 export function priceText(p: Prefs): string {
   const v = price(p);
-  if (v <= 0) return 'not known yet: add a fill-up with the amount paid, or tap to enter it';
+  if (v <= 0) return t('not known yet: add a fill-up with the amount paid, or tap to enter it');
   const ownStr = p.str('fuelPrice', '0');
   const own = ownStr !== '0' && ownStr !== '';
   const city = p.str('city', '');
-  return `₹${fmt(v)} a litre` + (own ? ' (your figure)' : ` (from your fill-ups${city ? ', ' + city : ''})`);
+  return own
+    ? f('₹%1$s a litre (your figure)', fmt(v))
+    : city === ''
+      ? f('₹%1$s a litre (from your fill-ups)', fmt(v))
+      : f('₹%1$s a litre (from your fill-ups, %2$s)', fmt(v), city);
 }
 
 /** Fuel cost of driving this far, at the average mileage and today's price; 0 when unknown. */

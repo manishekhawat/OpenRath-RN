@@ -4,11 +4,14 @@
  * passenger, the ride apps one tap away, permit / fitness / badge reminders, a CNG log, pickup
  * hotspots learnt from your own rides, a daily target and duty-hours reminder, one-tap SOS,
  * quiet-ride mode, ride notes, and spoken phrases for passengers. Everything stays on the unit.
- * This file has the sums, fare, hotspots and saved lists; the screens are in app/cab.
+ * This file has the log and its sums, the fare sum, hotspots, papers, phrases, CNG and notes, and
+ * the once-a-second tick; as in 1.42 the earnings report (cabEarnings.ts), the fare meter
+ * (cabMeter.ts), SOS (cabSos.ts) and the settings rows (cabSettings.ts) are files of their own.
+ * The screens are in app/cab. Shown text goes through t()/f(); spoken text stays English.
  */
 import * as Features from './features.ts';
 import { compute as fuelCompute, fmt } from './fuel.ts';
-import { mapsLink } from './geo.ts';
+import { f, t } from './i18n.ts';
 import { num, type Prefs } from './prefs.ts';
 
 export function on(p: Prefs, id: string): boolean {
@@ -90,11 +93,11 @@ export function rs(v: number): string {
 
 export function hm(ms: number): string {
   const m = Math.max(0, Math.floor(ms / 60000));
-  return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60) + ' min';
+  return m < 60 ? f('%1$s min', m) : f('%1$s h %2$s min', Math.floor(m / 60), m % 60);
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const two = (n: number) => String(n).padStart(2, '0');
+export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export const two = (n: number) => String(n).padStart(2, '0');
 
 /** "14 Oct  09:30", as the log's rows. */
 export function when(t: number, gap = '  '): string {
@@ -130,16 +133,6 @@ export interface Rates {
 
 /** ₹50 for 2 km, ₹16 a km, ₹2 a minute after 5 free, night +25%. */
 export const RATES: Rates = { base: 50, baseKm: 2, perKm: 16, waitPerMin: 2, freeWait: 5, nightPct: 25 };
-
-/** The pref key of each rate, with its label on the rates screen. */
-export const RATE_KEYS: [keyof Rates, string, string][] = [
-  ['base', 'cabBase', 'Base fare (₹)'],
-  ['baseKm', 'cabBaseKm', 'Km included in the base fare'],
-  ['perKm', 'cabPerKm', '₹ a km after that'],
-  ['waitPerMin', 'cabWaitRs', 'Waiting ₹ a minute'],
-  ['freeWait', 'cabFreeWait', 'Free waiting minutes'],
-  ['nightPct', 'cabNightPct', 'Night charge, 11 pm to 5 am (%)'],
-];
 
 /** Base fare covers the first km, then per km; waiting after the free minutes; night adds a share. */
 export function fare(r: Rates, km: number, waitMin: number, night: boolean): number {
@@ -183,6 +176,12 @@ export function where(lat: number, lon: number): string {
   return `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
 }
 
+/** A line of the hotspot list; `farKm` is null while the GPS has no fix. */
+export function hotspotRow(s: [number, number, number], hour: number, farKm: number | null): string {
+  const far = farKm === null ? '' : f('%1$s km away  ·  ', farKm.toFixed(1));
+  return far + f('%1$s rides around %2$s:00   (%3$s)', Math.round(s[2]), hour, where(s[0], s[1]));
+}
+
 // ================================================================== papers (pure part)
 
 export const PAPERS = ['permit', 'fitness', 'badge', 'tax', 'insurance', 'puc'];
@@ -207,31 +206,22 @@ export function dueText(name: string, days: number): string {
   return name + ' expires in ' + days + (days === 1 ? ' day' : ' days');
 }
 
-/** The papers due within 15 days (or gone by), as the once-a-day reminder says them. */
-export function papersDue(p: Prefs, now: number): string[] {
+/** dueText() for the screen, in the owner's language (dueText itself is also spoken). */
+export function dueShow(name: string, days: number): string {
+  const n = t(name);
+  if (days < 0) return -days === 1 ? f('%1$s expired yesterday', n) : f('%1$s expired %2$s days ago', n, -days);
+  if (days === 0) return f('%1$s expires today', n);
+  return days === 1 ? f('%1$s expires in 1 day', n) : f('%1$s expires in %2$s days', n, days);
+}
+
+/** The papers due within 15 days (or gone by), as the once-a-day reminder says them (or shows them). */
+export function papersDue(p: Prefs, now: number, show = false): string[] {
   const due: string[] = [];
   PAPERS.forEach((id, i) => {
     const d = daysTo(p.str(paperKey(id), ''), now);
-    if (d !== null && d <= 15) due.push(dueText(PAPER_NAMES[i], d));
+    if (d !== null && d <= 15) due.push(show ? dueShow(PAPER_NAMES[i], d) : dueText(PAPER_NAMES[i], d));
   });
   return due;
-}
-
-/** The settings row: the soonest paper and how many are set. */
-export function papersSummary(p: Prefs, now: number): string {
-  let set = 0;
-  let best = Infinity;
-  let soonest = '';
-  PAPERS.forEach((id, i) => {
-    const d = daysTo(p.str(paperKey(id), ''), now);
-    if (d === null) return;
-    set++;
-    if (d < best) {
-      best = d;
-      soonest = dueText(PAPER_NAMES[i], d);
-    }
-  });
-  return set === 0 ? 'permit, fitness, badge, road tax, insurance, PUC: not set' : soonest + '  (' + set + ' of 6 set)';
 }
 
 // ================================================================== phrases
@@ -294,8 +284,9 @@ export function addPhrase(p: Prefs, text: string): void {
   p.put('cabOwnPhrases', old === '' ? s : old + '\n' + s);
 }
 
+/** The language's name, shown in the owner's language. */
 export function langName(lang: string): string {
-  return LANG_NAMES[Math.max(0, LANGS.indexOf(lang))];
+  return t(LANG_NAMES[Math.max(0, LANGS.indexOf(lang))]);
 }
 
 /** The language of a typed phrase, from its script: "hi", "ta"… or "en". */
@@ -352,6 +343,15 @@ export function quiet(p: Prefs): boolean {
   return p.str('cabQuietNow', '') === 'on';
 }
 
+/**
+ * Passenger in or out; returns the message to show. The Android version also turned the music
+ * down to "cabQuietPct" of full and back, which needs the unit's system volume.
+ */
+export function setQuiet(p: Prefs, yes: boolean): string {
+  p.put('cabQuietNow', yes ? 'on' : '');
+  return t(yes ? 'Quiet ride: music down, messages not read aloud' : 'Quiet ride ended');
+}
+
 export function log(p: Prefs): Entry[] {
   try {
     const a = JSON.parse(p.str('cabLog', '[]'));
@@ -392,17 +392,28 @@ export function save(p: Prefs, l: Entry[]): void {
   p.put('cabLog', JSON.stringify(a));
 }
 
+/**
+ * A message from the cab tools: `text` is the English that is spoken (only when `speak`, which is
+ * false during a quiet ride), `shown` the same in the owner's language for the screen.
+ */
+export interface Note {
+  text: string;
+  shown: string;
+  speak: boolean;
+}
+
 /** Log a ride; returns the target message when this ride passed the daily target, else null. */
 export function addRide(
   p: Prefs, v: { rs: number; km?: number; app: string; pay: string; lat?: number; lon?: number }, now: number,
-): string | null {
+): Note | null {
   const before = sum(log(p), dayStart(now), now + 1);
   save(p, [...log(p), entry({ t: now, ride: true, rs: v.rs, km: v.km ?? 0, app: v.app, pay: v.pay, lat: v.lat ?? 0, lon: v.lon ?? 0 })]);
   startDuty(p, now);
   // the daily target, said once when it is passed
   const target = num(p, 'cabTargetRs', 2000);
   if (on(p, 'cabTarget') && target > 0 && net(before) < target && net(before) + v.rs >= target) {
-    return 'Target reached: ' + rs(net(before) + v.rs) + ' today. Well done!';
+    const total = rs(net(before) + v.rs);
+    return { text: 'Target reached: ' + total + ' today. Well done!', shown: f('Target reached: %1$s today. Well done!', total), speak: !quiet(p) };
   }
   return null;
 }
@@ -415,20 +426,7 @@ export function removeEntry(p: Prefs, index: number): void {
   save(p, log(p).filter((_, i) => i !== index));
 }
 
-/** The text to show for a line of the log. */
-export function entryRow(e: Entry): string {
-  return when(e.t) + '   ' + (e.ride
-    ? '+' + rs(e.rs) + '  ' + e.app + ', ' + e.pay + (e.km > 0 ? ', ' + fmt(e.km) + ' km' : '')
-    : '−' + rs(e.rs) + '  ' + e.what);
-}
-
 // ================================================================== every second
-
-/** A message to show, and whether to speak it too (not during a quiet ride). */
-export interface Note {
-  text: string;
-  speak: boolean;
-}
 
 /**
  * Every second while the app is open: the meter's waiting time while standing or crawling, the
@@ -443,7 +441,8 @@ export function tick(p: Prefs, now: number, kmh: number, fixAt: number): Note[] 
   const speak = !quiet(p);
   // meter: waiting time while standing or crawling
   if (num(p, 'cabMeterAt', 0) > 0 && fresh && kmh < 5 && dt > 0 && dt < 5000) {
-    live.waitMs = meterWaitMs(p) + dt;
+    if (live.waitMs < 0) live.waitMs = num(p, 'cabMeterWait', 0);
+    live.waitMs += dt;
     if (now - live.waitSavedAt > 15000) {
       live.waitSavedAt = now;
       p.put('cabMeterWait', String(live.waitMs));
@@ -457,7 +456,11 @@ export function tick(p: Prefs, now: number, kmh: number, fixAt: number): Note[] 
     const h = duty === 0 ? 0 : Math.floor((now - duty) / 3600000);
     if (duty > 0 && warnH > 0 && h >= warnH && h > num(p, 'cabDutyTold', 0)) {
       p.put('cabDutyTold', String(h));
-      out.push({ text: "You've been on duty for " + h + ' hours. Time for a proper break.', speak });
+      out.push({
+        text: "You've been on duty for " + h + ' hours. Time for a proper break.',
+        shown: f("You've been on duty for %1$s hours. Time for a proper break.", h),
+        speak,
+      });
     }
   }
   // papers: once a day, anything due within 15 days
@@ -466,7 +469,7 @@ export function tick(p: Prefs, now: number, kmh: number, fixAt: number): Note[] 
     if (today !== p.str('cabPapersDay', '') && now - fixAt < 600000) {
       p.put('cabPapersDay', today);
       const due = papersDue(p, now);
-      if (due.length > 0) out.push({ text: due.join('. ') + '.', speak });
+      if (due.length > 0) out.push({ text: due.join('. ') + '.', shown: papersDue(p, now, true).join('. ') + '.', speak });
     }
   }
   return out;
@@ -490,52 +493,19 @@ export function toggleDuty(p: Prefs, now: number): string | null {
     p.put('cabDutyAt', '0');
     // stays ended for today unless started again from here
     p.put('cabDutyEnded', String(now));
-    return 'Duty ended after ' + hm(now - d);
+    return f('Duty ended after %1$s', hm(now - d));
   }
   p.put('cabDutyAt', String(now));
   p.put('cabDutyTold', '0');
   return null;
 }
 
-// ================================================================== reports
+// ================================================================== the menu
 
 /** The menu's title. */
 export function title(p: Prefs, now: number): string {
   const s = sum(log(p), dayStart(now), now + 1);
-  return 'Cab  ·  today ' + rs(net(s)) + ' net, ' + s.rides + (s.rides === 1 ? ' ride' : ' rides');
-}
-
-export function report(p: Prefs, now: number): string {
-  const l = log(p);
-  const today = dayStart(now);
-  const week = weekStart(now);
-  let b = '';
-  const spans: [string, number, number][] = [
-    ['Today', today, now + 1], ['Yesterday', dayStart(today - 3600000), today],
-    ['This week (from Monday)', week, now + 1], ['Last 30 days', today - 29 * 86400000, now + 1],
-  ];
-  for (const [name, from, to] of spans) {
-    const x = sum(l, from, to);
-    b += name + ': ' + rs(net(x)) + ' net\n   ' + x.rides + (x.rides === 1 ? ' ride ' : ' rides ') + rs(x.in) + ',  costs ' + rs(x.out) + '\n';
-  }
-  const apps = by(l, week, now + 1, false);
-  const pays = by(l, today, now + 1, true);
-  if (apps.length > 0) b += '\nThis week by app: ' + apps.map(([k, v]) => k + ' ' + rs(v)).join(',  ');
-  if (pays.length > 0) b += '\nToday by payment: ' + pays.map(([k, v]) => k + ' ' + rs(v)).join(',  ');
-  const target = num(p, 'cabTargetRs', 2000);
-  if (on(p, 'cabTarget') && target > 0) {
-    const n = net(sum(l, today, now + 1));
-    b += '\n\nDaily target ' + rs(target) + ': ' + (n >= target ? 'reached' : rs(target - n) + ' to go');
-  }
-  return b.trim();
-}
-
-/** What "how much did I earn" says. */
-export function spoken(p: Prefs, now: number): string {
-  const s = sum(log(p), dayStart(now), now + 1);
-  if (s.rides === 0 && s.out === 0) return 'No rides logged today yet.';
-  return 'Today, ' + s.rides + (s.rides === 1 ? ' ride, ' : ' rides, ') + Math.round(s.in) + ' rupees in, ' +
-    Math.round(s.out) + ' rupees of costs, ' + Math.round(net(s)) + ' rupees net.';
+  return s.rides === 1 ? f('Cab  ·  today %1$s net, 1 ride', rs(net(s))) : f('Cab  ·  today %1$s net, %2$s rides', rs(net(s)), s.rides);
 }
 
 /** Today's net against the target, 0 to 1, for the Cab box's bar; -1 with no target. */
@@ -545,91 +515,9 @@ export function targetShare(p: Prefs, now: number): number {
   return Math.max(0, Math.min(1, net(sum(log(p), dayStart(now), now + 1)) / target));
 }
 
-// ================================================================== fare meter
-
-export const APPS = ['Uber', 'Ola', 'Rapido', 'inDrive', 'Namma Yatri', 'Street', 'Other'];
-export const PAYS = ['Cash', 'UPI', 'In the app'];
-export const COSTS = ['Fuel or CNG', 'Toll', 'Parking', 'Food', 'Commission', 'Repair', 'Other'];
-
-function dbl(p: Prefs, k: string, def: number): number {
-  const v = parseFloat(p.str(k, String(def)));
-  return Number.isFinite(v) ? v : def;
-}
-
-export function rates(p: Prefs): Rates {
-  const r = { ...RATES };
-  for (const [field, key] of RATE_KEYS) r[field] = dbl(p, key, RATES[field]);
-  return r;
-}
-
-export function ratesText(r: Rates): string {
-  return rs(r.base) + ' for ' + fmt(r.baseKm) + ' km, ' + rs(r.perKm) + '/km, waiting ' + rs(r.waitPerMin) + '/min after ' +
-    Math.round(r.freeWait) + ' min, night +' + Math.round(r.nightPct) + '%';
-}
-
-export const running = (p: Prefs) => num(p, 'cabMeterAt', 0) > 0;
-
-/** Km since the meter started, by the GPS odometer. */
-export function meterKm(p: Prefs, odoKm: number): number {
-  return Math.max(0, odoKm - dbl(p, 'cabMeterOdo', odoKm));
-}
-
-export function meterWaitMs(p: Prefs): number {
-  if (live.waitMs < 0) live.waitMs = num(p, 'cabMeterWait', 0);
-  return live.waitMs;
-}
-
-/** Night rates if the ride started or is now between 11 pm and 5 am. */
-export function meterNight(p: Prefs, now: number): boolean {
-  return night(new Date(num(p, 'cabMeterAt', now) || now).getHours()) || night(new Date(now).getHours());
-}
-
-export function fareNow(p: Prefs, odoKm: number, now: number): number {
-  return fare(rates(p), meterKm(p, odoKm), meterWaitMs(p) / 60000, meterNight(p, now));
-}
-
-/** Start the meter; quiet ride starts with it unless switched off ("cabQuietWithMeter"). */
-export function startMeter(p: Prefs, odoKm: number, lat: number, lon: number, now: number): void {
-  p.put('cabMeterAt', String(now));
-  p.put('cabMeterOdo', String(odoKm));
-  p.put('cabMeterWait', '0');
-  p.put('cabMeterLat', String(lat));
-  p.put('cabMeterLon', String(lon));
-  live.waitMs = 0;
-  startDuty(p, now);
-  if (on(p, 'cabQuiet') && p.str('cabQuietWithMeter', 'on') === 'on' && !quiet(p)) p.put('cabQuietNow', 'on');
-}
-
-/** The meter's lines under the fare, for the passenger. */
-export function meterInfo(p: Prefs, odoKm: number, now: number): string {
-  const r = rates(p);
-  const w = Math.floor(meterWaitMs(p) / 60000);
-  return fmt(meterKm(p, odoKm)) + ' km   ·   ' + w + ' min waiting   ·   ' + hm(now - num(p, 'cabMeterAt', 0)) +
-    (meterNight(p, now) ? '\nNight charge +' + Math.round(r.nightPct) + '%' : '') +
-    '\n' + rs(r.base) + ' for the first ' + fmt(r.baseKm) + ' km, then ' + rs(r.perKm) + ' a km';
-}
-
-export interface Stopped {
-  fare: number;
-  km: number;
-  lat: number;
-  lon: number;
-  said: string;
-}
-
-/** Stop the meter: the fare and the ride's details, for logging it and showing the UPI code. */
-export function stopMeter(p: Prefs, odoKm: number, now: number): Stopped | null {
-  if (!running(p)) return null;
-  const f = fareNow(p, odoKm, now);
-  const km = meterKm(p, odoKm);
-  const w = Math.floor(meterWaitMs(p) / 60000);
-  const said = fmt(km) + ' km, ' + w + ' min waiting' + (meterNight(p, now) ? ', night charge' : '');
-  const s = { fare: f, km, lat: dbl(p, 'cabMeterLat', 0), lon: dbl(p, 'cabMeterLon', 0), said };
-  p.put('cabMeterAt', '0');
-  p.put('cabMeterWait', '0');
-  live.waitMs = 0;
-  if (quiet(p) && p.str('cabQuietWithMeter', 'on') === 'on') p.put('cabQuietNow', '');
-  return s;
+/** A list of English words, each in the owner's language, for a list of choices. */
+export function tr(en: string[]): string[] {
+  return en.map((s) => t(s));
 }
 
 // ================================================================== CNG
@@ -658,8 +546,8 @@ export function cngStats(l: CngFill[]): [number, number, number] {
 
 export function cngHead(l: CngFill[]): string {
   const st = cngStats(l);
-  return st[1] > 0 ? 'CNG  ·  ' + fmt(st[1]) + ' km/kg average, ' + fmt(st[0]) + ' last, ₹' + fmt(st[2]) + ' a km'
-    : l.length === 0 ? 'No CNG fills yet' : 'CNG  ·  km/kg shows after two fills';
+  return st[1] > 0 ? f('CNG  ·  %1$s km/kg average, %2$s last, ₹%3$s a km', fmt(st[1]), fmt(st[0]), fmt(st[2]))
+    : t(l.length === 0 ? 'No CNG fills yet' : 'CNG  ·  km/kg shows after two fills');
 }
 
 export function cngRow(e: CngFill): string {
@@ -704,67 +592,3 @@ export function deleteNote(p: Prefs, index: number): void {
   p.put('cabNotes', JSON.stringify(notesList(p).filter((_, i) => i !== index)));
 }
 
-// ================================================================== SOS
-
-/** SOS contact 1 or 2 ("cabSos1", saved as name|number), or null. */
-export function contact(p: Prefs, i: number): [string, string] | null {
-  const v = p.str('cabSos' + i, '');
-  const bar = v.indexOf('|');
-  if (bar < 0 || bar === v.length - 1) return null;
-  return [v.substring(0, bar), v.substring(bar + 1)];
-}
-
-export function setContact(p: Prefs, i: number, name: string, phone: string): void {
-  const n = phone.replace(/[^0-9+]/g, '');
-  const nm = name.trim().replace(/\|/g, ' ');
-  p.put('cabSos' + i, n === '' ? '' : (nm === '' ? n : nm) + '|' + n);
-}
-
-export function contactsText(p: Prefs): string {
-  const c1 = contact(p, 1);
-  const c2 = contact(p, 2);
-  return c1 === null && c2 === null ? 'not set' : (c1 ? c1[0] : '') + (c1 && c2 ? ', ' : '') + (c2 ? c2[0] : '');
-}
-
-/** "Papa and Ravi", for the countdown. */
-export function sosWho(p: Prefs): string {
-  const c1 = contact(p, 1);
-  const c2 = contact(p, 2);
-  return (c1 ? c1[0] : '') + (c1 && c2 ? ' and ' : '') + (c2 ? c2[0] : '');
-}
-
-export function sosText(p: Prefs, lat: number, lon: number, now: number): string {
-  const name = p.str('welcome', ''); // Prefs.welcome(); the Android default was the author's own name
-  const who = name === '' ? 'your driver' : name;
-  const car = p.str('cabVehicle', '');
-  const d = new Date(now);
-  return 'SOS from ' + who + (car === '' ? '' : ' (' + car + ')') + ': I need help. ' +
-    (lat === 0 && lon === 0 ? 'Location not known yet.' : 'I am here: ' + mapsLink(lat, lon)) +
-    ' at ' + two(d.getHours()) + ':' + two(d.getMinutes()) + ', ' + d.getDate() + ' ' + MONTHS[d.getMonth()] + '.';
-}
-
-/** An SMS link to every SOS contact with the text filled in. */
-export function sosSms(p: Prefs, text: string): string {
-  const to = [contact(p, 1), contact(p, 2)].filter((c): c is [string, string] => c !== null).map((c) => c[1]);
-  return 'sms:' + to.join(',') + '?body=' + encodeURIComponent(text);
-}
-
-/** The QR a phone scans to send the SOS text to the first contact. */
-export function sosQr(p: Prefs, text: string): string {
-  const c = contact(p, 1) ?? contact(p, 2);
-  return c ? 'SMSTO:' + c[1] + ':' + text : '';
-}
-
-// ================================================================== settings
-
-/** Break reminder after 8, 9, 10, 11, 12 hours or never (0), stepping on a tap. */
-export function nextDutyH(cur: number): number {
-  const steps = [8, 9, 10, 11, 12, 0];
-  const i = steps.indexOf(cur);
-  return i < 0 ? 10 : steps[(i + 1) % steps.length];
-}
-
-/** Quiet ride volume 10% … 50%, stepping on a tap. */
-export function nextQuietPct(cur: number): number {
-  return cur >= 50 ? 10 : cur + 10;
-}

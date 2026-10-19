@@ -1,14 +1,18 @@
 /**
  * The music page: the app's own player with its station and song lists (the Android version's
  * "Online radio station" and "Choose a song" pickers), adding music files, and the sound
- * settings from Settings > Radio and music. They all act on this player only: the system volume,
+ * settings from Settings > Radio and music: resume, volume by speed, quiet hours, sound profiles,
+ * ducking, parked music, and since 1.36 to 1.39 the phone projection app, the soundboard, the
+ * video window and drag to seek. The sound ones act on this player only: the system volume,
  * other apps and the equalizer need native code.
  */
 import { useEffect, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
+import { router } from 'expo-router';
 
 import { Button, Choice, Field, Heading, Row, Screen } from '../components/ui';
 import * as Features from '../logic/features';
+import { f, t } from '../logic/i18n';
 import * as Player from '../logic/player';
 import { FILES, WEB, type Mode } from '../logic/player';
 import { num, type Prefs } from '../logic/prefs';
@@ -32,7 +36,7 @@ export default function MusicScreen() {
     P.ensureList(tab);
   }, [tab]);
 
-  const t = P.current();
+  const tr = P.current();
   const mine = s.mode === tab;
   const all = tab === WEB ? s.stations : s.songs;
   const at = tab === WEB ? s.station : s.song;
@@ -43,17 +47,17 @@ export default function MusicScreen() {
     setAdding(true);
     try {
       const n = await P.addFiles();
-      if (n > 0) Alert.alert(n === 1 ? 'Added one song' : `Added ${n} songs`);
+      if (n > 0) Alert.alert(n === 1 ? t('Added one song') : f('Added %1$s songs', n));
     } catch {
-      Alert.alert("The files couldn't be added");
+      Alert.alert(t("The files couldn't be added"));
     }
     setAdding(false);
   };
 
   const removeAdded = () =>
-    Alert.alert('Remove the songs added here?', "The phone's own music stays.", [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Remove', style: 'destructive', onPress: () => P.removeAdded() },
+    Alert.alert(t('Remove the songs added here?'), t("The phone's own music stays."), [
+      { text: t('Cancel'), style: 'cancel' },
+      { text: t('Remove'), style: 'destructive', onPress: () => P.removeAdded() },
     ]);
 
   const base = P.baseVolume();
@@ -61,6 +65,7 @@ export default function MusicScreen() {
   const on = (id: string) => Features.on(prefs, id);
   const flip = (id: string) => Features.set(prefs, id, !on(id));
   const tick = (id: string) => <Text style={{ color: look.accent, fontSize: 18 }}>{on(id) ? '✓' : ''}</Text>;
+  const [proj, setProj] = useState(prefs.str('app:projection', ''));
   const per = on('speedVolume') ? Math.max(1, Math.min(3, num(prefs, 'speedVolPer', 2))) : 0;
 
   return (
@@ -68,15 +73,26 @@ export default function MusicScreen() {
       {/* now playing */}
       <Heading>{s.mode === WEB ? 'Online radio' : s.mode === FILES ? 'Music files' : 'Player'}</Heading>
       <Text style={{ color: look.text, fontSize: 22, fontWeight: '500' }} numberOfLines={2}>
-        {t ? t.name : 'Nothing playing'}
+        {tr ? tr.name : t('Nothing playing')}
       </Text>
       <Text style={{ color: look.textDim, marginTop: 2 }}>
-        {s.status !== '' && (s.busy || !s.playing) ? s.status : s.busy ? 'Connecting…' : t ? t.sub : 'Pick a station or a song below'}
+        {t(s.status !== '' && (s.busy || !s.playing) ? s.status : s.busy ? 'Connecting…' : tr ? tr.sub : 'Pick a station or a song below')}
       </Text>
       {s.mode === FILES && s.duration > 0 ? (
         <Text style={{ color: look.textDim, marginTop: 4 }}>
           {Player.clock(s.position)} / {Player.clock(s.duration)}
         </Text>
+      ) : null}
+      {/* the app's own player can always move in a song; the box's drag bar follows the 'seek' switch */}
+      {s.mode === FILES && s.duration > 0 ? (
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+          <View style={{ flex: 1 }}>
+            <Button label="−30 s" onPress={() => P.seek(s.position - 30)} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button label="+30 s" onPress={() => P.seek(s.position + 30)} />
+          </View>
+        </View>
       ) : null}
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
         <View style={{ flex: 1 }}>
@@ -93,8 +109,8 @@ export default function MusicScreen() {
 
       <Heading>Volume</Heading>
       <Row
-        name={`Volume ${base}%`}
-        value={now !== base ? `Playing at ${now}% now (${volumeWhy(prefs, s.profile, s.ducked)})` : undefined}
+        name={f('Volume %1$s%%', base)}
+        value={now !== base ? f('Playing at %1$s%% now (%2$s)', now, volumeWhy(prefs, s.profile, s.ducked)) : undefined}
         right={
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <Button label="  −  " onPress={() => P.changeVolume(-10)} />
@@ -119,13 +135,13 @@ export default function MusicScreen() {
       {all.length > SHOW ? <Field label={tab === WEB ? 'Find a station' : 'Find a song'} value={find} onChange={setFind} /> : null}
       {all.length === 0 ? (
         <Text style={{ color: look.textDim, marginVertical: 8 }}>
-          {s.loadingList === tab
+          {t(s.loadingList === tab
             ? tab === WEB
               ? Player.STATUS.findingStations
               : Player.STATUS.findingMusic
             : tab === WEB
               ? 'No stations: Radio Browser needs the internet the first time.'
-              : 'No music found. Allow access to music, or add files below.'}
+              : 'No music found. Allow access to music, or add files below.')}
         </Text>
       ) : (
         shown.slice(0, SHOW).map(({ x, i }) => (
@@ -139,7 +155,7 @@ export default function MusicScreen() {
       )}
       {shown.length > SHOW ? (
         <Text style={{ color: look.textDim, marginTop: 8 }}>
-          {shown.length - SHOW} more: type part of a name to find them.
+          {f('%1$s more: type part of a name to find them.', shown.length - SHOW)}
         </Text>
       ) : null}
       {tab === WEB ? (
@@ -150,8 +166,7 @@ export default function MusicScreen() {
           <Button label={s.loadingList === FILES ? 'Looking for music…' : 'Look for music again'} onPress={() => P.rescan()} />
           {P.addedSongs().length > 0 ? <Button label="Remove the songs added here" kind="danger" onPress={removeAdded} /> : null}
           <Text style={{ color: look.textDim, marginTop: 4 }}>
-            The phone's music library plays where it is. Files picked with "Add music files" are copied into the app,
-            so they still play after a restart.
+            {t('The phone\'s music library plays where it is. Files picked with "Add music files" are copied into the app, so they still play after a restart.')}
           </Text>
         </>
       )}
@@ -177,7 +192,7 @@ export default function MusicScreen() {
         name="Quiet hours"
         value={
           on('quiet')
-            ? `from ${Sound.hour(Sound.quietFrom(prefs))} to ${Sound.hour(Sound.quietTo(prefs))}, music at ${Sound.quietVol(prefs)}%`
+            ? f('from %1$s to %2$s, music at %3$s%%', Sound.hour(Sound.quietFrom(prefs)), Sound.hour(Sound.quietTo(prefs)), Sound.quietVol(prefs))
             : 'off'
         }
         right={tick('quiet')}
@@ -197,14 +212,14 @@ export default function MusicScreen() {
           />
           <Row
             name="Quiet-hours volume"
-            value={`${Sound.quietVol(prefs)}% of full volume`}
+            value={f('%1$s%% of full volume', Sound.quietVol(prefs))}
             onPress={() => prefs.put('quietVol', String(Sound.cycle(Sound.QUIET_VOL, Sound.quietVol(prefs))))}
           />
         </>
       ) : null}
       <Row
         name="Sound profiles"
-        value={on('soundProfiles') ? 'City, highway and night volume' + (s.profile ? `  ·  ${s.profile} now` : '') : 'off'}
+        value={on('soundProfiles') ? t('City, highway and night volume') + (s.profile ? '  ·  ' + f('%1$s now', t(s.profile)) : '') : 'off'}
         right={tick('soundProfiles')}
         onPress={() => flip('soundProfiles')}
       />
@@ -214,8 +229,8 @@ export default function MusicScreen() {
             return (
               <Row
                 key={pr}
-                name={pr[0].toUpperCase() + pr.substring(1) + ' sound'}
-                value={`volume ${v > 0 ? '+' : ''}${v} steps${pr === s.profile ? '  ·  now' : ''}`}
+                name={f('%1$s sound', t(pr[0].toUpperCase() + pr.substring(1)))}
+                value={f('volume %1$s steps', (v > 0 ? '+' : '') + v) + (pr === s.profile ? '  ·  ' + t('now') : '')}
                 onPress={() => prefs.put('sndVol:' + pr, String(v >= 5 ? -5 : v + 1))}
               />
             );
@@ -224,7 +239,7 @@ export default function MusicScreen() {
       <Row name="Music dips for voice prompts" value="While the car speaks a turn or a warning" right={tick('duck')} onPress={() => flip('duck')} />
       <Row
         name="Battery saver for parked music"
-        value={on('parkedMusic') ? `Reminds once after ${Math.max(30, Sound.parkedMin(prefs))} minutes standing still` : 'off'}
+        value={on('parkedMusic') ? f('Reminds once after %1$s minutes standing still', Math.max(30, Sound.parkedMin(prefs))) : 'off'}
         right={tick('parkedMusic')}
         onPress={() => flip('parkedMusic')}
       />
@@ -233,19 +248,69 @@ export default function MusicScreen() {
         value="Needs Android's audio effects from native code: not in this version"
       />
       <Text style={{ color: look.textDim, marginTop: 8 }}>
-        These change this player's own volume. The stereo's volume, the FM radio and other music apps need native code (see
-        PORTING.md). Without an OBD adapter the engine can't be told apart from idling with the AC on, so parked music is
-        reminded about, not paused.
+        {t(
+          "These change this player's own volume. The stereo's volume, the FM radio and other music apps need native code (see PORTING.md). Without an OBD adapter the engine can't be told apart from idling with the AC on, so parked music is reminded about, not paused.",
+        )}
       </Text>
+
+      {/* 1.36 to 1.39: the music box's extras and the fun boxes */}
+      <Heading>Music box</Heading>
+      <Row
+        name="Drag to seek in the music box"
+        value="A bar with the time played; drag along it to move in the song (music apps that allow it)"
+        right={tick('seek')}
+        onPress={() => flip('seek')}
+      />
+      <Row
+        name="Music box colours from the album cover"
+        value="Needs the song's cover: this player has none (the phone's music library gives no covers), and other apps' covers need notification access, which needs native code"
+      />
+      <Row
+        name="Phone projection app"
+        value="A button in the music box opens your wireless CarPlay or Android Auto app (ZLink, AutoKit and others)"
+        right={tick('projection')}
+        onPress={() => flip('projection')}
+      />
+      {on('projection') ? (
+        <>
+          <Field
+            label="Your CarPlay or Android Auto app"
+            value={proj}
+            placeholder="com.zjinnova.zlink"
+            onChange={(v) => {
+              setProj(v);
+              prefs.put('app:projection', v.trim());
+            }}
+          />
+          <Text style={{ color: look.textDim, marginTop: 4 }}>
+            {proj.trim() !== '' && !Player.looksLikeProjection(proj, '')
+              ? t("That doesn't look like a CarPlay or Android Auto app, but it will be opened.")
+              : t('Its package name, as in the app\'s Play Store link. Finding it by itself needs the list of installed apps, which needs native code.')}
+          </Text>
+        </>
+      ) : null}
+      <Row
+        name="Soundboard"
+        value="A box of fun sounds (horn, fart, applause and more) that plays only when the car is stopped"
+        right={tick('soundboard')}
+        onPress={() => flip('soundboard')}
+      />
+      <Row
+        name="Video window"
+        value="Plays a video from the unit or a USB stick in a box; the picture shows only when the car is stopped"
+        right={tick('video')}
+        onPress={() => flip('video')}
+      />
+      {on('video') ? <Button label="Play a video" onPress={() => router.push('/video')} /> : null}
     </Screen>
   );
 }
 
 /** Why the volume differs from the owner's level just now. */
 function volumeWhy(prefs: Prefs, profile: string, ducked: boolean): string {
-  if (ducked) return 'dipped while the car speaks';
+  if (ducked) return t('dipped while the car speaks');
   const parts: string[] = [];
-  if (Features.on(prefs, 'speedVolume')) parts.push('speed');
-  if (profile !== '') parts.push(profile + ' sound');
-  return parts.length ? parts.join(' and ') : 'adjusted';
+  if (Features.on(prefs, 'speedVolume')) parts.push(t('speed'));
+  if (profile !== '') parts.push(f('%1$s sound', t(profile)));
+  return parts.length ? parts.join(' ' + t('and') + ' ') : t('adjusted');
 }

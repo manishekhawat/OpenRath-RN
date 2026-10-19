@@ -1,15 +1,19 @@
 /**
  * The drive engine (the work of the Drive service), outside React so it can run from the
  * background location task as well as on screen: each GPS fix goes through the trip computer,
- * the speed limit and camera alerts, the road helpers of road.ts, the trip side of trips.ts, the
- * crash check and the headlight reminder, and the trip is saved every 15 s. drive.tsx shows what
- * it publishes; background.ts decides where the fixes come from.
+ * the speed limit and camera alerts, the road helpers of road.ts, the trip side of trips.ts and
+ * the headlight reminder, and the trip is saved every 15 s. drive.tsx shows what it publishes;
+ * background.ts decides where the fixes come from.
  *
- * Speech works behind other apps. What needs the screen (the SOS countdown, the Cab notes) waits
- * in a queue while the app is behind another one, and is shown when it comes back.
+ * Since 1.38 it also works out the speed to show (Hub.speed and Fixes.java): replayed and
+ * impossible fixes are skipped, the owner's speed correction is added, the number eases between
+ * readings and shows 0 below the speed filter, and "--" (-1) without a fix for 10 s; and, from
+ * 1.39, this drive's summary once the car has stood still for 5 s (CarCard).
+ *
+ * Speech works behind other apps. What needs the screen (the Cab notes, new badges) waits in a
+ * queue while the app is behind another one, and is shown when it comes back.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
 import type { LocationObject } from 'expo-location';
 import { Alert, AppState, Platform, ToastAndroid } from 'react-native';
 
@@ -18,7 +22,8 @@ import * as Cab from '../logic/cab';
 import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
 import { dist } from '../logic/geo';
-import * as Rescue from '../logic/rescue';
+import { t } from '../logic/i18n';
+import * as Motion from '../logic/motion';
 import * as Speed from '../logic/speed';
 import * as Trip from '../logic/trip';
 import * as Valet from '../logic/valet';
@@ -39,6 +44,12 @@ export interface Snapshot {
   alertError: string;
   gps: string;
   road: RoadView;
+  /** km/h to show: corrected, filtered and smoothed; -1 with no fix in the last 10 s */
+  speedShown: number;
+  /** this drive so far, once the car has stood still 5 s (with the stopSummary switch on) */
+  stopped: Trip.Stopped | null;
+  /** when the last fix came in (Date.now()), 0 = none yet */
+  fixAt: number;
 }
 
 /** The car's voice; the app's own music dips while it talks (state/speech.ts). */
@@ -47,20 +58,33 @@ export function say(text: string) {
 }
 
 const prefs = Store.prefs;
-let snap: Snapshot = { trip: Trip.initial(Date.now()), limit: 0, cameraM: -1, over: false, alertError: '', gps: '', road: NO_ROAD };
+let snap: Snapshot = {
+  trip: Trip.initial(Date.now()),
+  limit: 0,
+  cameraM: -1,
+  over: false,
+  alertError: '',
+  gps: '',
+  road: NO_ROAD,
+  speedShown: -1,
+  stopped: null,
+  fixAt: 0,
+};
 const listeners = new Set<(s: Snapshot) => void>();
 
 const speed = { limit: 0, cameras: [] as Speed.Camera[], warned: false, announced: new Set<string>() };
 const query = { busy: false, at: null as null | { lat: number; lon: number }, time: 0 };
 const road = new RoadWatch(prefs, say);
 let savedAt = 0;
-let crashSeen = 0;
+/** the speed shown, unrounded, and when it was worked out (the monotonic clock where there is one) */
+const shown = { kmh: 0, at: 0, stoppedAt: 0 };
+let easeTimer: ReturnType<typeof setTimeout> | null = null;
 let lights = { told: false, darkSince: -1 };
 let lastFixT = 0;
 let lastTick = 0;
 let tickTimer: ReturnType<typeof setInterval> | null = null;
 let loading: Promise<void> | null = null;
-/** the root layout is mounted, so the router can open a screen */
+/** the root layout is mounted, so notes can be shown */
 let attached = false;
 const queue: Bg.Queued[] = [];
 
@@ -113,9 +137,13 @@ function show(item: Bg.Queued) {
     queue.push(item);
     return;
   }
-  if (item.kind === 'sos') router.push(item.text as never);
-  else if (Platform.OS === 'android') ToastAndroid.show(item.text, ToastAndroid.LONG);
+  if (Platform.OS === 'android') ToastAndroid.show(item.text, ToastAndroid.LONG);
   else Alert.alert(item.text);
+}
+
+/** A note for the screen (a new badge): shown now, or when the app comes back. */
+export function note(text: string) {
+  show({ kind: 'note', text, at: Date.now() });
 }
 
 /** The root layout is up (or went away): screens can be opened from here on. */
@@ -163,6 +191,7 @@ export function close(keepDriving: boolean) {
 function tick() {
   const now = Date.now();
   lastTick = now;
+  refreshSpeed();
   const t = snap.trip;
   for (const n of Cab.tick(prefs, now, t.kmh, t.last?.t ?? 0)) {
     show({ kind: 'note', text: n.text, at: now });
@@ -196,7 +225,7 @@ async function lookUpLimits(lat: number, lon: number) {
     speed.cameras = parsed.cameras;
     set({ limit: parsed.limit, alertError: '' });
   } catch {
-    set({ alertError: 'speed data unreachable' });
+    set({ alertError: t('speed data unreachable') });
   } finally {
     query.busy = false;
   }
@@ -240,10 +269,10 @@ function feedOne(l: LocationObject) {
       accuracy: l.coords.accuracy,
       t: l.timestamp || Date.now(),
     },
-    { over: speed.warned, scoring: Features.on(prefs, 'score'), parking: Features.on(prefs, 'parking') },
+    { over: speed.warned, scoring: Features.on(prefs, 'score'), parking: Features.on(prefs, 'parking'), speedFix: Speed.fix(prefs) },
   );
   const s = r.state;
-  const out: Partial<Snapshot> = { trip: s };
+  const out: Partial<Snapshot> = { trip: s, fixAt: Date.now() };
   // current already, so an update published on the way (a failed limit lookup) carries this trip
   snap = { ...snap, trip: s };
   if (alerts) speedAlerts(s, out);
@@ -258,17 +287,9 @@ function feedOne(l: LocationObject) {
     lon: s.lon,
     kmh: s.kmh,
     heading: s.heading,
-    altitude: l.coords.altitude,
-    accuracy: l.coords.accuracy,
-    driveKm: s.driveKm,
     t: s.prevAt,
   });
   out.road = view;
-  // a crash-like stop with accident help on: the countdown screen, which texts the contact
-  if (view.crashAt > crashSeen) {
-    crashSeen = view.crashAt;
-    show({ kind: 'sos', text: Rescue.sosHref(s.lat, s.lon), at: Date.now() });
-  }
   // the mileage coach, the route recorder and the fuel-low check
   const tr = Trips.onTripFix(prefs, prev, r, l.coords.altitude ?? null);
   tr.say.forEach(say);
@@ -292,7 +313,51 @@ function feedOne(l: LocationObject) {
     savedAt = Date.now();
     save(r.state, r.closedDay).catch(() => {});
   }
-  set(out);
+  snap = { ...snap, ...out };
+  set(speedNow(Date.now()));
+}
+
+// ---- the speed shown, and the drive summary when stopped
+
+const clock = () => (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now());
+
+/** The speed and stop summary for now, from the last fix (Hub.speed and CarCard.changed). */
+function speedNow(now: number): Partial<Snapshot> {
+  const tk = clock();
+  const fresh = snap.fixAt > 0 && now - snap.fixAt < Speed.FIX_TIMEOUT_MS;
+  let kmh = -1;
+  if (!fresh) shown.kmh = 0;
+  else {
+    const raw = snap.trip.kmh;
+    const still = Speed.filter(prefs);
+    shown.kmh = Features.on(prefs, 'smoothSpeed') ? Speed.smooth(shown.kmh, raw, tk - shown.at, still) : raw < still ? 0 : raw;
+    kmh = Math.round(shown.kmh);
+    if (Math.abs(shown.kmh - raw) >= 0.5) ease();
+  }
+  shown.at = tk;
+  // stopped for 5 seconds after some driving: how the drive went
+  const isStill = kmh === 0;
+  if (!isStill) shown.stoppedAt = 0;
+  else if (shown.stoppedAt === 0) shown.stoppedAt = now;
+  const tr = snap.trip;
+  const due = isStill && now - shown.stoppedAt >= Trip.STOP_SUMMARY_MS && tr.driveKm >= Trip.STOP_SUMMARY_KM && Features.on(prefs, 'stopSummary');
+  const stopped = due ? (snap.stopped && snap.stopped.km === tr.driveKm && snap.stopped.sec === tr.driveSec ? snap.stopped : Trip.stopped(tr)) : null;
+  return { speedShown: kmh, stopped };
+}
+
+/** The number moves on towards the reading a few times a second while on screen (not at "Less movement: Off"). */
+function ease() {
+  if (easeTimer || AppState.currentState !== 'active' || Motion.level(prefs) === 'off') return;
+  easeTimer = setTimeout(() => {
+    easeTimer = null;
+    refreshSpeed();
+  }, Motion.level(prefs) === 'reduced' ? 500 : 250);
+}
+
+/** Publish the speed shown and the stop summary when they changed (the tick, the easing). */
+function refreshSpeed() {
+  const c = speedNow(Date.now());
+  if (c.speedShown !== snap.speedShown || c.stopped !== snap.stopped) set(c);
 }
 
 /**
@@ -302,7 +367,9 @@ function feedOne(l: LocationObject) {
 export async function feed(batch: readonly LocationObject[]): Promise<void> {
   await ready();
   const now = Date.now();
-  for (const l of Bg.fresh(batch, lastFixT, now)) {
+  // no real position (0,0 or out of range): skipped; old fixes replayed by Android: Bg.fresh skips them
+  const real = batch.filter((l) => Speed.usable(l.coords.latitude, l.coords.longitude, 0, 0));
+  for (const l of Bg.fresh(real, lastFixT, now)) {
     lastFixT = l.timestamp || now;
     feedOne(l);
   }
@@ -327,6 +394,20 @@ export function hideFog() {
   set({ road: road.hideFog() });
 }
 
+/** A live GPS fix from the last 30 seconds (not an old one), or null (Hub.liveFix). */
+export function liveFix(): { lat: number; lon: number } | null {
+  const s = snap.trip;
+  return snap.fixAt > 0 && Date.now() - snap.fixAt < 30000 && s.last ? { lat: s.lat, lon: s.lon } : null;
+}
+
+/** "Park here": only from a live GPS fix, as an old one can be hundreds of metres off. Returns what to show. */
+export function parkHere(): string {
+  const f = liveFix();
+  if (!f) return t('No GPS position yet');
+  setPark(f.lat, f.lon);
+  return t('Parking spot saved');
+}
+
 export function setPark(lat: number, lon: number) {
   const s = { ...snap.trip, park: { lat, lon, at: Date.now() } };
   set({ trip: s });
@@ -334,7 +415,7 @@ export function setPark(lat: number, lon: number) {
 }
 
 export function resetToday() {
-  const s = { ...snap.trip, todayKm: 0, todaySec: 0, driveKm: 0, driveSec: 0, todayBrakes: 0, todayAccels: 0, todaySpeedSec: 0 };
+  const s = { ...snap.trip, todayKm: 0, todaySec: 0, driveKm: 0, driveSec: 0, driveTop: 0, todayBrakes: 0, todayAccels: 0, todaySpeedSec: 0 };
   set({ trip: s });
   AsyncStorage.setItem(TRIP_KEY, JSON.stringify(Trip.persisted(s))).catch(() => {});
 }

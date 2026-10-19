@@ -14,6 +14,8 @@
  * - favourite apps show the app's icon from expo-intent-launcher, or its first letter;
  * - "Your own pictures" as the background (layWall) is left out (the layout's own picture shows);
  *   air pressure, altitude and tyre pressures show "--" (no barometer, GPS altitude or TPMS yet).
+ * Words are shown in the owner's language (t()), speeds in km/h or mph and temperatures in °C or
+ * °F (src/logic/units.ts), and the road moves at the chosen motion level (src/logic/motion.ts).
  */
 import * as IntentLauncher from 'expo-intent-launcher';
 import { router } from 'expo-router';
@@ -37,8 +39,12 @@ import Svg, {
 import data from '../data/layouts.json';
 import * as Features from '../logic/features';
 import { mapsLink, routeLink } from '../logic/geo';
+import { f, t } from '../logic/i18n';
 import * as Layouts from '../logic/layouts';
 import type { Layout, Part } from '../logic/layouts';
+import * as Motion from '../logic/motion';
+import type { Prefs } from '../logic/prefs';
+import * as Units from '../logic/units';
 import type { Look, Pack } from '../logic/theme';
 import type { Wx } from '../logic/weather';
 import { useDrive } from '../state/drive';
@@ -72,9 +78,13 @@ export const PICTURES: Record<string, number> = {
   big_clock: require('../../assets/layouts/big_clock.jpg'),
   lyrics: require('../../assets/layouts/lyrics.jpg'),
   cards: require('../../assets/layouts/cards.jpg'),
+  mission: require('../../assets/layouts/mission.jpg'),
+  electric: require('../../assets/layouts/electric.jpg'),
+  roadster: require('../../assets/layouts/roadster.jpg'),
   car_rear_silver: require('../../assets/layouts/car_rear_silver.png'),
   car_rear_white: require('../../assets/layouts/car_rear_white.png'),
   car_rear_grey: require('../../assets/layouts/car_rear_grey.png'),
+  car_rear_red: require('../../assets/layouts/car_rear_red.png'),
 };
 
 /** Small pictures of each layout for the gallery (art/layout_preview.py). */
@@ -89,6 +99,9 @@ export const PREVIEWS: Record<string, number> = {
   big_clock: require('../../assets/layouts/prev_big_clock.jpg'),
   lyrics: require('../../assets/layouts/prev_lyrics.jpg'),
   cards: require('../../assets/layouts/prev_cards.jpg'),
+  mission: require('../../assets/layouts/prev_mission.jpg'),
+  electric: require('../../assets/layouts/prev_electric.jpg'),
+  roadster: require('../../assets/layouts/prev_roadster.jpg'),
 };
 
 // ------------------------------------------------------------------ drawing helpers
@@ -418,7 +431,12 @@ function icon(c: Pen, name: string | null, x: number, y: number, size: number) {
 interface Live {
   now: Date;
   h24: boolean;
+  /** in the chosen unit, or "--" */
   speed: string;
+  /** "km/h" or "mph" */
+  unit: string;
+  /** temperatures in °F */
+  fahrenheit: boolean;
   heading: number;
   lat: number;
   lon: number;
@@ -438,7 +456,7 @@ interface Live {
 }
 
 /** What's playing: always nothing here, until a media session module is ported. */
-const NOW = { title: 'Nothing playing', sub: 'Tap to choose music', playing: false, radio: false, progress: -1 };
+const nothing = () => ({ title: t('Nothing playing'), sub: t('Tap to choose music'), playing: false, radio: false, progress: -1 });
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -447,8 +465,9 @@ function time(l: Live): string {
   return l.h24 ? `${pad(h)}:${pad(l.now.getMinutes())}` : `${h % 12 || 12}:${pad(l.now.getMinutes())}`;
 }
 
-const dMMM = (d: Date) => `${d.getDate()} ${MONTHS[d.getMonth()]}`;
-const weekday = (d: Date) => WEEKDAYS[d.getDay()];
+/** Today's name, and "11 Oct", in the owner's language (the numbers as they are). */
+const dMMM = (d: Date) => `${d.getDate()} ${t(MONTHS[d.getMonth()])}`;
+const weekday = (d: Date) => t(WEEKDAYS[d.getDay()]);
 
 function direction(l: Live): string {
   return l.heading < 0 ? '--' : Layouts.compass(l.heading) + '  ' + Math.round(l.heading) + '°';
@@ -473,24 +492,27 @@ function is24h(): boolean {
   }
 }
 
-function live(wx: Wx | null, place: string, trip: ReturnType<typeof useDrive>['trip'], driver: string, tpmsUnit: string, now: Date): Live {
+function live(prefs: Prefs, wx: Wx | null, place: string, trip: ReturnType<typeof useDrive>['trip'], driver: string, tpmsUnit: string, now: Date): Live {
   const fresh = trip.last != null && now.getTime() - trip.last.t < 5000;
+  const tc = (c: number) => Units.temp(prefs, c);
   return {
     now,
     h24: is24h(),
-    speed: fresh ? String(Math.round(trip.kmh)) : '--',
+    speed: fresh ? String(Units.speed(trip.kmh, Units.mph(prefs))) : '--',
+    unit: Units.speedLabel(prefs),
+    fahrenheit: Units.fahrenheit(prefs),
     heading: trip.heading,
     lat: trip.lat,
     lon: trip.lon,
     todayKm: trip.todayKm,
-    temp: wx ? wx.temp + '°' : '--°',
-    desc: wx ? wx.text : 'Weather',
+    temp: wx ? tc(wx.tempC ?? wx.temp) : '--°',
+    desc: wx ? t(wx.text) : t('Weather'),
     place,
     humidity: wx ? Math.round(wx.humidity) + '%' : '',
     wind: wx ? Math.round(wx.wind) + ' km/h' : '',
     pressure: '',
     icon: wx ? weatherIcon(wx.code, wx.isDay) : 'w_cloud',
-    forecast: wx ? wx.daily.map((d) => [d.date, weatherIcon(d.code, true), Math.round(d.max) + '°', Math.round(d.min) + '°']) : [],
+    forecast: wx ? wx.daily.map((d) => [d.date, weatherIcon(d.code, true), tc(d.max), tc(d.min)]) : [],
     driver,
     tpmsUnit,
   };
@@ -564,7 +586,7 @@ function dockStill(c: Pen, p: Part, prefs: ReturnType<typeof usePrefs>['prefs'])
     if (p.tiles) shape(c, { x: cx - p.h / 2, y: p.y, w: p.h, h: p.h, r: 8, fill: p.fill, fill2: p.fill, alpha: p.alpha }, true, false);
     const gy = p.y + (p.h - size) / 2 - (p.labels ? 8 : 0);
     glyph(c, it, cx - size / 2, gy, size, p.ink);
-    if (p.labels) text(c, Layouts.label(it), cx, gy + size + 16, 13, p.ink, 'med', 'mm');
+    if (p.labels) text(c, t(Layouts.label(it)), cx, gy + size + 16, 13, p.ink, 'med', 'mm');
   });
 }
 
@@ -661,9 +683,9 @@ function weather(c: Pen, p: Part, l: Live) {
     text(c, temp, x + 6, y + 70, 72, p.ink, 'bold', 'ls');
     text(c, place, x + w, y + 18, 14, p.sub, 'reg', 'rt');
     const rows = [
-      ['Humidity', l.humidity],
-      ['Wind', l.wind],
-      ['Air pressure', l.pressure],
+      [t('Humidity'), l.humidity],
+      [t('Wind'), l.wind],
+      [t('Air pressure'), l.pressure],
     ];
     rows.forEach(([name, v], i) => {
       const yy = y + 118 + i * 38;
@@ -675,10 +697,10 @@ function weather(c: Pen, p: Part, l: Live) {
     if (today(l)) text(c, lo(l) + '/' + hi(l), x + 2, y + h * 0.7, h * 0.15, p.sub, 'reg', 'ls');
   } else if (st === 'wide') {
     icon(c, l.icon, x + w - 60, y - 6, 52);
-    const t = temp.replace('°', '°C');
-    text(c, t, x, y + 40, 40, p.ink, 'med', 'ls');
-    text(c, desc, x + width(t, 40, 'med') + 12, y + 40, 15, p.sub, 'reg', 'ls');
-    const line2 = place + (l.humidity ? (place ? '  ·  ' : '') + 'humidity ' + l.humidity : '');
+    const tt = temp.replace('°', l.fahrenheit ? '°F' : '°C');
+    text(c, tt, x, y + 40, 40, p.ink, 'med', 'ls');
+    text(c, desc, x + width(tt, 40, 'med') + 12, y + 40, 15, p.sub, 'reg', 'ls');
+    const line2 = place + (l.humidity ? (place ? '  ·  ' : '') + f('humidity %1$s', l.humidity) : '');
     text(c, line2, x + 2, y + 70, 14, p.sub, 'reg', 'ls');
   } else if (st === 'calendar') {
     text(c, today(l) ? range(l) : temp, cx, y + 64, 19, p.ink, 'bold', 'mm');
@@ -686,7 +708,7 @@ function weather(c: Pen, p: Part, l: Live) {
     text(c, fit(lastWord(desc), 12, w - 12), cx, y + 138, 12, p.sub, 'reg', 'mm');
   } else if (st === 'row') {
     icon(c, l.icon, x, y + h / 2 - 30, 60);
-    text(c, temp.replace('°', '°C'), x + w - 20, y + h / 2, 40, p.ink, 'med', 'rm');
+    text(c, temp.replace('°', l.fahrenheit ? '°F' : '°C'), x + w - 20, y + h / 2, 40, p.ink, 'med', 'rm');
   } else if (st === 'card') {
     text(c, fit(place, 14, w - 28), x + 16, y + 26, 14, p.sub, 'reg', 'lm');
     text(c, temp, x + 14, y + 74, 46, p.ink, 'med', 'lm');
@@ -698,7 +720,7 @@ function weather(c: Pen, p: Part, l: Live) {
 function forecast(c: Pen, p: Part, l: Live) {
   const f = l.forecast;
   if (f.length < 2) {
-    text(c, 'Forecast after the first weather update', p.x + p.w / 2, p.y + p.h / 2, 12, p.sub, 'reg', 'mm');
+    text(c, t('Forecast after the first weather update'), p.x + p.w / 2, p.y + p.h / 2, 12, p.sub, 'reg', 'mm');
     return;
   }
   const n = Math.min(4, f.length - 1);
@@ -708,7 +730,7 @@ function forecast(c: Pen, p: Part, l: Live) {
     icon(c, d[1], cx - 20, p.y + 8, 40);
     text(c, d[2], cx, p.y + 66, 16, p.ink, 'med', 'mm');
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d[0]);
-    const day = m ? DAYS[new Date(+m[1], +m[2] - 1, +m[3]).getDay()] : d[0];
+    const day = m ? t(DAYS[new Date(+m[1], +m[2] - 1, +m[3]).getDay()]) : d[0];
     text(c, day, cx, p.y + 92, 13, p.sub, 'reg', 'mm');
   }
 }
@@ -724,22 +746,23 @@ function speedPart(c: Pen, p: Part, l: Live) {
   const cy = y + h / 2;
   const v = l.speed;
   const frac = (parseInt(v, 10) || 0) / 180;
+  const unit = l.unit;
   const st = p.style;
   c.hit(x, y, w, h, 'dock:navi');
   if (st === 'ring') {
     ring(c, cx, cy, w * 0.4, w * 0.035, frac, '#FFFFFF', '#FFFFFF55');
     text(c, v, cx, cy - 6, h * 0.27, p.ink, 'med', 'mm');
-    text(c, 'km/h', cx, cy + h * 0.17, h * 0.085, p.sub, 'reg', 'mm');
+    text(c, unit, cx, cy + h * 0.17, h * 0.085, p.sub, 'reg', 'mm');
   } else if (st === 'number') {
     text(c, v, cx, y + h * 0.72, h * 0.8, p.ink, 'med', 'ms');
-    text(c, 'km/h', cx, y + h * 0.95, h * 0.13, p.sub, 'reg', 'ms');
+    text(c, unit, cx, y + h * 0.95, h * 0.13, p.sub, 'reg', 'ms');
   } else if (st === 'badge') {
-    text(c, v + ' km/h', cx, cy, h * 0.38, p.ink, 'med', 'mm');
+    text(c, v + ' ' + unit, cx, cy, h * 0.38, p.ink, 'med', 'mm');
   } else if (st === 'gauge-small') {
     const r = h * 0.36;
     ring(c, x + 18 + r, cy, r, 4, frac, p.accent, '#00000022');
     text(c, v, x + 18 + r, cy - 2, r * 0.62, p.ink, 'med', 'mm');
-    text(c, 'km/h', x + 18 + r, cy + r * 0.5, 10, p.sub, 'reg', 'mm');
+    text(c, unit, x + 18 + r, cy + r * 0.5, 10, p.sub, 'reg', 'mm');
     text(c, direction(l), x + w - 16, cy - 10, 15, p.ink, 'med', 'rm');
     text(c, '--', x + w - 16, cy + 16, 13, p.sub, 'reg', 'rm'); // altitude: not known here
   } else if (st === 'dial') {
@@ -763,13 +786,13 @@ function speedPart(c: Pen, p: Part, l: Live) {
     if (frac > 0) c.add(<Path d={arc(cx, cy, r * 0.93, 135, 270 * Math.min(1, frac))} stroke={p.accent} strokeWidth={5} fill="none" />);
     c.add(<Circle cx={cx} cy={cy} r={r * 0.42} stroke={faded(p.sub, 0.6)} strokeWidth={2} fill="none" />);
     text(c, v, cx, cy - 2, r * 0.3, p.ink, 'med', 'mm');
-    text(c, 'km/h', cx, cy + r * 0.24, r * 0.09, p.sub, 'reg', 'mm');
+    text(c, unit, cx, cy + r * 0.24, r * 0.09, p.sub, 'reg', 'mm');
   } else if (st === 'row') {
     text(c, v, x, cy + 14, 52, p.ink, 'med', 'ls');
-    text(c, 'km/h', x + width(v, 52, 'med') + 12, cy + 14, 15, p.sub, 'reg', 'ls');
+    text(c, unit, x + width(v, 52, 'med') + 12, cy + 14, 15, p.sub, 'reg', 'ls');
   } else if (st === 'card') {
     text(c, v, cx, y + 64, 64, p.ink, 'med', 'mm');
-    text(c, 'km/h', cx, y + 104, 15, p.sub, 'reg', 'mm');
+    text(c, unit, cx, y + 104, 15, p.sub, 'reg', 'mm');
     for (const sg of [-1, 1])
       c.add(<Line x1={cx + sg * 14} y1={y + 140} x2={cx + sg * 70} y2={y + h - 20} stroke="#9AC8F0" strokeWidth={2} strokeLinecap="round" />);
     c.add(<SvgImage href={PICTURES.car_rear_white} x={cx - 55} y={y + h - 110} width={110} height={79} preserveAspectRatio="none" />);
@@ -824,8 +847,8 @@ function music(c: Pen, p: Part) {
   const { x, y, w, h } = p;
   const cx = x + w / 2;
   const cy = y + h / 2;
-  const n = NOW;
-  const t = n.title;
+  const n = nothing();
+  const ttl = n.title;
   const ar = n.sub;
   const { ink, sub } = p;
   c.hit(x, y, w, h, 'media:open');
@@ -835,23 +858,23 @@ function music(c: Pen, p: Part) {
     const tx = x + h + 6;
     const tw = w - h - 30;
     glyph(c, n.radio ? 'radio' : 'music', tx, y + 36, 18, ink);
-    text(c, n.radio ? 'Radio' : 'Music', tx + 26, y + 45, 15, ink, 'med', 'lm');
-    text(c, fit(t, 22, tw, 'med'), tx, y + 88, 22, ink, 'med', 'lm');
+    text(c, t(n.radio ? 'Radio' : 'Music'), tx + 26, y + 45, 15, ink, 'med', 'lm');
+    text(c, fit(ttl, 22, tw, 'med'), tx, y + 88, 22, ink, 'med', 'lm');
     c.add(<Line x1={tx} y1={y + 116} x2={tx + 60} y2={y + 116} stroke={p.accent} strokeWidth={3} strokeLinecap="round" />);
     controls(c, tx, y + 136, tw, 24, ink, n.playing);
   } else if (st === 'float') {
-    text(c, fit(t, 30, w - 36, 'bold'), x + 18, y + 40, 30, ink, 'bold', 'lm');
+    text(c, fit(ttl, 30, w - 36, 'bold'), x + 18, y + 40, 30, ink, 'bold', 'lm');
     text(c, fit(ar, 15, w - 36), x + 18, y + 76, 15, sub, 'reg', 'lm');
     controls(c, x + 18, y + 112, w - 36, 24, ink, n.playing);
   } else if (st === 'card') {
     cover(c, x + 8, y + 8, w - 16, h - 90, false, 4);
-    text(c, fit(t, 20, w - 20, 'bold'), cx, y + h - 56, 20, ink, 'bold', 'mm');
+    text(c, fit(ttl, 20, w - 20, 'bold'), cx, y + h - 56, 20, ink, 'bold', 'mm');
     text(c, fit(ar, 13, w - 20), cx, y + h - 28, 13, sub, 'reg', 'mm');
     controls(c, x + 10, y + h + 32, w - 20, 30, ink, n.playing);
   } else if (st === 'row') {
     const sz = Math.min(70, h - 64);
     cover(c, x + 14, y + 12, sz, sz, false, 6);
-    text(c, fit(t, 17, w - sz - 40, 'med'), x + 26 + sz, y + 12 + sz * 0.35, 17, ink, 'med', 'lm');
+    text(c, fit(ttl, 17, w - sz - 40, 'med'), x + 26 + sz, y + 12 + sz * 0.35, 17, ink, 'med', 'lm');
     text(c, fit(ar, 12, w - sz - 40), x + 26 + sz, y + 12 + sz * 0.75, 12, sub, 'reg', 'lm');
     controls(c, x + 10, y + h - 42, w - 20, 22, ink, n.playing);
     bar(c, x + 14, x + w - 14, y + h - 8, n.progress, ink, null, 3);
@@ -859,7 +882,7 @@ function music(c: Pen, p: Part) {
     const r = w / 2;
     disc(c, cx, cy, r * 0.62);
     c.add(<Circle cx={cx} cy={cy} r={r * 0.98} stroke="#5A6A80" strokeWidth={4} fill="none" />);
-    text(c, fit(t, r * 0.11, r * 1.2, 'med'), cx, y + r * 0.26, r * 0.11, ink, 'med', 'mm');
+    text(c, fit(ttl, r * 0.11, r * 1.2, 'med'), cx, y + r * 0.26, r * 0.11, ink, 'med', 'mm');
     text(c, fit(ar, r * 0.11, r * 1.2, 'med'), cx, y + h - r * 0.26, r * 0.11, ink, 'med', 'mm');
     glyph(c, 'prev', x + r * 0.1, cy - 14, 28, ink);
     glyph(c, 'next', x + w - r * 0.1 - 28, cy - 14, 28, ink);
@@ -870,19 +893,19 @@ function music(c: Pen, p: Part) {
   } else if (st === 'record') {
     const r = Math.min(w, h) * 0.36;
     disc(c, cx, y + 10 + r, r);
-    text(c, fit(t, 17, w - 10, 'med'), cx, y + 2 * r + 46, 17, sub, 'med', 'mm');
+    text(c, fit(ttl, 17, w - 10, 'med'), cx, y + 2 * r + 46, 17, sub, 'med', 'mm');
     bar(c, x + 10, x + w - 10, y + 2 * r + 72, n.progress, ink, faded(sub, 0.4), 2);
     controls(c, x + 10, y + 2 * r + 92, w - 20, 30, ink, n.playing);
   } else if (st === 'list') {
     glyph(c, n.radio ? 'radio' : 'music', x, y + 8, 30, ink);
-    text(c, fit(t, 20, w - 60, 'med'), x + w - 20, y + 24, 20, ink, 'med', 'rm');
+    text(c, fit(ttl, 20, w - 60, 'med'), x + w - 20, y + 24, 20, ink, 'med', 'rm');
     controls(c, x - 6, y + 70, w - 20, 26, ink, n.playing);
     for (const yy of [y + h - 4, y - 10]) c.add(<Line x1={x} y1={yy} x2={x + w - 20} y2={yy} stroke={faded(sub, 0.3)} strokeWidth={1} />);
   } else if (st === 'lyrics') {
     glyph(c, n.radio ? 'radio' : 'music', x + 24, y + 22, 18, sub);
-    text(c, fit(t + (ar ? '  ·  ' + ar : ''), 14, w - 80), x + 50, y + 31, 14, sub, 'reg', 'lm');
+    text(c, fit(ttl + (ar ? '  ·  ' + ar : ''), 14, w - 80), x + 50, y + 31, 14, sub, 'reg', 'lm');
     // the songs around this one, this one large; with nothing playing, the title and the hint
-    const lines = ['', t, ar];
+    const lines = ['', ttl, ar];
     lines.forEach((s, i) => {
       const cur = i === 1;
       const size = cur ? 30 : 18;
@@ -892,20 +915,20 @@ function music(c: Pen, p: Part) {
     controls(c, x + 80, y + h - 70, w - 160, 36, ink, n.playing);
   } else if (st === 'wide') {
     glyph(c, n.radio ? 'radio' : 'music', x + 22, y + 20, 16, sub);
-    text(c, n.radio ? 'Radio' : 'Music', x + 46, y + 28, 13, sub, 'reg', 'lm');
-    text(c, fit(t, 26, w * 0.6, 'med'), x + 22, y + 72, 26, ink, 'med', 'lm');
+    text(c, t(n.radio ? 'Radio' : 'Music'), x + 46, y + 28, 13, sub, 'reg', 'lm');
+    text(c, fit(ttl, 26, w * 0.6, 'med'), x + 22, y + 72, 26, ink, 'med', 'lm');
     controls(c, x + 10, y + 108, w * 0.55, 28, ink, n.playing);
     disc(c, x + w - 90, cy + 4, 66);
   }
 }
 
 function stat(it: string, l: Live): [string, string] {
-  if (it === 'temp') return ['Temp (°C)', l.temp];
-  if (it === 'altitude') return ['Altitude', '--'];
-  if (it === 'direction') return [l.heading < 0 ? 'Direction' : 'Direction ' + Layouts.compass(l.heading), l.heading < 0 ? '--' : Math.round(l.heading) + '°'];
-  if (it === 'pressure') return ['Air pressure', l.pressure || '--'];
-  if (it === 'tyres') return [`Tyres (${l.tpmsUnit === 'bar' ? 'bar' : 'psi'})`, '-- -- -- --'];
-  if (l.lat === 0 && l.lon === 0) return ['Position', '--'];
+  if (it === 'temp') return [l.fahrenheit ? t('Temp (°F)') : t('Temp (°C)'), l.temp];
+  if (it === 'altitude') return [t('Altitude'), '--'];
+  if (it === 'direction') return [l.heading < 0 ? t('Direction') : f('Direction %1$s', Layouts.compass(l.heading)), l.heading < 0 ? '--' : Math.round(l.heading) + '°'];
+  if (it === 'pressure') return [t('Air pressure'), l.pressure || '--'];
+  if (it === 'tyres') return [f('Tyres (%1$s)', l.tpmsUnit === 'bar' ? 'bar' : 'psi'), '-- -- -- --'];
+  if (l.lat === 0 && l.lon === 0) return [t('Position'), '--'];
   return [`${Math.abs(l.lon).toFixed(4)}° ${l.lon >= 0 ? 'E' : 'W'}`, `${Math.abs(l.lat).toFixed(4)}° ${l.lat >= 0 ? 'N' : 'S'}`];
 }
 
@@ -975,13 +998,13 @@ function userPart(c: Pen, p: Part, l: Live) {
   c.hit(x, y, w, h, 'user');
   if (p.style === 'line') {
     avatar(c, x + 16, y + 20, 16);
-    text(c, name ? "Let's go, " + name + '!' : "Let's go!", x + 44, y + h / 2, 16, p.sub, 'reg', 'lm');
+    text(c, name ? f("Let's go, %1$s!", name) : t("Let's go!"), x + 44, y + h / 2, 16, p.sub, 'reg', 'lm');
     return;
   }
   const r = h * 0.34;
   avatar(c, x + 18 + r, y + h / 2, r);
-  text(c, fit(name || 'Hello', 20, w - 2 * r - 44, 'bold'), x + 30 + 2 * r, y + h / 2 - 10, 20, p.ink, 'bold', 'lm');
-  text(c, 'Drive safe', x + 30 + 2 * r, y + h / 2 + 16, 13, p.sub, 'reg', 'lm');
+  text(c, fit(name || t('Hello'), 20, w - 2 * r - 44, 'bold'), x + 30 + 2 * r, y + h / 2 - 10, 20, p.ink, 'bold', 'lm');
+  text(c, t('Drive safe'), x + 30 + 2 * r, y + h / 2 + 16, 13, p.sub, 'reg', 'lm');
 }
 
 const TILE = [
@@ -1020,7 +1043,7 @@ function favourites(c: Pen, p: Part, prefs: ReturnType<typeof usePrefs>['prefs']
       c.add(
         <Path d={`M${cx - s * 0.18} ${ty + s / 2}L${cx + s * 0.18} ${ty + s / 2}M${cx} ${ty + s / 2 - s * 0.18}L${cx} ${ty + s / 2 + s * 0.18}`} stroke={p.ink} strokeWidth={2.5} strokeLinecap="round" />,
       );
-      text(c, 'Add app', cx, cy + s / 2 + 6, 11, p.ink, 'reg', 'mm');
+      text(c, t('Add app'), cx, cy + s / 2 + 6, 11, p.ink, 'reg', 'mm');
     }
   }
 }
@@ -1039,7 +1062,7 @@ function drawLive(c: Pen, lay: Layout, p: Part, l: Live, prefs: ReturnType<typeo
   else if (k === 'picture' && p.style === 'trip') {
     const km = l.todayKm < 100 ? fmtKm(l.todayKm) : String(Math.round(l.todayKm));
     text(c, km + ' km', p.x + p.w / 2, p.y + p.h * 0.42, 40, p.ink, 'med', 'mm');
-    text(c, l.place ? 'today · ' + l.place : 'today', p.x + p.w / 2, p.y + p.h * 0.42 + 40, 15, p.sub, 'reg', 'mm');
+    text(c, l.place ? f('today · %1$s', l.place) : t('today'), p.x + p.w / 2, p.y + p.h * 0.42 + 40, 15, p.sub, 'reg', 'mm');
   } else if (k === 'dock') {
     const items = Layouts.dockItems(prefs, p);
     const n = items.length + (p.clock ? 1 : 0);
@@ -1085,14 +1108,14 @@ function appLabel(prefs: ReturnType<typeof usePrefs>['prefs'], pkg: string): str
 
 function openApp(pkg: string, label: string): boolean {
   if (Platform.OS !== 'android') {
-    Alert.alert('Opening other apps works on Android only');
+    Alert.alert(t('Opening other apps works on Android only'));
     return true;
   }
   try {
     IntentLauncher.openApplication(pkg);
     return true;
   } catch {
-    Alert.alert(`${label} isn't installed`, pkg);
+    Alert.alert(f("%1$s isn't installed", label), pkg);
     return false;
   }
 }
@@ -1112,11 +1135,11 @@ function AppPicker({ title, apps, onPick, onClose }: { title: string; apps: App[
                 <Text style={styles.modalSub}>{a.pkg}</Text>
               </Pressable>
             ))}
-            {apps.length === 0 ? <Text style={styles.modalSub}>Add apps on the Apps page, or type a package name.</Text> : null}
+            {apps.length === 0 ? <Text style={styles.modalSub}>{t('Add apps on the Apps page, or type a package name.')}</Text> : null}
           </ScrollView>
-          <Field label="Package name" value={pkg} onChange={setPkg} placeholder="com.spotify.music" />
-          <Button label="Use this app" kind="primary" onPress={() => pkg.trim() && onPick(pkg.trim())} />
-          <Button label="Cancel" onPress={onClose} />
+          <Field label={t('Package name')} value={pkg} onChange={setPkg} placeholder="com.spotify.music" />
+          <Button label={t('Use this app')} kind="primary" onPress={() => pkg.trim() && onPick(pkg.trim())} />
+          <Button label={t('Cancel')} onPress={onClose} />
         </View>
       </View>
     </Modal>
@@ -1135,23 +1158,22 @@ function Backdrop({ lay, kmh, moving, k, ox, oy, w, h }: { lay: Layout; kmh: num
   const road = lay.roadHorizon > 0 && Layouts.roadOn(prefs);
   const anim = Layouts.animOn(prefs);
   const drift = anim && moving;
+  const every = Motion.frame(Motion.level(prefs)); // ms between frames; -1 = still
   const [frame, setFrame] = useState({ phase: 0, t: 0 });
   const kmhRef = useRef(kmh);
   kmhRef.current = kmh;
 
   useEffect(() => {
-    if (!((road || drift) && moving)) return;
+    if (!((road || drift) && moving && every > 0)) return;
     let last = 0;
-    let raf = 0;
-    const step = (now: number) => {
+    const timer = setInterval(() => {
+      const now = Date.now();
       const dt = last === 0 ? 0 : Math.min(0.2, (now - last) / 1000);
       last = now;
-      setFrame((f) => ({ phase: (f.phase + (kmhRef.current / 3.6 / 8) * dt) % 1.6, t: Date.now() / 1000 }));
-      raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [road, drift, moving]);
+      setFrame((fr) => ({ phase: (fr.phase + (kmhRef.current / 3.6 / 8) * dt) % 1.6, t: now / 1000 }));
+    }, every);
+    return () => clearInterval(timer);
+  }, [road, drift, moving, every]);
 
   const src = PICTURES[lay.bg];
   const s = anim ? 1.05 : 1;
@@ -1257,13 +1279,13 @@ export default function LayoutView({ layout: lay }: { layout: Layout }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lay, prefs, version]);
 
-  const l = live(weather.wx, weather.place, trip, Layouts.driver(prefs), prefs.str('tpmsUnit', 'psi'), now);
+  const l = live(prefs, weather.wx, weather.place, trip, Layouts.driver(prefs), prefs.str('tpmsUnit', 'psi'), now);
   const pen = new Pen('l');
   for (const p of lay.parts) if (on(p)) drawLive(pen, lay, p, l, prefs, apps);
 
   const pickFavourite = (i: number) =>
     setPicking({
-      title: 'Choose an app',
+      title: t('Choose an app'),
       onPick: (pkg) => {
         Layouts.setFavourite(prefs, i, pkg);
         setPicking(null);
@@ -1281,16 +1303,20 @@ export default function LayoutView({ layout: lay }: { layout: Layout }) {
       else {
         const pkg = Layouts.dockApp(prefs, n);
         if (pkg) openApp(pkg, Layouts.label(n));
-        else Alert.alert(Layouts.label(n), `Long-press to choose the app for ${Layouts.label(n)}`);
+        else Alert.alert(t(Layouts.label(n)), f('Long-press to choose the app for %1$s', t(Layouts.label(n))));
       }
     } else if (action.startsWith('media:')) {
       const pkg = prefs.str('app:media:music', '');
-      if (action === 'media:open' && pkg) openApp(pkg, 'Music');
-      else Alert.alert('Music', "What's playing and the music buttons need the media module, which isn't in this version yet. Long-press the Music button on the dock to choose your music app.");
+      if (action === 'media:open' && pkg) openApp(pkg, t('Music'));
+      else
+        Alert.alert(
+          t('Music'),
+          t("What's playing and the music buttons need the media module, which isn't in this version yet. Long-press the Music button on the dock to choose your music app."),
+        );
     } else if (action.startsWith('place:')) {
       const name = action.substring(6);
       const ll = Layouts.place(prefs, name);
-      if (!ll) Alert.alert(name, `Save ${name} on the map first (the star in the map box)`);
+      if (!ll) Alert.alert(t(name), f('Save %1$s on the map first (the star in the map box)', t(name)));
       else Linking.openURL(trip.lat !== 0 ? routeLink(trip.lat, trip.lon, ll[0], ll[1]) : mapsLink(ll[0], ll[1])).catch(() => {});
     } else if (action.startsWith('fav:')) {
       const i = parseInt(action.substring(4), 10);
@@ -1311,7 +1337,7 @@ export default function LayoutView({ layout: lay }: { layout: Layout }) {
       const n = action.substring(5);
       if (['apps', 'settings', 'user', 'dash'].includes(n)) return false;
       setPicking({
-        title: 'App for ' + Layouts.label(n),
+        title: f('App for %1$s', t(Layouts.label(n))),
         onPick: (pkg) => {
           prefs.put('app:' + Layouts.dockKey(n), pkg);
           setPicking(null);
@@ -1415,12 +1441,12 @@ export function ThemePreview({ pack, look, width }: { pack: Pack; look: Look; wi
         <SvgImage href={PICTURES.car_rear_silver} x={303 - 110} y={262 - 157} width={220} height={157} preserveAspectRatio="none" />
         {txt('OPENRATH', 132, 50, 13, look.text, '400', 'start', 0.3)}
         {txt('62', 382, 62, 38, look.text, '300')}
-        {txt('LIGHTS ON', 128, 272, 12, look.accent, '500', 'start', 0.18)}
+        {txt(t('LIGHTS ON'), 128, 272, 12, look.accent, '500', 'start', 0.18)}
         {txt('FM1', 534, 480, 12, look.accent, '500', 'start', 0.18)}
         {txt('17:31', 303, 372, 58, look.text, '300', 'middle')}
-        {txt('Sunday 11 October', 303, 408, 15, look.textDim, '400', 'middle')}
+        {txt(t('Sunday 11 October'), 303, 408, 15, look.textDim, '400', 'middle')}
         {txt('28°', 210, 520, 42, look.text, '300')}
-        {txt('Cloudy', 475, 505, 16, look.text, '500', 'end')}
+        {txt(t('Cloudy'), 475, 505, 16, look.text, '500', 'end')}
         {txt('New Delhi', 475, 535, 13, look.textDim, '400', 'end')}
         <WeatherIcon name="w_cloud" x={138} y={482} size={56} />
         {txt('98.30', 758, 528, 46, look.text, '300', 'middle')}

@@ -7,6 +7,7 @@ import * as Car from './car.ts';
 import { typical } from './coach.ts';
 import * as Features from './features.ts';
 import { log, stats } from './fuel.ts';
+import { f, t } from './i18n.ts';
 import { num, type Prefs } from './prefs.ts';
 
 /** The choices for "warn when the petrol is below", km of driving. */
@@ -72,15 +73,18 @@ export function rangeKm(p: Prefs, gpsOdoKm: number): number {
   return l < 0 ? -1 : l * k;
 }
 
-/** For the start-up summary: the range when the planner is on, else -1 (which leaves it out). */
+/** For the start-up summary: the range when Fuel and mileage is on, else -1 (which leaves it out). */
 export function summaryRange(p: Prefs, gpsOdoKm: number): number {
-  return Features.on(p, 'fuelPlan') ? rangeKm(p, gpsOdoKm) : -1;
+  return Features.on(p, 'fuelPrice') ? rangeKm(p, gpsOdoKm) : -1;
 }
 
 export function text(p: Prefs, gpsOdoKm: number): string {
   const r = rangeKm(p, gpsOdoKm);
-  if (r < 0) return 'not known yet: add a fill-up with "filled to full" ticked';
-  return `about ${Math.round(r / 10) * 10} km of ${Car.word(Car.fuel(p))} left`;
+  if (r < 0) return t('not known yet: add a fill-up with "filled to full" ticked');
+  const w = Car.word(Car.fuel(p));
+  const km = Math.round(r / 10) * 10;
+  // the Android version always says petrol; other fuels keep their own word (in English)
+  return w === 'petrol' ? f('about %1$s km of petrol left', km) : f('about %1$s km of %2$s left', km, w);
 }
 
 /**
@@ -91,9 +95,9 @@ export class LowCheck {
   /** the last warning level spoken, km */
   told = Number.MAX_SAFE_INTEGER;
 
-  /** What to say, or null. */
+  /** What to say (spoken, so in English), or null. */
   check(p: Prefs, gpsOdoKm: number): string | null {
-    if (!Features.on(p, 'fuelPlan')) return null;
+    if (!Features.on(p, 'fuelPrice')) return null;
     const r = rangeKm(p, gpsOdoKm);
     if (r < 0) return null;
     const warn = warnKm(p);

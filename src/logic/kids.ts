@@ -1,3 +1,4 @@
+import { f, t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 import { dayKey } from './trip.ts';
 
@@ -82,12 +83,12 @@ export function toggle(p: Prefs, code: string, now = Date.now()): string[] {
 }
 
 export function platesHeading(count: number): string {
-  return `Number plates from other states: ${count} of ${STATES.length} found today`;
+  return f('Number plates from other states: %1$s of %2$s found today', count, STATES.length);
 }
 
 /** The player's name ('kid1', 'kid2'), or the seat. */
 export function player(p: Prefs, i: number): string {
-  return p.str('kid' + (i + 1), i === 0 ? 'Left seat' : 'Right seat');
+  return p.str('kid' + (i + 1), t(i === 0 ? 'Left seat' : 'Right seat'));
 }
 
 export function rename(p: Prefs, i: number, name: string): void {

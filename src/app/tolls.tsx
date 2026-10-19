@@ -1,5 +1,5 @@
 /**
- * Tolls paid (Care.addToll and the toll lines of the trip history): add a payment, see this and
+ * Tolls paid (Care.addToll, from the trip menu, and the toll lines of the trip history): add a payment, see this and
  * last week's and month's totals next to the fuel spent, and delete a wrong entry.
  */
 import { useMemo, useState } from 'react';
@@ -8,6 +8,7 @@ import { Alert, Text, View } from 'react-native';
 import { Button, Field, Heading, Row, Screen } from '../components/ui';
 import * as Care from '../logic/care';
 import * as Fuel from '../logic/fuel';
+import { f, t } from '../logic/i18n';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 
@@ -31,32 +32,32 @@ export default function TollsScreen() {
 
   const add = () => {
     const v = parseFloat(rs);
-    if (!(v > 0)) return Alert.alert('Enter the toll paid in rupees');
+    if (!(v > 0)) return Alert.alert(t('Toll paid (₹)'));
     Care.addToll(prefs, v);
     setRs('');
   };
 
   const remove = (index: number) =>
-    Alert.alert('Delete this toll?', undefined, [
-      { text: 'Keep', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => Care.setTolls(prefs, list.filter((_, i) => i !== index)) },
+    Alert.alert(t('Delete this toll?'), undefined, [
+      { text: t('Keep'), style: 'cancel' },
+      { text: t('Delete'), style: 'destructive', onPress: () => Care.setTolls(prefs, list.filter((_, i) => i !== index)) },
     ]);
 
   return (
-    <Screen title="Tolls">
-      <Field label="Toll paid (₹)" value={rs} onChange={setRs} numeric placeholder="e.g. 115" />
-      <Button label="Add a toll payment" kind="primary" onPress={add} />
+    <Screen title={t('Tolls')}>
+      <Field label={t('Toll paid (₹)')} value={rs} onChange={setRs} numeric placeholder="115" />
+      <Button label={t('Add a toll payment')} kind="primary" onPress={add} />
 
-      <Heading>Spent</Heading>
-      {totals.map((t) => (
-        <View key={t.name} style={{ flexDirection: 'row', paddingVertical: 6 }}>
-          <Text style={{ color: look.text, flex: 1 }}>{t.name}</Text>
-          <Text style={{ color: look.text, width: 110, textAlign: 'right' }}>tolls ₹{Math.round(t.toll)}</Text>
-          <Text style={{ color: look.textDim, width: 110, textAlign: 'right' }}>fuel ₹{Math.round(t.fuel)}</Text>
+      <Heading>{t('Spent')}</Heading>
+      {totals.map((r) => (
+        <View key={r.name} style={{ flexDirection: 'row', paddingVertical: 6 }}>
+          <Text style={{ color: look.text, flex: 1 }}>{t(r.name)}</Text>
+          <Text style={{ color: look.text, width: 110, textAlign: 'right' }}>{f(', tolls ₹%1$s', Math.round(r.toll)).replace(/^, /, '')}</Text>
+          <Text style={{ color: look.textDim, width: 110, textAlign: 'right' }}>{f(', fuel ₹%1$s', Math.round(r.fuel)).replace(/^, /, '')}</Text>
         </View>
       ))}
 
-      <Heading>{list.length === 0 ? 'No tolls yet' : 'Tolls paid (tap one to delete it)'}</Heading>
+      <Heading>{list.length === 0 ? t('No tolls yet') : t('Tolls paid (tap one to delete it)')}</Heading>
       {list
         .map((e, i) => ({ e, i }))
         .reverse()

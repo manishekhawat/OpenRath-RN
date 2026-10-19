@@ -19,6 +19,7 @@ import { Alert, Platform, ToastAndroid } from 'react-native';
 
 import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
+import { t } from '../logic/i18n';
 import * as Player from '../logic/player';
 import { FILES, WEB, type Mode, type Track } from '../logic/player';
 import { num, type Prefs } from '../logic/prefs';
@@ -100,8 +101,8 @@ export function musicDir(): Directory {
 }
 
 function toast(text: string) {
-  if (Platform.OS === 'android') ToastAndroid.show(text, ToastAndroid.SHORT);
-  else Alert.alert(text);
+  if (Platform.OS === 'android') ToastAndroid.show(t(text), ToastAndroid.SHORT);
+  else Alert.alert(t(text));
 }
 
 // ------------------------------------------------------------------ the player
@@ -165,11 +166,11 @@ function release() {
   state.duration = 0;
 }
 
-function showControls(t: Track) {
+function showControls(tr: Track) {
   try {
     ap?.setActiveForLockScreen(
       true,
-      { title: t.name, artist: t.sub !== '' ? t.sub : state.mode === WEB ? 'Online radio' : 'Music' },
+      { title: tr.name, artist: tr.sub !== '' ? tr.sub : state.mode === WEB ? t('Online radio') : t('Music') },
       { isLiveStream: state.mode === WEB },
     );
   } catch {
@@ -490,6 +491,16 @@ export function setMode(mode: Mode) {
   if (state.playing) pause();
   switchTo(mode);
   changed();
+}
+
+/** Move in the song to `sec` seconds (the music box's drag to seek). Radio streams can't seek. */
+export function seek(sec: number) {
+  if (!ap || loaded === '' || state.mode !== FILES || state.duration <= 0) return;
+  const to = Math.max(0, Math.min(state.duration, sec));
+  commandAt = Date.now();
+  state.position = to;
+  changed();
+  ap.seekTo(to).catch(() => {});
 }
 
 /** Stop and let go of the sound and the notification. */

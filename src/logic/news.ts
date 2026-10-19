@@ -1,4 +1,5 @@
 import * as Features from './features.ts';
+import { f, t } from './i18n.ts';
 import { num, type Prefs } from './prefs.ts';
 
 /**
@@ -106,17 +107,17 @@ export function readOne(it: Item): string {
 export function age(at: number, now: number): string {
   if (at <= 0) return '';
   const m = Math.floor((now - at) / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return m + ' min ago';
+  if (m < 1) return t('just now');
+  if (m < 60) return f('%1$s min ago', m);
   const h = Math.floor(m / 60);
-  return h < 48 ? h + ' h ago' : Math.floor(h / 24) + ' days ago';
+  return h < 48 ? f('%1$s h ago', h) : f('%1$s days ago', Math.floor(h / 24));
 }
 
 /** The box heading: "TOP NEWS · 12 min ago". */
 export function heading(topic: string, at: number, now: number, online = true): string {
   const name = topicName(topic);
   const a = age(at, now);
-  return (name === 'Top stories' ? 'TOP NEWS' : name.toUpperCase() + ' NEWS') + (a === '' ? '' : '  ·  ' + a + (online ? '' : ', offline'));
+  return (name === 'Top stories' ? t('TOP NEWS') : f('%1$s NEWS', t(name).toUpperCase())) + (a === '' ? '' : '  ·  ' + a + (online ? '' : t(', offline')));
 }
 
 /** The kept headlines as stored: one "title<TAB>source" per line. */

@@ -2,15 +2,17 @@
  * Settings > Screen layout (LayoutGallery and the Layout rows in the Android version): a picture
  * of each layout, two to a row like the theme gallery. Tap one to use it. The boxes show in the
  * current theme; the others are pictures made at build time (assets/layouts/prev_*.jpg). Below,
- * the chosen layout's parts can be shown or hidden.
+ * the chosen layout's parts can be shown or hidden. Since 1.35 the moving road is the dashboard's
+ * own switch ("Moving road under the car") and the driver part shows the home screen's "Your
+ * name", so neither has a row here.
  */
 import { useState } from 'react';
 import { Alert, Image, Pressable, Text, useWindowDimensions, View } from 'react-native';
 
 import { LAYOUTS, PREVIEWS, ThemePreview, mix } from '../../components/LayoutView';
-import { Button, Field, Heading, Row, Screen } from '../../components/ui';
+import { Heading, Row, Screen } from '../../components/ui';
+import { f, t } from '../../logic/i18n';
 import * as Layouts from '../../logic/layouts';
-import * as Profiles from '../../logic/profiles';
 import { chosen } from '../../logic/theme';
 import { lookFor, pack, useLook } from '../../state/look';
 import { usePrefs } from '../../state/prefs';
@@ -29,8 +31,6 @@ export default function LayoutsScreen() {
   const { prefs } = usePrefs();
   const look = useLook();
   const { width } = useWindowDimensions();
-  const [editing, setEditing] = useState<'' | 'user'>('');
-  const [name, setName] = useState('');
   const [ordering, setOrdering] = useState(false);
   const current = Layouts.current(prefs);
   const cur = Layouts.get(LAYOUTS, current);
@@ -60,8 +60,10 @@ export default function LayoutsScreen() {
             ) : (
               <Image source={PREVIEWS[id]} style={{ width: tile, height: (tile * 225) / 384, borderRadius: 8 }} resizeMode="stretch" />
             )}
-            <Text style={{ color: look.text, fontSize: 17, fontWeight: '500', paddingHorizontal: 6, paddingTop: 10 }}>{on ? title + '   ✓ in use' : title}</Text>
-            <Text style={{ color: look.textDim, fontSize: 13, paddingHorizontal: 6, paddingTop: 4 }}>{desc}</Text>
+            <Text style={{ color: look.text, fontSize: 17, fontWeight: '500', paddingHorizontal: 6, paddingTop: 10 }}>
+              {on ? f('%1$s   ✓ in use', t(title)) : t(title)}
+            </Text>
+            <Text style={{ color: look.textDim, fontSize: 13, paddingHorizontal: 6, paddingTop: 4 }}>{t(desc)}</Text>
           </Pressable>
         );
       })}
@@ -70,7 +72,7 @@ export default function LayoutsScreen() {
 
   if (!cur) {
     return (
-      <Screen title="Screen layout">
+      <Screen title={t('Screen layout')}>
         {gallery}
       </Screen>
     );
@@ -79,23 +81,21 @@ export default function LayoutsScreen() {
   const opts = Layouts.opts(cur);
   const stats = Layouts.part(cur, 'stats');
   const showing = stats ? Layouts.statItems(prefs, cur.id, stats) : [];
-  const profile = Profiles.current(prefs);
-  const user = prefs.str('layUser', '');
 
   return (
-    <Screen title="Screen layout">
+    <Screen title={t('Screen layout')}>
       {gallery}
 
       {opts.length > 0 ? (
         <>
-          <Heading>Show on {cur.name}</Heading>
+          <Heading>{f('Show on %1$s', t(cur.name))}</Heading>
           {opts.map((o) => {
             const on = Layouts.shown(prefs, cur.id, o);
             return (
               <Row
                 key={o}
-                name={Layouts.OPT_NAMES[o] ?? o}
-                value={on ? 'shown' : 'hidden'}
+                name={Layouts.OPT_NAMES[o] ? t(Layouts.OPT_NAMES[o]) : o}
+                value={t(on ? 'shown' : 'hidden')}
                 right={<Text style={{ color: look.accent, fontSize: 18 }}>{check(on)}</Text>}
                 onPress={() => Layouts.setShown(prefs, cur.id, o, !on)}
               />
@@ -106,82 +106,64 @@ export default function LayoutsScreen() {
 
       {stats ? (
         <>
-          <Heading>Details on {cur.name}</Heading>
-                    {Layouts.statOrder(prefs, cur.id, stats).map((it) => {
+          <Heading>{f('Details on %1$s', t(cur.name))}</Heading>
+          {Layouts.statOrder(prefs, cur.id, stats).map((it) => {
             const on = showing.includes(it);
             const at = showing.indexOf(it);
             return (
               <Row
                 key={it}
-                name={(on ? at + 1 + '.  ' : '') + Layouts.statName(it)}
+                name={(on ? at + 1 + '.  ' : '') + t(Layouts.statName(it))}
                 right={<Text style={{ color: look.accent, fontSize: 18 }}>{check(on)}</Text>}
                 onPress={() => (ordering ? on && Layouts.toTop(prefs, cur.id, stats, it) : Layouts.setStat(prefs, cur.id, stats, it, !on))}
               />
             );
           })}
           <Row
-            name="Order of the details"
-            value={ordering ? 'Tap one to put it first; tap here when done' : 'tap one to put it first'}
+            name={t('Change the order')}
+            value={t(ordering ? 'Tap one to put it first; tap here when done' : 'tap one to put it first')}
             onPress={() => {
-              if (!ordering && showing.length < 2) return Alert.alert('Show two or more details first');
+              if (!ordering && showing.length < 2) return Alert.alert(t('Show two or more details first'));
               setOrdering(!ordering);
             }}
           />
         </>
       ) : null}
 
-      <Heading>Layout</Heading>
-      {Layouts.part(cur, 'user') ? (
-        <>
-          <Row
-            name="Driver's name"
-            value={user || (profile ? profile + ' (driver profile)' : 'not set')}
-            onPress={() => {
-              setName(user);
-              setEditing('user');
-            }}
-          />
-          {editing === 'user' ? (
-            <>
-              <Field label="Driver's name" value={name} onChange={setName} />
-              <Button
-                label="OK"
-                kind="primary"
-                onPress={() => {
-                  prefs.put('layUser', name.trim());
-                  setEditing('');
-                }}
-              />
-              <Button label="Cancel" onPress={() => setEditing('')} />
-            </>
-          ) : null}
-        </>
-      ) : null}
-      {cur.roadHorizon > 0 ? (
-        <Row name="Moving road lines" value={Layouts.roadOn(prefs) ? 'on, while driving' : 'off'} onPress={() => prefs.put('layRoad', Layouts.roadOn(prefs) ? 'off' : 'on')} />
-      ) : null}
+      <Heading>{t('Layout')}</Heading>
       <Row
-        name="Phone mirroring button"
-        value={Layouts.mirrorOn(prefs) ? "on the layout's buttons" : 'off'}
+        name={t('Phone mirroring button')}
+        value={t(Layouts.mirrorOn(prefs) ? "on the layout's buttons" : 'off')}
         onPress={() => {
           prefs.put('layMirror', Layouts.mirrorOn(prefs) ? 'off' : 'on');
-          if (Layouts.mirrorOn(prefs)) Alert.alert('Phone mirroring', 'Long-press the new button to choose your mirroring app');
+          if (Layouts.mirrorOn(prefs)) Alert.alert(t('Phone mirroring'), t('Long-press the new button to choose your mirroring app'));
         }}
       />
-      <Row name="Background movement" value={Layouts.animOn(prefs) ? 'gentle, while driving' : 'off'} onPress={() => prefs.put('layAnim', Layouts.animOn(prefs) ? 'off' : 'on')} />
+      <Row
+        name={t('Background movement')}
+        value={t(Layouts.animOn(prefs) ? 'gentle, while driving' : 'off')}
+        onPress={() => prefs.put('layAnim', Layouts.animOn(prefs) ? 'off' : 'on')}
+      />
       {Layouts.part(cur, 'favourites') ? (
         <Row
-          name="Favourite apps"
-          value={`${Array.from({ length: Layouts.FAVOURITES }, (_, i) => Layouts.favourite(prefs, i)).filter(Boolean).length} of ${Layouts.FAVOURITES} chosen; tap a tile on the layout to choose, long-press to change`}
+          name={t('Clear the favourite apps')}
+          value={t('tap a tile on the layout to choose, long-press to change')}
           onPress={() =>
-            Alert.alert('Clear the favourite apps?', undefined, [
-              { text: 'Keep', style: 'cancel' },
-              { text: 'Clear', style: 'destructive', onPress: () => prefs.put('layApps', '') },
+            Alert.alert(t('Clear the favourite apps'), undefined, [
+              { text: t('Keep'), style: 'cancel' },
+              {
+                text: t('Clear'),
+                style: 'destructive',
+                onPress: () => {
+                  prefs.put('layApps', '');
+                  Alert.alert(t('Cleared. Tap a tile on the layout to choose its app.'));
+                },
+              },
             ])
           }
         />
       ) : null}
-      <Row name="Back to the boxes" value="The classic dashboard" onPress={() => Layouts.choose(prefs, Layouts.BOXES)} />
+      <Row name={t('Back to the boxes')} value={t('The classic dashboard')} onPress={() => Layouts.choose(prefs, Layouts.BOXES)} />
     </Screen>
   );
 }

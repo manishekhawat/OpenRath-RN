@@ -15,6 +15,7 @@ import * as TaskManager from 'expo-task-manager';
 import { Alert, AppState } from 'react-native';
 
 import * as Bg from '../logic/background';
+import { t } from '../logic/i18n';
 import * as Engine from './engine';
 import * as Store from './store';
 
@@ -59,10 +60,10 @@ const onScreen = () => AppState.currentState === 'active';
 function ask(): Promise<boolean> {
   Store.prefs.put(Bg.ASKED, '1');
   return new Promise((resolve) =>
-    Alert.alert(Bg.EXPLAIN_TITLE, Bg.EXPLAIN, [
-      { text: 'Not now', style: 'cancel', onPress: () => resolve(false) },
+    Alert.alert(t(Bg.EXPLAIN_TITLE), t(Bg.EXPLAIN), [
+      { text: t('Not now'), style: 'cancel', onPress: () => resolve(false) },
       {
-        text: 'Continue',
+        text: t('Continue'),
         onPress: () =>
           Location.requestBackgroundPermissionsAsync()
             .then((r) => resolve(r.granted))
@@ -154,6 +155,23 @@ export function sync(force = false): Promise<Bg.Source> {
   const next = chain.then(() => reconcile(force)).catch(() => {});
   chain = next;
   return next.then(() => mode);
+}
+
+/**
+ * After deep sleep (Wake.woke) the GPS listener can be stale: stop the watch or the task and start
+ * the source again, as Drive.start did.
+ */
+export function restart(): Promise<Bg.Source> {
+  const next = chain
+    .then(async () => {
+      sub?.remove();
+      sub = null;
+      await stopTask();
+      mode = 'none';
+    })
+    .catch(() => {});
+  chain = next;
+  return sync();
 }
 
 /** The app is closing: the watch stops with it; the task (and its notification) goes on. */

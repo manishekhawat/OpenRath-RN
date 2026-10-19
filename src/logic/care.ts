@@ -3,6 +3,7 @@
  * by date, the odometer itself, toll spending, and the weekly and monthly trip history.
  */
 import { fmt, log, suggestOdo } from './fuel.ts';
+import { f, t as tr } from './i18n.ts';
 import { num, type Prefs } from './prefs.ts';
 import { dayKey, type History } from './trip.ts';
 
@@ -58,16 +59,16 @@ export function daysLeft(p: Prefs, i: number, today: Date = new Date()): number 
 export function describe(p: Prefs, i: number, odoKm: number, today: Date = new Date()): string {
   if (byDate(i)) {
     const d = daysLeft(p, i, today);
-    if (d === UNSET) return 'due date not set';
+    if (d === UNSET) return tr('due date not set');
     const due = p.str(`care:${ITEMS[i]}:due`, '');
-    return d < 0 ? 'overdue since ' + due : d === 0 ? 'due today' : `due ${due} (${d} days)`;
+    return d < 0 ? f('overdue since %1$s', due) : d === 0 ? tr('due today') : f('due %1$s (%2$s days)', due, d);
   }
   const k = kmLeft(p, i, odoKm);
-  if (k === UNSET) return `every ${every(p, i)} km; last one not set`;
-  return k < 0 ? `overdue by ${-k} km` : `in ${k} km (every ${every(p, i)} km)`;
+  if (k === UNSET) return f('every %1$s km; last one not set', every(p, i));
+  return k < 0 ? f('overdue by %1$s km', -k) : f('in %1$s km (every %2$s km)', k, every(p, i));
 }
 
-/** The most urgent reminder for the car box, or "" when nothing is close. */
+/** The most urgent reminder for the car box, or "" when nothing is close (in English: it is also spoken). */
 export function alert(p: Prefs, odoKm: number, today: Date = new Date()): string {
   let best = '';
   let bestScore = Number.POSITIVE_INFINITY;
@@ -152,7 +153,7 @@ export function spent(l: { t?: number; rs?: number }[], from: number, to: number
 /** "  ·  tolls ₹450 this month" for the fuel box's foot, or "". */
 export function tollsThisMonth(p: Prefs, now: Date = new Date()): string {
   const rs = spent(tolls(p), new Date(now.getFullYear(), now.getMonth(), 1).getTime(), Number.MAX_SAFE_INTEGER);
-  return rs > 0 ? `  ·  tolls ₹${Math.round(rs)} this month` : '';
+  return rs > 0 ? '  ·  ' + f('tolls ₹%1$s this month', Math.round(rs)) : '';
 }
 
 // ------------------------------------------------------------------ trip history
@@ -220,10 +221,10 @@ export function totals(p: Prefs, hist: History, from: number, to: number): Total
 
 /** "This week: 120.5 km, 3 h 10 min, fuel ₹2000, tolls ₹150, score 88" */
 export function periodLine(name: string, t: Totals): string {
-  let b = `${name}: ${fmt(t.km)} km, ${Math.floor(t.sec / 3600)} h ${Math.floor((t.sec % 3600) / 60)} min`;
-  if (t.fuelRs > 0) b += `, fuel ₹${Math.round(t.fuelRs)}`;
-  if (t.tollRs > 0) b += `, tolls ₹${Math.round(t.tollRs)}`;
-  if (t.score >= 0) b += `, score ${t.score}`;
+  let b = tr(name) + ': ' + f('%1$s km, %2$s h %3$s min', fmt(t.km), Math.floor(t.sec / 3600), Math.floor((t.sec % 3600) / 60));
+  if (t.fuelRs > 0) b += f(', fuel ₹%1$s', Math.round(t.fuelRs));
+  if (t.tollRs > 0) b += f(', tolls ₹%1$s', Math.round(t.tollRs));
+  if (t.score >= 0) b += f(', score %1$s', t.score);
   return b;
 }
 
@@ -237,5 +238,35 @@ export function withToday(hist: History, day: string, row: number[]): History {
 
 /** "Today's driving score: 92 / 100 (1 harsh brakes, 2 hard starts, 0 min over the limit)" */
 export function scoreLine(score: number, brakes: number, accels: number, speedSec: number): string {
-  return `Today's driving score: ${score} / 100 (${brakes} harsh brakes, ${accels} hard starts, ${Math.floor(speedSec / 60)} min over the limit)`;
+  return f("Today's driving score: %1$s / 100 (%2$s harsh brakes, %3$s hard starts, %4$s min over the limit)", score, brakes, accels, Math.floor(speedSec / 60));
+}
+
+// ------------------------------------------------------------------ the trip menu
+
+/**
+ * Since 1.35 "Trips, fuel and tolls" is one Settings row that opens the trip menu (also the trip
+ * box's tap): start today's trip again, save the parking spot, the fuel log, trip history with the
+ * driving score, and a toll payment.
+ */
+export const TRIP_MENU = [
+  "Start today's trip again",
+  'Save the parking spot here',
+  'Fuel log and fill-ups',
+  'Trip history and driving score',
+  'Add a toll payment',
+];
+
+/** The trip menu's heading: "Today 12.3 km  ·  GPS odometer 4567 km". */
+export function tripMenuTitle(todayKm: number, odoKm: number): string {
+  return f('Today %1$s km  ·  GPS odometer %2$s km', todayKm.toFixed(1), String(Math.round(odoKm)));
+}
+
+/** The Settings row's state: "today 12.3 km, score 92; 4 fill-ups". */
+export function tripRow(todayKm: number, score: number, fills: number): string {
+  return f('today %1$s km, score %2$s; %3$s', todayKm.toFixed(1), String(score), fills === 0 ? tr('no fill-ups yet') : f('%1$s fill-ups', String(fills)));
+}
+
+/** The parking spot is saved only from a GPS fix of the last 30 seconds (Hub.liveFix). */
+export function liveFix(fixAt: number, now: number = Date.now()): boolean {
+  return fixAt > 0 && now - fixAt < 30000;
 }

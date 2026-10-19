@@ -7,6 +7,7 @@ import { spent, tolls, driven } from './care.ts';
 import * as Coach from './coach.ts';
 import { weekly as weeklyText } from './errands.ts';
 import * as Features from './features.ts';
+import { t } from './i18n.ts';
 import { log } from './fuel.ts';
 import { kmpl as planKmpl, summaryRange } from './fuelplan.ts';
 import { upcoming } from './holidays.ts';
@@ -20,7 +21,8 @@ const DAY = 86400000;
  * time only starts the clock. Call when parked (below 3 km/h), as the Java version did.
  */
 export function due(p: Prefs, now: Date = new Date()): boolean {
-  if (!Features.on(p, 'weekly')) return false;
+  // part of "Daily and weekly summary" since 1.35
+  if (!Features.on(p, 'startSummary')) return false;
   const t = now.getTime();
   const last = parseFloat(p.str('weeklyAt', '0')) || 0;
   if (last === 0) {
@@ -89,6 +91,11 @@ export function week(p: Prefs, hist: History, now: number = Date.now()): Week {
 
 export const TITLE = 'Your week in the car';
 
+/** TITLE in the chosen language. */
+export function title(): string {
+  return t(TITLE);
+}
+
 /** The next holiday, if it falls within a week (the first one on or after a week from now differs). */
 export function holidaySoon(now: Date = new Date()): string {
   const next = upcoming(now, 1);
@@ -98,7 +105,7 @@ export function holidaySoon(now: Date = new Date()): string {
 
 /**
  * The start-up summary's petrol range and holiday, as Chores.summary passed them to
- * Errands.summary: range -1 (left out) unless the fuel-low planner is on and knows the tank.
+ * Errands.summary: range -1 (left out) unless Fuel and mileage is on and knows the tank.
  */
 export function summaryExtras(p: Prefs, gpsOdoKm: number, now: Date = new Date()): { rangeKm: number; holiday: string } {
   return { rangeKm: summaryRange(p, gpsOdoKm), holiday: holidaySoon(now) };

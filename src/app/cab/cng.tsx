@@ -8,6 +8,7 @@ import { Linking } from 'react-native';
 import { Button, Field, Heading, Row, Screen } from '../../components/ui';
 import * as Cab from '../../logic/cab';
 import * as Care from '../../logic/care';
+import { t } from '../../logic/i18n';
 import { useDrive } from '../../state/drive';
 import { usePrefs } from '../../state/prefs';
 import { toast } from './meter';
@@ -31,7 +32,7 @@ export default function Cng() {
     const k = parseFloat(kg);
     const r = parseFloat(rupees);
     const o = parseFloat(odo);
-    if (!(k > 0) || !(o > 0)) return toast('Enter the kg and the odometer as numbers');
+    if (!(k > 0) || !(o > 0)) return toast(t('Enter the kg and the odometer as numbers'));
     Cab.addCng(prefs, k, Number.isFinite(r) ? r : 0, o, Date.now());
     setAdding(false);
   };
@@ -40,23 +41,23 @@ export default function Cng() {
     <Screen title={Cab.cngHead(list)}>
       {adding ? (
         <>
-          <Heading>Add a CNG fill</Heading>
-          <Field label="Kg" value={kg} onChange={setKg} numeric />
-          <Field label="Amount paid (₹)" value={rupees} onChange={setRupees} numeric />
-          <Field label="Odometer (km)" value={odo} onChange={setOdo} numeric />
-          <Button label="Save" kind="primary" onPress={save} />
-          <Button label="Cancel" onPress={() => setAdding(false)} />
+          <Heading>{t('Add a CNG fill')}</Heading>
+          <Field label={t('Kg')} value={kg} onChange={setKg} numeric />
+          <Field label={t('Amount paid (₹)')} value={rupees} onChange={setRupees} numeric />
+          <Field label={t('Odometer (km)')} value={odo} onChange={setOdo} numeric />
+          <Button label={t('Save')} kind="primary" onPress={save} />
+          <Button label={t('Cancel')} onPress={() => setAdding(false)} />
         </>
       ) : (
         <>
-          <Button label="Add a fill" kind="primary" onPress={start} />
+          <Button label={t('Add a fill')} kind="primary" onPress={start} />
           <Button
-            label="CNG stations near here"
-            onPress={() => Linking.openURL(Cab.cngSearch(trip.lat, trip.lon)).catch(() => toast('Needs a map app (Google Maps, Organic Maps or OsmAnd)'))}
+            label={t('CNG stations near here')}
+            onPress={() => Linking.openURL(Cab.cngSearch(trip.lat, trip.lon)).catch(() => toast(t('Needs a map app (Google Maps, Organic Maps or OsmAnd)')))}
           />
         </>
       )}
-      <Heading>Fills</Heading>
+      <Heading>{t('CNG fill-ups')}</Heading>
       {[...list].reverse().map((e, i) => (
         <Row key={e.t + ':' + i} name={Cab.cngRow(e)} />
       ))}

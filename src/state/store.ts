@@ -2,13 +2,17 @@
  * The settings themselves (the React Native side of Prefs.java), outside React so the background
  * trip task can read them too: every value is a string by key, kept in memory for synchronous
  * reads, loaded from AsyncStorage once and saved shortly after a change. prefs.tsx wraps this for
- * the screens; `subscribe` tells it about changes.
+ * the screens; `subscribe` tells it about changes. The language is read as soon as they are in.
+ * `reports` keeps the opt-in usage counts and crash notes (Reports.java) under their own key, so
+ * they never go into backups or driver profiles.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import * as I18n from '../logic/i18n';
 import type { Prefs } from '../logic/prefs';
 
 const KEY = 'openrath:prefs';
+const REPORTS_KEY = 'openrath:reports';
 
 const values = new Map<string, string>();
 const listeners = new Set<() => void>();
@@ -25,7 +29,13 @@ export function load(): Promise<void> {
         if (raw) for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, string>)) values.set(k, v);
       })
       .catch(() => {})
+      .then(() => AsyncStorage.getItem(REPORTS_KEY))
+      .then((raw) => {
+        if (raw) for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, string>)) reportValues.set(k, v);
+      })
+      .catch(() => {})
       .finally(() => {
+        I18n.load(prefs);
         isLoaded = true;
       });
   }
@@ -81,5 +91,31 @@ export const prefs: Prefs = {
   all: () => Object.fromEntries(values),
   remove: (k) => {
     if (values.delete(k)) changed();
+  },
+};
+
+// ------------------------------------------------------------------ usage reports' own store
+
+const reportValues = new Map<string, string>();
+let reportTimer: ReturnType<typeof setTimeout> | null = null;
+
+function reportChanged() {
+  if (reportTimer) clearTimeout(reportTimer);
+  reportTimer = setTimeout(() => {
+    reportTimer = null;
+    load().then(() => AsyncStorage.setItem(REPORTS_KEY, JSON.stringify(Object.fromEntries(reportValues))).catch(() => {}));
+  }, 300);
+}
+
+export const reports: Prefs = {
+  str: (k, d) => reportValues.get(k) ?? d,
+  put: (k, v) => {
+    if (reportValues.get(k) === v) return;
+    reportValues.set(k, v);
+    reportChanged();
+  },
+  all: () => Object.fromEntries(reportValues),
+  remove: (k) => {
+    if (reportValues.delete(k)) reportChanged();
   },
 };

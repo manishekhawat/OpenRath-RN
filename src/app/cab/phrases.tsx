@@ -9,11 +9,11 @@ import { Text } from 'react-native';
 
 import { Button, Choice, Field, Heading, Row, Screen } from '../../components/ui';
 import * as Cab from '../../logic/cab';
+import { f, t } from '../../logic/i18n';
 import { useLook } from '../../state/look';
 import { usePrefs } from '../../state/prefs';
 import { toast } from './meter';
 
-const LANG_OPTIONS = Cab.LANGS.map((id, i) => ({ id, label: Cab.LANG_NAMES[i] }));
 const NAMES: Record<string, string> = { hi: 'Hindi', en: 'English', mr: 'Marathi', kn: 'Kannada', ta: 'Tamil', te: 'Telugu', bn: 'Bengali', gu: 'Gujarati', pa: 'Punjabi', ml: 'Malayalam' };
 
 export default function Phrases() {
@@ -23,6 +23,7 @@ export default function Phrases() {
   const list = Cab.phraseList(prefs);
   const [own, setOwn] = useState('');
   const [adding, setAdding] = useState(false);
+  const langOptions = Cab.LANGS.map((id, i) => ({ id, label: t(Cab.LANG_NAMES[i]) }));
 
   const speak = async (i: number) => {
     const text = list[i];
@@ -38,7 +39,7 @@ export default function Phrases() {
       // can't tell: try it
     }
     if (!has) {
-      toast('No ' + (NAMES[code] ?? code) + ' voice on the unit, so here it is in English');
+      toast(f('No %1$s voice on the unit, so here it is in English', NAMES[code] ?? code));
       if (!mine) Speech.speak(Cab.PHRASES[i][0], { language: 'en-IN' });
       return;
     }
@@ -46,27 +47,27 @@ export default function Phrases() {
   };
 
   return (
-    <Screen title={'Say to the passenger (' + Cab.langName(lang) + ')'}>
+    <Screen title={f('Say to the passenger (%1$s)', Cab.langName(lang))}>
       {list.map((t, i) => (
         <Row key={i + t} name={t} onPress={() => speak(i)} />
       ))}
-      <Heading>Language</Heading>
-      <Choice options={LANG_OPTIONS} value={lang} onChange={(v) => prefs.put('cabLang', v)} />
+      <Heading>{t('Phrases in')}</Heading>
+      <Choice options={langOptions} value={lang} onChange={(v) => prefs.put('cabLang', v)} />
       {adding ? (
         <>
-          <Heading>Your own phrase</Heading>
-          <Field label="Type it in any language" value={own} onChange={setOwn} />
-          <Button label="Save" kind="primary" onPress={() => {
+          <Heading>{t('Your own phrase')}</Heading>
+          <Field label={t('Type it in any language')} value={own} onChange={setOwn} />
+          <Button label={t('Save')} kind="primary" onPress={() => {
             Cab.addPhrase(prefs, own);
             setOwn('');
             setAdding(false);
           }} />
-          <Button label="Cancel" onPress={() => setAdding(false)} />
+          <Button label={t('Cancel')} onPress={() => setAdding(false)} />
         </>
       ) : (
-        <Button label="Add your own" onPress={() => setAdding(true)} />
+        <Button label={t('Add your own')} onPress={() => setAdding(true)} />
       )}
-      <Text style={{ color: look.textDim, marginTop: 8 }}>Tap a phrase to say it aloud.</Text>
+      <Text style={{ color: look.textDim, marginTop: 8 }}>{t('Tap a phrase to say it aloud.')}</Text>
     </Screen>
   );
 }

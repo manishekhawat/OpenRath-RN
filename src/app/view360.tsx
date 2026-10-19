@@ -1,7 +1,8 @@
 /**
  * 360 view of the owner's car (port of View360.java, new in 1.30): OpenRath's own 3D model
  * (logic/car3d.ts) in the car's shape, colour and number plate, turned with a finger or by the
- * Top, Front, Side and Rear buttons, and turning slowly by itself when left alone. It also opens
+ * Top, Front, Side and Rear buttons, and turning slowly by itself when left alone (not at Less
+ * movement: Off). It also opens
  * the stereo's own 360 camera app (the one that stitches the four cameras, on units that have the
  * kit); OpenRath can't read those cameras itself. Drawn with react-native-svg, one polygon per face.
  */
@@ -16,6 +17,8 @@ import * as Car from '../logic/car';
 import * as Car3D from '../logic/car3d';
 import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
+import { f, t } from '../logic/i18n';
+import * as Motion from '../logic/motion';
 import { num, type Prefs } from '../logic/prefs';
 import { useDrive } from '../state/drive';
 import { usePrefs } from '../state/prefs';
@@ -99,6 +102,8 @@ export default function View360() {
   };
 
   // the animation: easing towards a button's view, else a slow turn after 4 s untouched
+  // (left out when Less movement is Off)
+  const still = Motion.frame(Motion.level(prefs)) <= 0;
   useEffect(() => {
     let raf = 0;
     let last = Date.now();
@@ -114,7 +119,7 @@ export default function View360() {
         cam.pitch += (g.pitch - cam.pitch) * k;
         if (Math.abs(g.yaw - cam.yaw) < 0.002 && Math.abs(g.pitch - cam.pitch) < 0.002) go.current = { yaw: NaN, pitch: NaN };
         moved = true;
-      } else if (now - touchedAt.current > 4000) {
+      } else if (now - touchedAt.current > 4000 && !still) {
         cam.yaw += 0.006 * frames; // turns slowly by itself when left alone
         moved = true;
       }
@@ -123,7 +128,7 @@ export default function View360() {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [cam]);
+  }, [cam, still]);
 
   const pan = useMemo(
     () =>
@@ -224,7 +229,7 @@ export default function View360() {
       </View>
 
       <Text style={styles.title} pointerEvents="none">
-        {'360 VIEW  ·  ' + (carName === '' ? 'YOUR CAR' : carName.toUpperCase())}
+        {f('360 VIEW  ·  %1$s', carName === '' ? t('YOUR CAR') : carName.toUpperCase())}
       </Text>
 
       <View style={styles.barWrap} pointerEvents="box-none">
@@ -236,7 +241,7 @@ export default function View360() {
                 onPress={() => press(n)}
                 style={[styles.pill, { backgroundColor: n === 'Close' ? '#7A2328' : n === '360 camera' ? '#1F6F45' : 'rgba(255,255,255,0.12)' }]}
               >
-                <Text style={styles.pillText}>{n}</Text>
+                <Text style={styles.pillText}>{t(n)}</Text>
               </Pressable>
             ),
           )}
@@ -248,7 +253,7 @@ export default function View360() {
           <Pressable style={styles.dialog} onPress={() => {}}>
             {menu === 'colour' ? (
               <>
-                <Text style={styles.dialogTitle}>Car colour</Text>
+                <Text style={styles.dialogTitle}>{t('Car colour')}</Text>
                 <ScrollView>
                   {Car3D.COLOUR_NAMES.map((name, i) => (
                     <Pressable
@@ -260,7 +265,7 @@ export default function View360() {
                       }}
                     >
                       <View style={[styles.swatch, { backgroundColor: Car3D.COLOURS[i] }]} />
-                      <Text style={styles.itemText}>{name}</Text>
+                      <Text style={styles.itemText}>{t(name)}</Text>
                     </Pressable>
                   ))}
                 </ScrollView>
@@ -268,7 +273,7 @@ export default function View360() {
             ) : null}
             {menu === 'shape' ? (
               <>
-                <Text style={styles.dialogTitle}>Car shape</Text>
+                <Text style={styles.dialogTitle}>{t('Car shape')}</Text>
                 {Car3D.SHAPE_NAMES.map((name, i) => (
                   <Pressable
                     key={name}
@@ -278,14 +283,14 @@ export default function View360() {
                       setMenu('');
                     }}
                   >
-                    <Text style={[styles.itemText, shape === Car3D.SHAPES[i] ? { fontWeight: '700' } : null]}>{name}</Text>
+                    <Text style={[styles.itemText, shape === Car3D.SHAPES[i] ? { fontWeight: '700' } : null]}>{t(name)}</Text>
                   </Pressable>
                 ))}
               </>
             ) : null}
             {menu === 'plate' ? (
               <>
-                <Text style={styles.dialogTitle}>Number plate (e.g. DL 3C AB 1234)</Text>
+                <Text style={styles.dialogTitle}>{t('Number plate (e.g. DL 3C AB 1234)')}</Text>
                 <TextInput
                   value={plateEdit}
                   onChangeText={setPlateEdit}
@@ -299,7 +304,7 @@ export default function View360() {
                 />
                 <View style={styles.actions}>
                   <Pressable onPress={() => setMenu('')} style={styles.action}>
-                    <Text style={styles.actionText}>Cancel</Text>
+                    <Text style={styles.actionText}>{t('Cancel')}</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => {
@@ -308,7 +313,7 @@ export default function View360() {
                     }}
                     style={styles.action}
                   >
-                    <Text style={styles.actionText}>Save</Text>
+                    <Text style={styles.actionText}>{t('Save')}</Text>
                   </Pressable>
                 </View>
               </>

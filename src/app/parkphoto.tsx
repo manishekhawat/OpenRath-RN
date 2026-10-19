@@ -11,6 +11,7 @@ import { Alert, Image, Linking, StyleSheet, Text, View } from 'react-native';
 
 import { Button, Heading, Screen } from '../components/ui';
 import * as Features from '../logic/features';
+import { t } from '../logic/i18n';
 import * as Snap from '../logic/snap';
 import * as Cam from '../state/camera';
 import { useLook } from '../state/look';
@@ -45,7 +46,7 @@ function Shooter({ auto, onDone }: { auto: boolean; onDone: () => void }) {
       onDone();
     } catch (e) {
       setBusy(false);
-      Alert.alert("Couldn't take the photo", String((e as Error)?.message ?? e));
+      Alert.alert(t("Couldn't take the photo"), String((e as Error)?.message ?? e));
     }
   };
 
@@ -63,11 +64,11 @@ function Shooter({ auto, onDone }: { auto: boolean; onDone: () => void }) {
         {show ? (
           <CameraView ref={ref} style={StyleSheet.absoluteFill} mode="picture" facing="back" onCameraReady={() => setReady(true)} />
         ) : (
-          <Text style={{ color: '#FFFFFF', alignSelf: 'center' }}>Waiting for the camera…</Text>
+          <Text style={{ color: '#FFFFFF', alignSelf: 'center' }}>{t('Waiting for the camera…')}</Text>
         )}
       </View>
-      <Button label={busy ? 'Taking the photo…' : 'Take the photo'} kind="primary" onPress={shoot} />
-      <Button label="Cancel" onPress={onDone} />
+      <Button label={t(busy ? 'Taking the photo…' : 'Take the photo')} kind="primary" onPress={shoot} />
+      <Button label={t('Cancel')} onPress={onDone} />
     </View>
   );
 }
@@ -79,7 +80,7 @@ export default function ParkPhotoScreen() {
   const { take } = useLocalSearchParams<{ take?: string }>();
   const [perm, askPerm] = useCameraPermissions();
   const [shooting, setShooting] = useState(false);
-  const on = Features.on(prefs, 'parkPhoto');
+  const on = Features.on(prefs, 'parking');
 
   // read again whenever a photo is kept (cam.files)
   void cam.files;
@@ -89,7 +90,7 @@ export default function ParkPhotoScreen() {
   const start = async () => {
     const p = perm?.granted ? perm : await askPerm();
     if (p.granted) setShooting(true);
-    else if (!p.canAskAgain) Alert.alert('Allow the camera in the system settings', undefined, [{ text: 'Cancel' }, { text: 'Open', onPress: () => Linking.openSettings() }]);
+    else if (!p.canAskAgain) Alert.alert(t('Allow the camera in the system settings'), undefined, [{ text: t('Cancel') }, { text: t('Open'), onPress: () => Linking.openSettings() }]);
   };
 
   useEffect(() => {
@@ -97,30 +98,30 @@ export default function ParkPhotoScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [take, perm != null]);
 
-  const failed = (e: unknown) => Alert.alert("Couldn't do that", String((e as Error)?.message ?? e));
+  const failed = (e: unknown) => Alert.alert(t("Couldn't do that"), String((e as Error)?.message ?? e));
 
   return (
-    <Screen title="Parking photo">
-      {!on ? <Text style={{ color: look.textDim, marginBottom: 8 }}>Turn on "Parking photo" in Settings &gt; Features to be asked when you park.</Text> : null}
+    <Screen title={t('Parking photo')}>
+      {!on ? <Text style={{ color: look.textDim, marginBottom: 8 }}>{t('Turn on "Parking" in Settings > Features to be asked when you park.')}</Text> : null}
       {shooting ? (
         <Shooter auto={take === '1'} onDone={() => setShooting(false)} />
       ) : latest ? (
         <>
           <Image source={{ uri: latest.uri }} style={styles.photo} resizeMode="contain" />
           <Text style={{ color: look.text, marginVertical: 8 }}>{Snap.takenText(latest.at)}</Text>
-          <Button label="Take a new one" kind="primary" onPress={start} />
-          <Button label="Share" onPress={() => Cam.share(latest.file, 'image/jpeg').catch(failed)} />
-          <Button label="Save to the gallery" onPress={() => Cam.toGallery(latest.file).then((m) => Alert.alert(m))} />
+          <Button label={t('Take a new one')} kind="primary" onPress={start} />
+          <Button label={t('Share')} onPress={() => Cam.share(latest.file, 'image/jpeg').catch(failed)} />
+          <Button label={t('Save to the gallery')} onPress={() => Cam.toGallery(latest.file).then((m) => Alert.alert(m))} />
         </>
       ) : (
         <>
           <Text style={{ color: look.textDim, marginVertical: 8 }}>{Snap.noneText()}</Text>
-          <Button label="Take one now" kind="primary" onPress={start} />
+          <Button label={t('Take one now')} kind="primary" onPress={start} />
         </>
       )}
       {!shooting && before ? (
         <>
-          <Heading>The one before</Heading>
+          <Heading>{t('The one before')}</Heading>
           <Image source={{ uri: before.uri }} style={styles.small} resizeMode="contain" />
           <Text style={{ color: look.textDim, marginTop: 4 }}>{Snap.takenText(before.at)}</Text>
         </>

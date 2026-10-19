@@ -4,6 +4,7 @@
  * 60 at most and turned into GPX on request. The file side is in src/state/tracks.ts.
  */
 import { dist } from './geo.ts';
+import { f, t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 import { dayKey } from './trip.ts';
 
@@ -201,10 +202,10 @@ export function accelDone(p: Prefs, t100: number, t60: number, now: number): str
 /** The Settings line: "last 9.5 s (0–60 5.4 s)  ·  best 9.1 s", or "no full run yet". */
 export function accelText(p: Prefs): string {
   const last = p.str('accelLast', '');
-  if (last === '') return 'no full run yet';
+  if (last === '') return t('no full run yet');
   const lf = last.split('|');
   const best = p.str('accelBest', '');
-  return 'last ' + lf[0] + ' s' + (lf.length > 1 && lf[1] !== '' ? ' (0–60 ' + lf[1] + ' s)' : '') + '  ·  best ' + (best || '-') + ' s';
+  return f('last %1$s s', lf[0]) + (lf.length > 1 && lf[1] !== '' ? ' (0–60 ' + lf[1] + ' s)' : '') + f('  ·  best %1$s s', best || '-');
 }
 
 export function forgetAccel(p: Prefs): void {
@@ -214,6 +215,11 @@ export function forgetAccel(p: Prefs): void {
 
 export const ACCEL_ABOUT =
   'Stop completely, then accelerate. The time is spoken when you pass 100 km/h. It uses GPS, so it is good to about half a second. Only on a safe, empty road.';
+
+/** ACCEL_ABOUT in the chosen language. */
+export function accelAbout(): string {
+  return t(ACCEL_ABOUT);
+}
 
 // ------------------------------------------------------------------ volume with speed
 

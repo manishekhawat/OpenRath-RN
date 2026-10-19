@@ -3,6 +3,8 @@
  * fix goes through `feed`, which returns the new state; the app keeps the state and saves it.
  */
 import { dist } from './geo.ts';
+import { corrected } from './speed.ts';
+import { speed as inUnit } from './units.ts';
 
 export interface Fix {
   lat: number;
@@ -22,6 +24,8 @@ export interface TripState {
   todaySec: number;
   driveKm: number;
   driveSec: number;
+  /** top speed since the app started, km/h (for the drive summary when stopped) */
+  driveTop: number;
   /** the GPS odometer: every km counted since the app was installed */
   odoKm: number;
   kmh: number;
@@ -57,6 +61,7 @@ export function initial(now: number, saved?: Partial<TripState>): TripState {
     todaySec: 0,
     driveKm: 0,
     driveSec: 0,
+    driveTop: 0,
     odoKm: 0,
     kmh: 0,
     heading: -1,
@@ -93,9 +98,9 @@ export interface FeedResult {
 
 /**
  * One GPS fix. `over` says the car is above the speed limit right now; `scoring` and `parking`
- * are the feature switches.
+ * are the feature switches; `speedFix` is the owner's speed correction in percent.
  */
-export function feed(s0: TripState, f: Fix, opts: { over: boolean; scoring: boolean; parking: boolean }): FeedResult {
+export function feed(s0: TripState, f: Fix, opts: { over: boolean; scoring: boolean; parking: boolean; speedFix?: number }): FeedResult {
   const s: TripState = { ...s0 };
   const now = f.t;
   let closedDay: FeedResult['closedDay'];
@@ -116,6 +121,7 @@ export function feed(s0: TripState, f: Fix, opts: { over: boolean; scoring: bool
   if ((f.speed == null || kmh === 0) && last && now - last.t > 0 && now - last.t < 5000 && d > 2) {
     kmh = Math.max(kmh, (d / ((now - last.t) / 1000)) * 3.6);
   }
+  kmh = corrected(kmh, opts.speedFix ?? 0);
   s.kmh = kmh;
   s.lat = f.lat;
   s.lon = f.lon;
@@ -148,6 +154,7 @@ export function feed(s0: TripState, f: Fix, opts: { over: boolean; scoring: bool
     if (kmh > 4 && d < 70 * Math.max(1, dt / 1000)) {
       s.todayKm += d / 1000;
       s.driveKm += d / 1000;
+      s.driveTop = Math.max(s.driveTop, kmh);
       s.odoKm += d / 1000;
       if (dt < 5000) {
         s.todaySec += Math.floor(dt / 1000);
@@ -191,4 +198,29 @@ export function duration(sec: number): string {
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   return h > 0 ? `${h} h ${String(m).padStart(2, '0')} min` : `${m} min`;
+}
+
+/** This drive so far, for the car box once stopped (CarCard.summary). */
+export interface Stopped {
+  km: number;
+  sec: number;
+  avgKmh: number;
+  topKmh: number;
+}
+
+/** The summary shows after this long at a standstill, */
+export const STOP_SUMMARY_MS = 5000;
+/** and only after this much driving. */
+export const STOP_SUMMARY_KM = 0.5;
+
+export function stopped(s: TripState): Stopped {
+  return { km: s.driveKm, sec: s.driveSec, avgKmh: s.driveSec > 0 ? (s.driveKm * 3600) / s.driveSec : 0, topKmh: s.driveTop };
+}
+
+/** "12.0 km · 30 min · avg 24 · top 68 km/h" (CarCard.summary; distances stay in km). */
+export function stopText(km: number, sec: number, top: number, mph: boolean): string {
+  const min = Math.floor(sec / 60);
+  const avg = sec > 0 ? inUnit((km * 3600) / sec, mph) : 0;
+  const time = min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min` : min + ' min';
+  return `${km.toFixed(1)} km · ${time} · avg ${avg} · top ${inUnit(top, mph)} ${mph ? 'mph' : 'km/h'}`;
 }

@@ -15,6 +15,7 @@ import { Alert, Platform } from 'react-native';
 
 import * as Dashcam from '../logic/dashcam';
 import * as Features from '../logic/features';
+import { f, t } from '../logic/i18n';
 import type { Prefs } from '../logic/prefs';
 import * as Snap from '../logic/snap';
 import { useDrive } from './drive';
@@ -241,19 +242,19 @@ export async function play(f: File, mime = 'video/mp4') {
 }
 
 export async function share(f: File, mime = 'video/mp4') {
-  if (!(await Sharing.isAvailableAsync())) return Alert.alert('Sharing is not available on this unit');
+  if (!(await Sharing.isAvailableAsync())) return Alert.alert(t('Sharing is not available on this unit'));
   await Sharing.shareAsync(f.uri, { mimeType: mime, dialogTitle: f.name });
 }
 
 /** A copy in the phone's gallery; returns the message to show. */
-export async function toGallery(f: File): Promise<string> {
+export async function toGallery(file: File): Promise<string> {
   try {
     const p = await MediaLibrary.requestPermissionsAsync(true);
-    if (!p.granted) return 'Allow the gallery to save it there';
-    await MediaLibrary.Asset.create(f.uri);
-    return 'Saved to the gallery';
+    if (!p.granted) return t('Allow the gallery to save it there');
+    await MediaLibrary.Asset.create(file.uri);
+    return t('Saved to the gallery');
   } catch (e) {
-    return "Couldn't save it: " + String((e as Error)?.message ?? e);
+    return f("Couldn't save it: %1$s", String((e as Error)?.message ?? e));
   }
 }
 
@@ -323,9 +324,9 @@ export async function carParked(prefs: Prefs) {
   const how = Snap.plan(prefs, allowed, views.size > 0 && state.owner != null && views.has(state.owner));
   if (how === 'view') set({ snap: true });
   else if (how === 'ask')
-    Alert.alert(Snap.ASK_TITLE, Snap.ASK_TEXT, [
-      { text: 'Not now', style: 'cancel' },
-      { text: 'Take photo', onPress: () => router.push({ pathname: '/parkphoto', params: { take: '1' } }) },
+    Alert.alert(t(Snap.ASK_TITLE), t(Snap.ASK_TEXT), [
+      { text: t('Not now'), style: 'cancel' },
+      { text: t('Take photo'), onPress: () => router.push({ pathname: '/parkphoto', params: { take: '1' } }) },
     ]);
 }
 

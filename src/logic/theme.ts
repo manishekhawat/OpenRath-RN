@@ -1,11 +1,13 @@
 /**
  * Theme packs (port of Theme.java): a theme.json sets colours and switches; anything it leaves
  * out falls back to the built-in look. See THEMES.md in the original source for the format.
- * Five themes are built in (ids start with @); others are folders of plain files, imported from a
+ * Eight themes are built in (ids start with @); others are folders of plain files, imported from a
  * .zip of the folder or a lone theme.json (see src/state/look.ts for where they are kept).
+ * ThemeAuto (src/logic/themeauto.ts) can show another theme for a while: `override`.
  */
 import { unzipSync } from 'fflate';
 
+import { f, t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 
 export interface ThemeJson {
@@ -67,7 +69,7 @@ export function lookOf(json: ThemeJson, defAccent = PAINT_ACCENT, defEdge = PAIN
     if (!(key in col)) return def;
     const v = colour(col[key]);
     if (v == null) {
-      problem = `Colour ${key} isn't a colour like #D8DCE2`;
+      problem = f("Colour %1$s isn't a colour like #D8DCE2", key);
       return def;
     }
     return v;
@@ -77,7 +79,7 @@ export function lookOf(json: ThemeJson, defAccent = PAINT_ACCENT, defEdge = PAIN
   if (Array.isArray(json.backgroundGradient) && json.backgroundGradient.length >= 2) {
     const g = json.backgroundGradient.map(colour);
     if (g.every((x) => x != null)) gradient = g as string[];
-    else problem = 'backgroundGradient needs colours like #3A0D5C';
+    else problem = t('backgroundGradient needs colours like #3A0D5C');
   }
   return {
     text,
@@ -102,6 +104,9 @@ export function lookOf(json: ThemeJson, defAccent = PAINT_ACCENT, defEdge = PAIN
 // ------------------------------------------------------------------ packs
 
 export const DEFAULT = '@magma-grey';
+
+/** The themes built into the app, in src/data/theme-<id>.json; their ids start with @. */
+export const BUILT_IN = ['magma-grey', 'light', 'minimal', 'auto', 'genz', 'mission', 'electric', 'roadster'];
 
 /** A theme the owner can choose: built in, or a folder of their own. */
 export interface Pack {
@@ -130,20 +135,36 @@ export function brokenPack(folder: string, why: string): Pack {
   return packOf(folder, { name: folder, description: 'theme.json has a mistake: ' + why }, folder);
 }
 
-/** The line under a theme's picture in the gallery. */
+/** The line under a theme's picture in the gallery; a built-in theme's words are translated. */
 export function about(p: Pack): string {
-  let s = p.description;
-  if (p.folder != null && p.author) s = (s ? s + '  ·  ' : '') + 'by ' + p.author;
+  let s = p.folder == null ? t(p.description) : p.description;
+  if (p.folder != null && p.author) s = (s ? s + '  ·  ' : '') + f('by %1$s', p.author);
   if (p.folder != null) s = (s ? s + '  ·  ' : '') + 'themes/' + p.folder;
   return s;
 }
 
+/** A theme picked by ThemeAuto (night) instead of the owner's own, or null. */
+let override: string | null = null;
+
+export function getOverride(): string | null {
+  return override;
+}
+
+export function setOverride(id: string | null): void {
+  override = id;
+}
+
+/** The theme on screen: ThemeAuto's pick while there is one, else the owner's own. */
+export function chosen(p: Prefs): string {
+  return override ?? own(p);
+}
+
 /**
- * The chosen theme's id ("themePack", as in the Android version, where "theme" is the car-paint
+ * The owner's own theme's id ("themePack", as in the Android version, where "theme" is the car-paint
  * accent). The old built-in name from 1.10 means Magma Grey; an id kept in "theme" by the first
  * React Native builds still counts.
  */
-export function chosen(p: Prefs): string {
+export function own(p: Prefs): string {
   const want = p.str('themePack', '');
   if (want === '' || want === 'Built-in Dzire chrome') {
     const old = p.str('theme', '');

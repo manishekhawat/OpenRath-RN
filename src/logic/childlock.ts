@@ -4,9 +4,15 @@
  * way needs the accessibility service, which is native (see PORTING.md).
  */
 import * as Features from './features.ts';
+import { t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 
 export const SORRY = 'This app is locked while the car is moving';
+
+/** SORRY in the chosen language, for the toast. */
+export function sorry(): string {
+  return t(SORRY);
+}
 
 export function apps(p: Prefs): Set<string> {
   const s = new Set(p.str('lockedApps', '').split(','));

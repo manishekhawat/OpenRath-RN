@@ -4,6 +4,7 @@
  * read-aloud wait (they are counted and mentioned when the highway ends), and the dashboard shows
  * a slim highway strip with the average speed and the time since the last break.
  */
+import { f } from './i18n.ts';
 
 export const FAST = 75;
 export const SLOW = 50;
@@ -53,8 +54,7 @@ export function endText(held: number): string {
 export function stripText(avgKmh: number, drivingMin: number, held: number): string {
   const mins = Math.max(0, Math.floor(drivingMin));
   return (
-    'HIGHWAY  ·  avg ' + Math.round(avgKmh) + ' km/h  ·  driving ' +
-    (mins >= 60 ? Math.floor(mins / 60) + ' h ' + (mins % 60) + ' min' : mins + ' min') +
-    (held > 0 ? '  ·  ' + held + ' waiting' : '')
+    f('HIGHWAY  ·  avg %1$s km/h  ·  driving %2$s', Math.round(avgKmh), mins >= 60 ? f('%1$s h %2$s min', Math.floor(mins / 60), mins % 60) : f('%1$s min', mins)) +
+    (held > 0 ? '  ·  ' + f('%1$s waiting', held) : '')
   );
 }

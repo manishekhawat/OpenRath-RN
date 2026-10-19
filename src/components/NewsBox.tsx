@@ -9,6 +9,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import * as Features from '../logic/features';
+import { t } from '../logic/i18n';
 import * as News from '../logic/news';
 import type { Prefs } from '../logic/prefs';
 import { say } from '../state/drive';
@@ -67,12 +68,12 @@ export function NewsBox({ style, lines = News.COUNT }: { style?: StyleProp<ViewS
         </Text>
         {/* a big target: it's pressed while driving */}
         <Pressable onPress={toggle} style={[styles.read, { borderColor: look.edge }]} hitSlop={8} accessibilityRole="button">
-          <Text style={[styles.readText, { color: look.text }]}>{speaking ? '■  Stop' : '▶  Read aloud'}</Text>
+          <Text style={[styles.readText, { color: look.text }]}>{speaking ? t('■  Stop') : t('▶  Read aloud')}</Text>
         </Pressable>
       </View>
       {news.items.length === 0 ? (
         <Text style={[styles.line, { color: look.textDim }]}>
-          {!on ? 'The news box is switched off in Settings > Features.' : news.busy || news.tried === 0 ? 'Getting the headlines…' : 'Headlines show here when there\'s internet.'}
+          {!on ? t('The news box is switched off in Settings > Features.') : news.busy || news.tried === 0 ? t('Getting the headlines…') : t("Headlines show here when there's internet.")}
         </Text>
       ) : (
         news.items.slice(0, n).map((it, i) => (

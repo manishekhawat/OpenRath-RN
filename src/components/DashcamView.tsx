@@ -17,6 +17,7 @@ import { Linking, Platform, Pressable, StyleSheet, Text, View, type StyleProp, t
 
 import * as Dashcam from '../logic/dashcam';
 import * as Features from '../logic/features';
+import { t } from '../logic/i18n';
 import * as Snap from '../logic/snap';
 import * as Cam from '../state/camera';
 import { useDrive } from '../state/drive';
@@ -34,7 +35,7 @@ export function DashcamView({ full = false, style }: { full?: boolean; style?: S
   const [perm, askPerm] = useCameraPermissions();
   const [mic] = useMicrophonePermissions();
   const on = Features.on(prefs, 'dashcam');
-  const snapOn = Features.on(prefs, 'parkPhoto');
+  const snapOn = Features.on(prefs, 'parking');
 
   // take a place among the camera users, on top
   const [id, setId] = useState<number | null>(null);
@@ -56,7 +57,7 @@ export function DashcamView({ full = false, style }: { full?: boolean; style?: S
   useEffect(() => {
     if (!trip.prevAt) return;
     setMoving(motion.current.feed(trip.kmh, trip.prevAt));
-    if (brakes.current.feed(trip.kmh, trip.prevAt, Features.on(prefs, 'accidentHelp')) && mine) Cam.protect(prefs);
+    if (brakes.current.feed(trip.kmh, trip.prevAt) && mine) Cam.protect(prefs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trip.prevAt]);
   useEffect(() => {
@@ -206,7 +207,9 @@ export function DashcamView({ full = false, style }: { full?: boolean; style?: S
     />
   ) : null;
 
-  const label = snapping ? 'Parking photo…' : flash || (cam.recording ? (cam.status === Dashcam.STATUS.recording ? 'REC' : cam.status) : cam.status);
+  const label = snapping
+    ? t('Parking photo…')
+    : flash || (cam.recording ? (cam.status === Dashcam.STATUS.recording ? 'REC' : Dashcam.statusText(cam.status)) : Dashcam.statusText(cam.status));
   const overlay = (
     <View style={styles.overlay} pointerEvents="none">
       {cam.recording && !snapping ? <View style={styles.dot} /> : null}
@@ -224,14 +227,14 @@ export function DashcamView({ full = false, style }: { full?: boolean; style?: S
           <Pressable style={styles.center} onPress={on && !granted ? allow : undefined}>
             <Text style={{ color: '#FFFFFF', textAlign: 'center' }}>
               {!on
-                ? 'The dashcam is off: turn it on in Settings > Features'
+                ? t('The dashcam is off: turn it on in Settings > Features')
                 : !granted
-                  ? 'Tap to allow the camera'
+                  ? t('Tap to allow the camera')
                   : needCamera
-                    ? 'Waiting for the camera…'
+                    ? t('Waiting for the camera…')
                     : mine
-                      ? cam.status
-                      : 'The camera is in use on another screen'}
+                      ? Dashcam.statusText(cam.status)
+                      : t('The camera is in use on another screen')}
             </Text>
           </Pressable>
         ) : null}
@@ -243,14 +246,14 @@ export function DashcamView({ full = false, style }: { full?: boolean; style?: S
   // the dashboard box
   if (on && perm && !granted) {
     return (
-      <Box title="DASHCAM" style={style} onPress={allow}>
-        <Text style={{ color: look.text }}>{Dashcam.STATUS.permission.replace('open the dashcam screen once', 'tap')}</Text>
+      <Box title={t('DASHCAM')} style={style} onPress={allow}>
+        <Text style={{ color: look.text }}>{t('needs camera permission: tap to allow it')}</Text>
       </Box>
     );
   }
   if (!showCamera) return null;
   return (
-    <Box title={snapping ? 'PARKING PHOTO' : 'DASHCAM'} style={[{ minHeight: 140 }, style]} onPress={() => router.push('/dashcam')} onLongPress={keep}>
+    <Box title={snapping ? t('PARKING PHOTO') : t('DASHCAM')} style={[{ minHeight: 140 }, style]} onPress={() => router.push('/dashcam')} onLongPress={keep}>
       <View style={[styles.live, { borderRadius: Math.max(0, look.radius - 6) }]}>
         {camera}
         {overlay}

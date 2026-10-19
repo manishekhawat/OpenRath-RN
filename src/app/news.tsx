@@ -11,6 +11,7 @@ import { Text } from 'react-native';
 import { readAll, useNews } from '../components/NewsBox';
 import { Button, Choice, Heading, Row, Screen } from '../components/ui';
 import * as Features from '../logic/features';
+import { t } from '../logic/i18n';
 import * as News from '../logic/news';
 import { say } from '../state/drive';
 import { useLook } from '../state/look';
@@ -36,30 +37,30 @@ export default function NewsScreen() {
     setBusy(false);
   };
 
-  const pick = (t: string) => {
-    News.setTopic(prefs, t);
+  const pick = (id: string) => {
+    News.setTopic(prefs, id);
     fetchNow();
   };
 
   const on = Features.on(prefs, 'news');
   return (
-    <Screen title="News">
-      {!on ? <Text style={{ color: look.accent, marginBottom: 8 }}>The news box is switched off in Settings &gt; Features.</Text> : null}
-      <Heading>News box shows</Heading>
-      <Choice options={News.TOPICS.map((id, i) => ({ id, label: News.TOPIC_NAMES[i] }))} value={topic} onChange={pick} />
+    <Screen title={t('News box')}>
+      {!on ? <Text style={{ color: look.accent, marginBottom: 8 }}>{t('The news box is switched off in Settings > Features.')}</Text> : null}
+      <Heading>{t('News box shows')}</Heading>
+      <Choice options={News.TOPICS.map((id, i) => ({ id, label: t(News.TOPIC_NAMES[i]) }))} value={topic} onChange={pick} />
       <Heading>{News.heading(topic, news.at, Date.now())}</Heading>
       {news.items.length === 0 ? (
         <Text style={{ color: look.textDim, marginVertical: 8 }}>
-          {busy ? 'Getting the headlines…' : "Headlines show here when there's internet."}
+          {busy ? t('Getting the headlines…') : t("Headlines show here when there's internet.")}
         </Text>
       ) : (
         news.items.map((it, i) => <Row key={i} name={`${i + 1}.  ${it.title}`} value={it.source} onPress={() => say(News.readOne(it))} />)
       )}
-      <Button label="▶  Read aloud" kind="primary" onPress={() => readAll(prefs)} />
-      <Button label="■  Stop" onPress={() => stopSpeech()} />
-      <Button label={busy ? 'Fetching…' : 'Fetch the latest'} onPress={fetchNow} />
+      <Button label={t('▶  Read aloud')} kind="primary" onPress={() => readAll(prefs)} />
+      <Button label={t('■  Stop')} onPress={() => stopSpeech()} />
+      <Button label={busy ? t('Fetching…') : t('Fetch the latest')} onPress={fetchNow} />
       <Text style={{ color: look.textDim, marginTop: 8 }}>
-        From Google News, every 30 minutes while there is internet. The last five are kept for when there isn't.
+        {t("From Google News, every 30 minutes while there is internet. The last five are kept for when there isn't.")}
       </Text>
     </Screen>
   );

@@ -14,6 +14,7 @@ import { DashcamView } from '../components/DashcamView';
 import { Button, Choice, Heading, Row, Screen } from '../components/ui';
 import * as Dashcam from '../logic/dashcam';
 import * as Features from '../logic/features';
+import { f, t } from '../logic/i18n';
 import * as Cam from '../state/camera';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
@@ -22,12 +23,12 @@ import { usePrefs } from '../state/prefs';
 const SHOW = 20;
 
 function ClipRow({ clip, open, onToggle }: { clip: Cam.Clip; open: boolean; onToggle: () => void }) {
-  const failed = (e: unknown) => Alert.alert("Couldn't do that", String((e as Error)?.message ?? e));
+  const failed = (e: unknown) => Alert.alert(t("Couldn't do that"), String((e as Error)?.message ?? e));
   const remove = () =>
-    Alert.alert('Delete this clip?', Dashcam.clipLabel(clip.name), [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('Delete this clip?'), Dashcam.clipLabel(clip.name), [
+      { text: t('Cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('Delete'),
         style: 'destructive',
         onPress: () => {
           try {
@@ -40,14 +41,14 @@ function ClipRow({ clip, open, onToggle }: { clip: Cam.Clip; open: boolean; onTo
     ]);
   return (
     <View>
-      <Row name={Dashcam.clipLabel(clip.name)} value={Dashcam.sizeText(clip.size) + (clip.saved ? ' · kept' : '')} onPress={onToggle} />
+      <Row name={Dashcam.clipLabel(clip.name)} value={Dashcam.sizeText(clip.size) + (clip.saved ? ' · ' + t('kept') : '')} onPress={onToggle} />
       {open ? (
         <View style={{ marginVertical: 8 }}>
-          <Button label="Play" kind="primary" onPress={() => Cam.play(clip.file).catch(failed)} />
-          <Button label="Share" onPress={() => Cam.share(clip.file).catch(failed)} />
+          <Button label={t('Play')} kind="primary" onPress={() => Cam.play(clip.file).catch(failed)} />
+          <Button label={t('Share')} onPress={() => Cam.share(clip.file).catch(failed)} />
           {!clip.saved ? (
             <Button
-              label="Keep (never deleted automatically)"
+              label={t('Keep (never deleted automatically)')}
               onPress={() => {
                 try {
                   Cam.keepClip(clip);
@@ -57,8 +58,8 @@ function ClipRow({ clip, open, onToggle }: { clip: Cam.Clip; open: boolean; onTo
               }}
             />
           ) : null}
-          <Button label="Save to the gallery" onPress={() => Cam.toGallery(clip.file).then((m) => Alert.alert(m))} />
-          <Button label="Delete" kind="danger" onPress={remove} />
+          <Button label={t('Save to the gallery')} onPress={() => Cam.toGallery(clip.file).then((m) => Alert.alert(m))} />
+          <Button label={t('Delete')} kind="danger" onPress={remove} />
         </View>
       ) : null}
     </View>
@@ -81,7 +82,7 @@ export default function DashcamScreen() {
   const setSound = async (v: 'on' | 'off') => {
     if (v === 'on') {
       const p = await askMic();
-      if (!p.granted) return Alert.alert('Allow the microphone to record sound with the clips');
+      if (!p.granted) return Alert.alert(t('Allow the microphone to record sound with the clips'));
     }
     prefs.put('dashcamSound', v);
   };
@@ -90,61 +91,62 @@ export default function DashcamScreen() {
     clips.map((c) => <ClipRow key={c.file.uri} clip={c} open={open === c.file.uri} onToggle={() => setOpen(open === c.file.uri ? null : c.file.uri)} />);
 
   return (
-    <Screen title="Dashcam">
+    <Screen title={t('Dashcam')}>
       <DashcamView full />
       <Text style={{ color: look.textDim, marginVertical: 8 }}>{Dashcam.rowText(prefs, cam.status)}</Text>
       {on ? (
         <>
           {cam.held ? (
-            <Button label="Start" kind="primary" onPress={() => Cam.hold(false)} />
+            <Button label={t('Start')} kind="primary" onPress={() => Cam.hold(false)} />
           ) : (
-            <Button label="Stop" onPress={() => Cam.hold(true)} />
+            <Button label={t('Stop')} onPress={() => Cam.hold(true)} />
           )}
-          <Button label="Save the clip now" kind="primary" onPress={() => Alert.alert(Cam.protect(prefs))} />
+          <Button label={t('Save the clip now')} kind="primary" onPress={() => Alert.alert(Cam.protect(prefs))} />
         </>
       ) : (
-        <Text style={{ color: look.textDim }}>Turn on "Dashcam" in Settings &gt; Features to record.</Text>
+        <Text style={{ color: look.textDim }}>{t('Turn on the dashcam in Settings > Driving')}</Text>
       )}
 
-      <Heading>Settings</Heading>
-      <Row name="Camera" value="the device's own camera (a USB dashcam needs native code)" />
+      <Heading>{t('Settings')}</Heading>
+      <Row name={t('Camera')} value={t("the device's own camera (a USB dashcam needs native code)")} />
       <Choice
         options={[
-          { id: 'back', label: 'Back' },
-          { id: 'front', label: 'Front' },
+          { id: 'back', label: t('Back') },
+          { id: 'front', label: t('Front') },
         ]}
         value={Dashcam.facing(prefs)}
         onChange={(v) => prefs.put('dashcamFacing', v)}
       />
-      <Row name="Sound" value={Dashcam.sound(prefs) ? 'recorded with the clips' : 'off: no sound in the clips'} />
+      <Row name={t('Sound')} value={t(Dashcam.sound(prefs) ? 'recorded with the clips' : 'off: no sound in the clips')} />
       <Choice
         options={[
-          { id: 'off', label: 'Off' },
-          { id: 'on', label: 'On' },
+          { id: 'off', label: t('Off') },
+          { id: 'on', label: t('On') },
         ]}
         value={Dashcam.sound(prefs) ? 'on' : 'off'}
         onChange={setSound}
       />
-      <Row name="Space for recordings" value={Dashcam.spaceText(prefs)} onPress={() => Dashcam.nextSpace(prefs)} />
-      <Row name="Jolt that keeps the clip" value={Dashcam.joltText(prefs) + '; harsh braking always does'} />
-      <Choice options={Dashcam.JOLT_CHOICES} value={String(Math.round(Dashcam.joltG(prefs) * 10))} onChange={(v) => prefs.put('dashcamJolt', v)} />
+      <Row name={t('Space for recordings')} value={Dashcam.spaceText(prefs)} onPress={() => Dashcam.nextSpace(prefs)} />
+      <Row name={t('Jolt that keeps the clip')} value={Dashcam.joltText(prefs) + t('; harsh braking always does')} />
+      <Choice options={Dashcam.JOLT_CHOICES.map((c) => ({ ...c, label: t(c.label) }))} value={String(Math.round(Dashcam.joltG(prefs) * 10))} onChange={(v) => prefs.put('dashcamJolt', v)} />
       <Text style={{ color: look.textDim, marginTop: 4 }}>
-        Records one-minute clips while the dashboard or this screen is showing and the car is moving (this screen: always). A jolt
-        keeps the clip before and the one being recorded; a long press on the camera does too.
+        {t(
+          'Records one-minute clips while the dashboard or this screen is showing and the car is moving (this screen: always). A jolt keeps the clip before and the one being recorded; a long press on the camera does too.',
+        )}
       </Text>
 
-      <Heading>Kept clips</Heading>
-      <Row name="Save the clip now" value={Dashcam.savedText(saved.length)} onPress={() => Alert.alert(Cam.protect(prefs))} />
-      {saved.length ? list(saved) : <Text style={{ color: look.textDim, marginVertical: 8 }}>None yet.</Text>}
+      <Heading>{t('Kept clips')}</Heading>
+      <Row name={t('Save the clip now')} value={Dashcam.savedText(saved.length)} onPress={() => Alert.alert(Cam.protect(prefs))} />
+      {saved.length ? list(saved) : <Text style={{ color: look.textDim, marginVertical: 8 }}>{t('None yet.')}</Text>}
 
-      <Heading>Recent clips</Heading>
+      <Heading>{t('Recent clips')}</Heading>
       {loop.length ? (
         <>
           {list(all ? loop : loop.slice(0, SHOW))}
-          {!all && loop.length > SHOW ? <Button label={`Show all ${loop.length}`} onPress={() => setAll(true)} /> : null}
+          {!all && loop.length > SHOW ? <Button label={f('Show all %1$s', loop.length)} onPress={() => setAll(true)} /> : null}
         </>
       ) : (
-        <Text style={{ color: look.textDim, marginVertical: 8 }}>None yet.</Text>
+        <Text style={{ color: look.textDim, marginVertical: 8 }}>{t('None yet.')}</Text>
       )}
     </Screen>
   );

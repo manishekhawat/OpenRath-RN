@@ -2,8 +2,9 @@
  * The picture layouts (port of Layouts.java; the definitions are src/data/layouts.json, the same
  * file as assets/layouts/layouts.json in the Android version): a full-screen picture with round,
  * pill and card parts on it, as an alternative to the boxes. Settings > Screen layout picks one,
- * and each part can be shown or hidden.
+ * and each part can be shown or hidden. Names here are English; screens pass them through t().
  */
+import * as Features from './features.ts';
 import type { Prefs } from './prefs.ts';
 import { current as profile } from './profiles.ts';
 
@@ -219,8 +220,11 @@ export function opts(l: Layout): string[] {
   return out;
 }
 
-/** Layout-wide switches: moving road lines, gentle background movement. */
-export const roadOn = (p: Prefs) => p.str('layRoad', 'on') !== 'off';
+/**
+ * Layout-wide switches: moving road lines, gentle background movement. The road is the same
+ * switch as the dashboard's moving road (since 1.35; "layRoad" is no longer read).
+ */
+export const roadOn = (p: Prefs) => Features.on(p, 'road');
 /** A phone-mirroring button added to each layout's dock. */
 export const mirrorOn = (p: Prefs) => p.str('layMirror', 'off') === 'on';
 export const animOn = (p: Prefs) => p.str('layAnim', 'off') === 'on';
@@ -296,8 +300,12 @@ export function place(p: Prefs, name: string): [number, number] | null {
   return Number.isFinite(la) && Number.isFinite(lo) ? [la, lo] : null;
 }
 
-/** The name on the driver part: "layUser", else the driver profile's name. */
+/**
+ * The name on the driver part: the home screen's "Your name" ("welcome"), shared since 1.35;
+ * "layUser" was the layouts' own name before there was one setting, and still wins when set
+ * (Settings clears it when the name is changed); else the driver profile's name.
+ */
 export function driver(p: Prefs): string {
-  const n = p.str('layUser', '').trim();
+  const n = p.str('layUser', '').trim() || p.str('welcome', '').trim();
   return n || profile(p);
 }

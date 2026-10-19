@@ -1,13 +1,15 @@
 /**
  * The weather box's data: Open-Meteo every 15 minutes, air quality from the same service, and
- * the place name. The last answer is kept, so the box still shows the hour that is now from it
- * while there is no internet.
+ * the place name. The last answer is kept, so the box still shows the hour that is now from it,
+ * and the next 24 hours for the tall box's curve, while there is no internet.
  */
 import * as Location from 'expo-location';
 import { useEffect, useRef, useState } from 'react';
+import { Platform, ToastAndroid } from 'react-native';
 
 import * as Air from '../logic/air';
 import * as Features from '../logic/features';
+import { f, t } from '../logic/i18n';
 import * as Weather from '../logic/weather';
 import { say } from './drive';
 import { usePrefs } from './prefs';
@@ -40,7 +42,8 @@ export function useWeather(lat: number, lon: number): WeatherInfo {
         const body = await (await fetch(Weather.url(lat, lon))).text();
         const wx = Weather.read(JSON.parse(body), Date.now(), false);
         let aqi = -1;
-        if (Features.on(prefs, 'aqi')) {
+        if (Features.on(prefs, 'rain')) {
+          // air quality is part of Weather alerts since 1.35 (the old 'aqi' switch)
           try {
             const cur = (await (await fetch(Air.url(lat, lon))).json()).current;
             aqi = Air.index(cur?.pm2_5 ?? NaN, cur?.pm10 ?? NaN);
@@ -48,6 +51,7 @@ export function useWeather(lat: number, lon: number): WeatherInfo {
             const s = Air.alert(aqi, Date.now(), told);
             if (s) {
               prefs.put('aqiTold', String(Date.now()));
+              if (Platform.OS === 'android') ToastAndroid.show(f('Air quality: %1$s (AQI %2$s)', t(Air.band(aqi)), aqi), ToastAndroid.LONG);
               say(s);
             }
           } catch {
