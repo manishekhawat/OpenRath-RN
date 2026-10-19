@@ -117,7 +117,7 @@ function openApp(prefs: Prefs, key: string, name: string): boolean {
       // not installed any more: choose again
     }
   }
-  toast(f('Choose the app for %1$s in Apps', t(name)), true);
+  toast(f('Choose the app for %1$s', t(name)), true);
   return false;
 }
 
@@ -178,13 +178,10 @@ export function run(cmd: Voice.Command, ctx: VoiceCtx) {
       }
       return;
     case 'flood': {
-      if (!Features.on(p, 'monsoon')) {
-        toast('Turn on monsoon mode in Settings > Features', true);
-        return;
-      }
-      const t = Engine.markFlood();
-      toast(t);
-      say(t);
+      // as in 1.42, marking the spot doesn't ask whether weather alerts are on
+      const marked = Engine.markFlood();
+      toast(marked);
+      say(marked);
       return;
     }
     case 'docs':
@@ -210,9 +207,7 @@ export function run(cmd: Voice.Command, ctx: VoiceCtx) {
       else go({ pathname: '/chores', params: { open: 'share' } });
       return;
     case 'parkPhoto':
-      if (!Features.on(p, 'parkPhoto')) toast('Turn on the parking photo in Settings > Features', true);
-      else go('/parkphoto');
-      return;
+      return go('/parkphoto');
     case 'hotspot':
     case 'split':
     case 'parkTimer':

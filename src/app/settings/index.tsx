@@ -42,6 +42,7 @@ import * as Cam from '../../state/camera';
 import { useDrive } from '../../state/drive';
 import { themeName, useLook } from '../../state/look';
 import { usePrefs } from '../../state/prefs';
+import { getVoice } from '../../state/speech';
 
 const VERSION = Constants.expoConfig?.version ?? '1.42';
 
@@ -193,9 +194,9 @@ export default function Settings() {
   );
   const topic = prefs.str('newsTopic', 'top');
   add('Dashboard', 'News box shows', News.topicName(topic), () => News.setTopic(prefs, News.TOPICS[(News.TOPICS.indexOf(topic) + 1) % News.TOPICS.length]), on('news'));
-  const owner = prefs.str('ownerName', '');
+  const owner = Layouts.owner(prefs);
   add('Dashboard', 'Your name', owner === '' ? 'hidden' : owner, () =>
-    askText({ title: 'Your name, on the home screen (empty to hide)', value: owner, save: (v) => prefs.put('ownerName', v) }),
+    askText({ title: 'Your name, on the home screen (empty to hide)', value: owner, save: (v) => Layouts.saveOwner(prefs, v) }),
   );
   const saverMin = num(prefs, 'saverMin', 5);
   add('Dashboard', 'Clock screensaver after', on('saver') ? f('%1$s min idle while parked', saverMin) : 'off (switch above)', () => {
@@ -275,6 +276,11 @@ export default function Settings() {
   const google = prefs.str('src:navi', 'own') === 'google';
   add('Map and navigation', 'Guide routes in', google ? 'Google Maps' : "OpenRath's map", () => prefs.put('src:navi', google ? 'own' : 'google'));
   add('Map and navigation', 'Navigation button opens', prefs.str('app:dock:navi', '') || 'com.google.android.apps.maps', () => askPackage('dock:navi', 'Navigation'));
+  add('Map and navigation', 'Guide without internet in', appName(prefs, 'offlineNav'), () => askPackage('offlineNav', 'Offline map app'));
+  // Expo can't list the installed voices, so the row always offers to pick one or get Google's
+  add('Map and navigation', 'Spoken voice', "tap to pick a voice, or get Google's, which speaks Hindi", () => {
+    getVoice();
+  });
 
   // ---- Driving
   add('Driving', 'Badges', 'smooth-driving streaks, weeks within the limit and distance milestones', '/achievements', on('achievements'));

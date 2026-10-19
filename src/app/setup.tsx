@@ -53,7 +53,7 @@ export default function SetupScreen() {
   const [colour, setColour] = useState(Car3D.colour(prefs));
   const [tank, setTank] = useState(prefs.str('tankL', ''));
   const [carName, setCarName] = useState(prefs.str('carName', ''));
-  const [ownerName, setOwnerName] = useState(prefs.str('ownerName', ''));
+  const [ownerName, setOwnerName] = useState(Layouts.owner(prefs));
   const brand = useMemo(() => brands.find((b) => b.id === brandId), [brandId]);
 
   // what has been allowed, read when the permissions step shows and after each ask
@@ -91,7 +91,7 @@ export default function SetupScreen() {
       (id, on) => Features.set(prefs, id, on),
     );
     if (carName.trim()) prefs.put('carName', carName.trim().toUpperCase());
-    prefs.put('ownerName', ownerName.trim());
+    Layouts.saveOwner(prefs, ownerName);
   };
 
   const done = () => {

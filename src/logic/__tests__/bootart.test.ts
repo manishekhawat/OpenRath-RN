@@ -115,5 +115,11 @@ test('bootart: the whole animation', async () => {
   assert.equal(names[names.length - 1], 'part1/000.png');
   assert.equal(files['part0/045.png'][1], 0x50);
   assert.equal(logo.length, 54 + 64 * 3 * 40);
-  assert.ok(art.instructions('/x', null, null).includes('STILL BOOT LOGO (safe):'));
+  const steps = art.instructions('/x', null, null);
+  assert.ok(steps.startsWith('Saved in /x.'));
+  assert.ok(steps.includes('STILL BOOT LOGO (safe):'));
+  assert.ok(steps.includes('Some stereos have a Boot animation app'), 'without a boot animation app on the unit');
+  const onStick = art.instructions('/x', '/usb', 'Boot Logo');
+  assert.ok(onStick.startsWith('Saved in /x and on /usb.'));
+  assert.ok(onStick.includes('This stereo has "Boot Logo"'));
 });

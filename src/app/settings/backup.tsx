@@ -170,7 +170,7 @@ export default function BackupScreen() {
         {t('Every setting, the fuel and toll logs, trip history and your own pictures, in a .zip that the Android version of OpenRath can restore too.')}
       </Text>
       <Button label={t(busy ? 'Making the backup…' : 'Back up now and share')} kind="primary" onPress={busy ? () => {} : backUp} />
-      <Button label="Restore from a file…" onPress={pick} />
+      <Button label="Restore from a backup" onPress={pick} />
       <Row
         name="Daily automatic backup"
         value={Features.on(prefs, 'backup') ? (last > 0 ? f('on; last %1$s', new Date(last).toLocaleDateString()) : t('on; none yet')) : t('off')}

@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import * as Features from '../features.ts';
+import * as i18n from '../i18n.ts';
 import * as player from '../player.ts';
 import { memoryPrefs } from '../prefs.ts';
 import * as sound from '../sound.ts';
@@ -22,6 +23,11 @@ test('quiet hours', () => {
   assert.equal(sound.hour(0), 'midnight');
   assert.equal(sound.hour(12), 'noon');
   assert.equal(sound.hour(7), '7 am');
+  // in Hindi the part of the day, which am/pm alone doesn't tell (1.34)
+  i18n.setOn(true);
+  assert.ok(sound.hour(2).includes('रात'), 'at night');
+  assert.ok(sound.hour(18).includes('शाम'), 'in the evening');
+  i18n.setOn(false);
   assert.ok(!sound.inside(10, 8, 8), 'same hours: never');
   assert.ok(sound.inside(10, 8, 18), 'daytime range');
   const p = memoryPrefs();
@@ -174,6 +180,7 @@ test('songs and the list', () => {
   assert.ok(player.retry(4));
   assert.ok(!player.retry(5), 'gives up after five errors');
   assert.equal(player.gaveUp(player.WEB), 'Web radio unreachable');
+  assert.equal(player.idle(player.FILES).sub, 'Tap play for music on the unit or USB');
 });
 
 test('resume after switch-on', () => {

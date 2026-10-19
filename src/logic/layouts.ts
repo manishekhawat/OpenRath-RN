@@ -301,11 +301,25 @@ export function place(p: Prefs, name: string): [number, number] | null {
 }
 
 /**
- * The name on the driver part: the home screen's "Your name" ("welcome"), shared since 1.35;
- * "layUser" was the layouts' own name before there was one setting, and still wins when set
- * (Settings clears it when the name is changed); else the driver profile's name.
+ * The owner's name, shared since 1.35 by the home screen's greeting and the layouts' driver part.
+ * It is kept under "welcome", as the Android version and its backups call it; installs made with
+ * this port before 1.42 wrote "ownerName", so that is still read.
+ */
+export function owner(p: Prefs): string {
+  return p.str('welcome', '').trim() || p.str('ownerName', '').trim();
+}
+
+/** Saves that name. Like Java's editWelcome, it clears the layouts' own older name. */
+export function saveOwner(p: Prefs, v: string): void {
+  p.put('welcome', v.trim());
+  p.put('layUser', '');
+}
+
+/**
+ * The name on the driver part: "layUser" was the layouts' own name before there was one setting,
+ * and still wins when set (saving the name clears it); then the owner's name, then the profile's.
  */
 export function driver(p: Prefs): string {
-  const n = p.str('layUser', '').trim() || p.str('welcome', '').trim();
+  const n = p.str('layUser', '').trim() || owner(p);
   return n || profile(p);
 }

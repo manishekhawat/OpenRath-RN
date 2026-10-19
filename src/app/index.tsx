@@ -15,7 +15,7 @@ import { CompassBox } from '../components/CompassBox';
 import { DashcamView } from '../components/DashcamView';
 import { Dock } from '../components/Dock';
 import LayoutView, { useLayout } from '../components/LayoutView';
-import MicButton from '../components/MicButton';
+import { FloatingMic } from '../components/MicButton';
 import { MusicBox } from '../components/MusicBox';
 import { NewsBox } from '../components/NewsBox';
 import { Road } from '../components/Road';
@@ -33,7 +33,9 @@ import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
 import * as Fuel from '../logic/fuel';
 import { f, t } from '../logic/i18n';
+import * as Layouts from '../logic/layouts';
 import { num } from '../logic/prefs';
+import * as Setup from '../logic/setup';
 import * as Trip from '../logic/trip';
 import * as Units from '../logic/units';
 import * as Weekly from '../logic/weekly';
@@ -113,7 +115,7 @@ export default function Home() {
     const { rangeKm, holiday } = Weekly.summaryExtras(prefs, trip.odoKm);
     const text = Errands.summary(
       new Date(),
-      prefs.str('ownerName', ''),
+      Layouts.owner(prefs),
       weather.wx.temp + '°',
       weather.wx.text,
       weather.wx.rain,
@@ -192,7 +194,16 @@ export default function Home() {
     if (!driving) setNightOff(false);
   }, [driving]);
 
-  if (!Car.ready(prefs)) return <Redirect href="/setup" />;
+  // 1.42: the first-run setup shows until it is finished, and carries on where it was left
+  const setupNeeded = Setup.needed(
+    Features.on(prefs, 'setup'),
+    prefs.str('setupDone', '') === 'yes',
+    prefs.str('setupStep', '') !== '',
+    Car.ready(prefs),
+    Features.levelPicked(prefs),
+  );
+  if (setupNeeded) return <Redirect href="/setup" />;
+  if (!Car.ready(prefs)) return <Redirect href="/setup?only=car" />;
 
   if (saver) {
     const wake = () => {
@@ -230,7 +241,7 @@ export default function Home() {
   const ampm = now.getHours() < 12 ? 'AM' : 'PM';
   const carName = Car.name(prefs);
   // 1.42: no greeting line until the owner types their name
-  const owner = prefs.str('ownerName', '').trim();
+  const owner = Layouts.owner(prefs);
   // the engine fills this in after 5 seconds at a standstill, when stopSummary is on
   const stopped = drive.stopped;
 
@@ -360,14 +371,7 @@ export default function Home() {
   const soundBox = Features.on(prefs, 'soundboard') ? <SoundboardBox style={styles.flexBox} /> : null;
   const videoBox = Features.on(prefs, 'video') ? <VideoBox style={styles.flexBox} /> : null;
 
-  // the trip menu (HomeActivity.tripMenu)
-  const tripMenu = [
-    "Start today's trip again",
-    'Save the parking spot here',
-    'Fuel log and fill-ups',
-    'Trip history and driving score',
-    'Add a toll payment',
-  ];
+  // the trip menu, shared with the Settings row (HomeActivity.tripMenu)
   const tripPick = (i: number) => {
     if (i === 0) drive.resetToday();
     else if (i === 1) toast(drive.parkHere());
@@ -423,12 +427,12 @@ export default function Home() {
     <SafeAreaView style={styles.fill} onTouchStart={() => (touchAt.current = Date.now())}>
       {body}
       <Dock />
-      {/* 1.42: the mic floats on the home screen unless it belongs to the map only (Features.micPlace) */}
-      {Features.on(prefs, 'voice') && Features.micPlace(prefs) !== 'map' ? <MicButton style={styles.mic} aqi={weather.aqi} /> : null}
+      {/* 1.42: the mic floats where it was dragged, unless it belongs to the map only (Features.micPlace) */}
+      {Features.on(prefs, 'voice') && Features.micPlace(prefs) !== 'map' ? <FloatingMic aqi={weather.aqi} /> : null}
       {menu === 'trip' ? (
         <PickList
-          title={f('Today %1$s km  ·  GPS odometer %2$s km', Fuel.fmt(trip.todayKm), Math.round(odoKm))}
-          options={tripMenu}
+          title={Care.tripMenuTitle(trip.todayKm, odoKm)}
+          options={Care.TRIP_MENU}
           onPick={tripPick}
           onClose={() => setMenu(null)}
         />
@@ -489,5 +493,4 @@ const styles = StyleSheet.create({
   nightUnit: { color: '#7A1C1C', fontSize: 22, letterSpacing: 4, fontWeight: '500' },
   nightHint: { color: '#7A1C1C', fontSize: 13, paddingTop: 30 },
   bar: { height: 6, borderRadius: 3, marginTop: 10, overflow: 'hidden' },
-  mic: { position: 'absolute', right: 16, bottom: 80 },
 });

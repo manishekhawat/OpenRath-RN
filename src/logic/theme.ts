@@ -74,7 +74,17 @@ export function lookOf(json: ThemeJson, defAccent = PAINT_ACCENT, defEdge = PAIN
     }
     return v;
   };
+  // the colours first, then the gradient, so the mistake shown is the last one, as in Java
   const text = c('text', '#D8DCE2');
+  const textDim = c('textDim', '#8A8F96');
+  const accent = c('accent', defAccent);
+  const edge = c('edge', defEdge);
+  const panelTop = c('panelTop', '#111215');
+  const panel = c('panel', '#0B0C0E');
+  const background = c('background', '#000000');
+  const icons = c('icons', text);
+  const roadFill = c('road', '#1D1F23');
+  const roadLine = c('roadLine', '#C9CDD3');
   let gradient: string[] | null = null;
   if (Array.isArray(json.backgroundGradient) && json.backgroundGradient.length >= 2) {
     const g = json.backgroundGradient.map(colour);
@@ -83,15 +93,15 @@ export function lookOf(json: ThemeJson, defAccent = PAINT_ACCENT, defEdge = PAIN
   }
   return {
     text,
-    textDim: c('textDim', '#8A8F96'),
-    accent: c('accent', defAccent),
-    edge: c('edge', defEdge),
-    panelTop: c('panelTop', '#111215'),
-    panel: c('panel', '#0B0C0E'),
-    background: c('background', '#000000'),
-    icons: c('icons', text),
-    roadFill: c('road', '#1D1F23'),
-    roadLine: c('roadLine', '#C9CDD3'),
+    textDim,
+    accent,
+    edge,
+    panelTop,
+    panel,
+    background,
+    icons,
+    roadFill,
+    roadLine,
     gradient,
     radius: typeof json.cornerRadius === 'number' ? json.cornerRadius : 14,
     road: json.road ?? true,

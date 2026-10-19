@@ -186,7 +186,7 @@ for (const id of DEV_IDS) (get(id) as Feature).level = DEV;
  * features 1.35 removed are gone), and the 1.42 ones added since.
  */
 const PORTED_130 = ["accel", "backup", "bootArt", "bumps", "cab", "cabApps", "cabCng", "cabEarnings", "cabMeter", "cabNotes", "cabPapers", "cabPhrases", "cabQuiet", "cabSos", "cabSpots", "cabTarget", "care", "childLock", "coach", "dashcam", "duck", "fog", "fuelCheck", "fuelPlan", "fuelPrice", "gpx", "highway", "hotspot", "kids", "lightsReminder", "monsoon", "news", "nightDrive", "parkLink", "parkPhoto", "parkTimer", "parkedMusic", "parking", "profiles", "quiet", "rain", "restStop", "resume", "road", "saver", "score", "serviceBooking", "serviceFinder", "soundProfiles", "speedAlerts", "speedVolume", "split", "startSummary", "tollAhead", "tolls", "tripShare", "view360", "voice", "waits", "wallet", "weather", "weekly", "zones", "aqi"];
-const PORTED_142 = ["smoothSpeed", "stopSummary", "achievements", "places", "hourlyWeather", "calendar", "dockStatus", "tapFeedback", "soundboard", "video", "projection", "askCar", "faultWords", "wake", "setup", "intro", "autoTheme", "appDrawer", "reports"];
+const PORTED_142 = ["smoothSpeed", "stopSummary", "achievements", "places", "hourlyWeather", "calendar", "dockStatus", "tapFeedback", "soundboard", "video", "projection", "askCar", "faultWords", "wake", "setup", "intro", "autoTheme", "appDrawer", "reports", "seek"];
 
 export const PORTED = new Set([...PORTED_130, ...PORTED_142].map(parent).filter((id) => get(id) != null));
 for (const f of ALL) f.ported = PORTED.has(f.id);

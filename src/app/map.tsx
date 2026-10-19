@@ -223,7 +223,7 @@ export default function MapScreen() {
             ? `google.navigation:q=${f6(a[0])},${f6(a[1])}`
             : `geo:${f6(a[0])},${f6(a[1])}?q=${f6(a[0])},${f6(a[1])}(${encodeURIComponent(String(a[2] ?? ''))})`;
         if (offlineNav !== '' && Platform.OS === 'android') {
-          IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.VIEW, { data: url, packageName: offlineNav }).catch(() =>
+          IntentLauncher.startActivityAsync('android.intent.action.VIEW', { data: url, packageName: offlineNav }).catch(() =>
             Linking.openURL(url).catch(() => {}),
           );
         } else Linking.openURL(url).catch(() => {});
@@ -250,12 +250,12 @@ export default function MapScreen() {
         break;
       }
       case 'savedPlace':
-        // the map's saved Home and Office, so drives can be named for the commute insights
+        // the map's saved Home and Office, so the dock's saved places and drive names can use them
         if (a[0] === 'Home' || a[0] === 'Office') prefs.put('place:' + a[0], f6(a[1]) + ',' + f6(a[2]));
         break;
       case 'bigQr':
         // the parking spot as a QR code, to walk back to the car with the phone (HomeActivity.parkQr)
-        if (!Features.on(prefs, 'parking')) Alert.alert(t('Turn on Parking in Settings, Driving'));
+        if (!Features.on(prefs, 'parking')) Alert.alert(t('Turn on "Parking spot to your phone" in Settings > Driving'));
         else if (!trip.park) Alert.alert(t('No parking spot saved yet'));
         else setParkQr(true);
         break;
@@ -269,27 +269,45 @@ export default function MapScreen() {
     }
   };
 
+  // the night layer over the map, as dark as Settings' night dimming says (one row since 1.35).
+  // "With the headlights" needs the unit's own lights, which need native code, so only "after
+  // sunset" dims here.
+  const dim = dimAlpha(prefs.str('dim', 'off'), num(prefs, 'dimLevel', 40), false, trip.lat !== 0 && Errands.dark(trip.lat, trip.lon, Date.now()));
+
   return (
     <SafeAreaView style={[styles.fill, { backgroundColor: look.background }]}>
-      <WebView
-        ref={web}
-        style={styles.fill}
-        originWhitelist={['*']}
-        source={{ html: MAP_HTML, baseUrl: 'https://openrath.local/' }}
-        injectedJavaScriptBeforeContentLoaded={cfgJs + SHIM}
-        onMessage={onMessage}
-        onLoadEnd={() => {
-          ready.current = true;
-          sent.current = { lat: 0, lon: 0, park: 0 };
-          web.current?.injectJavaScript(cfgJs + 'true;');
-          push();
-          handOver();
-        }}
-        javaScriptEnabled
-        domStorageEnabled
-        geolocationEnabled={false}
-        setSupportMultipleWindows={false}
-      />
+      {rest ? (
+        <View style={[styles.fill, styles.note]}>
+          <Text style={[styles.noteText, { color: look.textDim }]}>
+            {t("The map stopped working twice, so it's resting. It comes back in a few minutes.")}
+          </Text>
+        </View>
+      ) : (
+        <WebView
+          key={build}
+          ref={web}
+          style={styles.fill}
+          originWhitelist={['*']}
+          source={{ html: MAP_HTML, baseUrl: 'https://openrath.local/' }}
+          injectedJavaScriptBeforeContentLoaded={cfgJs + SHIM}
+          onMessage={onMessage}
+          onLoadEnd={() => {
+            ready.current = true;
+            sent.current = { lat: 0, lon: 0, park: 0 };
+            web.current?.injectJavaScript(cfgJs + 'true;');
+            push();
+            handOver();
+          }}
+          // the renderer dying used to take OpenRath with it (1.38)
+          onRenderProcessGone={died}
+          onContentProcessDidTerminate={died}
+          javaScriptEnabled
+          domStorageEnabled
+          geolocationEnabled={false}
+          setSupportMultipleWindows={false}
+        />
+      )}
+      {dim > 0 ? <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: dim }]} /> : null}
       <View style={styles.back}>
         <Button label="‹ Home" onPress={() => router.back()} />
       </View>
@@ -306,5 +324,7 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  note: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
+  noteText: { fontSize: 15, textAlign: 'center' },
   back: { position: 'absolute', left: 12, bottom: 12 },
 });

@@ -11,6 +11,7 @@ import { test } from 'node:test';
 import { strToU8, zipSync } from 'fflate';
 
 import * as backup from '../backup.ts';
+import * as features from '../features.ts';
 import * as layouts from '../layouts.ts';
 import { memoryPrefs } from '../prefs.ts';
 import * as profiles from '../profiles.ts';
@@ -40,7 +41,7 @@ test('layouts (Tests.java)', () => {
 });
 
 test('layouts: the definitions read', () => {
-  assert.equal(LAYOUTS.length, 10);
+  assert.equal(LAYOUTS.length, 13, 'ten, plus the three looks new in 1.42');
   const b = layouts.get(LAYOUTS, 'bubbles');
   assert.ok(b);
   assert.equal(b.parts[0].kind, 'clock');
@@ -52,6 +53,24 @@ test('layouts: the definitions read', () => {
   const s = layouts.get(LAYOUTS, 'scenery');
   assert.equal(s?.roadHorizon, 364);
   assert.equal(layouts.parseAll({ nope: 1 }).length, 0, 'a broken file gives none');
+});
+
+test('layouts: the three looks new in 1.42', () => {
+  const m = layouts.get(LAYOUTS, 'mission');
+  assert.ok(m && !m.light, 'Mission control is dark');
+  assert.equal(m.lines.length, 2, 'the two rules across the screen');
+  const dial = layouts.part(m, 'speed');
+  assert.equal(dial?.style, 'dial');
+  assert.equal(dial?.shape, 'circle');
+  assert.deepEqual(layouts.part(m, 'stats')?.items, ['temp', 'altitude', 'direction'], 'the telemetry list');
+  const e = layouts.get(LAYOUTS, 'electric');
+  assert.ok(e?.light, 'Electric is light');
+  assert.equal(layouts.part(e!, 'car')?.src, 'car_rear_white', 'the car on its own panel');
+  assert.equal(layouts.part(e!, 'weather')?.style, 'card');
+  const r = layouts.get(LAYOUTS, 'roadster');
+  assert.equal(layouts.part(r!, 'car')?.src, 'car_rear_red');
+  assert.equal(layouts.part(r!, 'speed')?.accent, '#E82127', 'racing red');
+  assert.equal(r?.roadHorizon, 300, 'a moving road');
 });
 
 test('layouts: choosing one', () => {
@@ -114,9 +133,13 @@ test('layouts: dock, favourites, places and the driver', () => {
   assert.equal(layouts.driver(p), '');
   p.put('profile', 'Asha');
   assert.equal(layouts.driver(p), 'Asha', 'the profile name');
+  p.put('welcome', ' Riya ');
+  assert.equal(layouts.driver(p), 'Riya', "the home screen's name, shared since 1.35");
   p.put('layUser', ' Tech ');
-  assert.equal(layouts.driver(p), 'Tech', 'its own name first');
+  assert.equal(layouts.driver(p), 'Tech', 'the layouts\' own name, from before there was one');
   assert.ok(layouts.roadOn(p) && !layouts.animOn(p));
+  p.put('feat:road', 'off');
+  assert.ok(!layouts.roadOn(p), "the dashboard's moving road switch, since 1.35");
   assert.equal(layouts.wall(p), 'layout');
 });
 
@@ -212,6 +235,23 @@ test('backup: one made by the Android app', () => {
   assert.ok(!(backup.TYPES_KEY in again.prefs.home));
   assert.throws(() => backup.unzip(zipSync({ 'other.txt': strToU8('hi') })), /not an OpenRath backup/);
   assert.throws(() => backup.unzip(strToU8('not a zip')), /not an OpenRath backup/);
+});
+
+test('backup: switches merged or removed in 1.35', () => {
+  // a backup from an older version: the old names are restored as they are, each old switch is
+  // read through the one it became part of, and the names of removed features are ignored
+  const json = {
+    app: 'OpenRath',
+    format: 1,
+    made: 5,
+    prefs: { home: { 'feat:tolls': ['s', 'off'], 'feat:wash': ['s', 'on'], 'feat:parkPhoto': ['s', 'x'] } },
+  };
+  const p = memoryPrefs();
+  backup.restore(p, json as unknown as backup.BackupJson);
+  assert.equal(p.str('feat:wash', ''), 'on', "a removed feature's setting is kept but unused");
+  assert.equal(features.get('wash'), undefined, 'and the feature is gone');
+  assert.ok(!features.on(p, 'tollAhead'), 'an old name follows the switch it became part of');
+  assert.ok(features.on(p, 'parkPhoto') === features.on(p, 'parking'), 'and so does the parking photo');
 });
 
 test('backup: names, pruning and the daily copy', () => {
