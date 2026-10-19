@@ -54,7 +54,7 @@ export default function About() {
         <Text style={p}>• {t('Map: the map area you look at to the tile server.')}</Text>
         <Text style={p}>• {t('Routes: start and destination to the OSRM routing server.')}</Text>
         <Text style={p}>
-          • {t('Search: what you type or say to Photon. Voice search uses the unit’s speech recogniser (usually Google).')}
+          • {t("Search: what you type or say to Photon. Voice search uses the unit's speech recogniser (usually Google).")}
         </Text>
         <Text style={p}>• {t('Online radio: the station list from radio-browser.info, and the stream from the station itself.')}</Text>
         <Text style={dim}>

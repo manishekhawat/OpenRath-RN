@@ -1,6 +1,6 @@
 # Credits
 
-OpenRath is written by Manish Shekhawat. It stands on other people's work, and this page thanks them. Code and assets bundled in the app, with their licences, are listed in [NOTICE.md](NOTICE.md); the online services it uses are in [PRIVACY.md](PRIVACY.md) and in the app under Help > About.
+OpenRath is written by Manish Shekhawat. This is the React Native (Expo) edition, ported from the Android version: Based on OpenRath by Manish Shekhawat, https://github.com/manishekhawat/OpenRath. It stands on other people's work, and this page thanks them. Code and assets bundled in the app, with their licences, are listed in [NOTICE.md](NOTICE.md); the online services it uses are in the app under Settings > About and licences, and Privacy.
 
 Nothing from the projects below is copied into OpenRath unless NOTICE.md says so: they are where ideas came from, or where we learnt how something works.
 

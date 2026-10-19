@@ -1,9 +1,8 @@
 /**
  * Small helpers for the dashboard, with no Expo types so they are tested: the dock's status icons
- * (StatusIcons.java, 1.38), the car box's drive summary when stopped (CarCard.summary, 1.39) and
- * the compass box's points (Cards.CompassCard, 1.36).
+ * (StatusIcons.java, 1.38) and the compass box's points (Cards.CompassCard, 1.36). The car box's
+ * drive summary when stopped is Trip.stopText.
  */
-import { speed } from './units.ts';
 
 // ---------------------------------------------------------------- status icons
 
@@ -61,16 +60,6 @@ export function wifiBars(rssi: number): number {
   if (rssi >= -67) return 3;
   if (rssi >= -78) return 2;
   return 1;
-}
-
-// ---------------------------------------------------------------- car box
-
-/** "12.4 km · 34 min · avg 22 · top 68 km/h", in the owner's speed unit (distance stays in km). */
-export function summary(km: number, sec: number, top: number, mph: boolean): string {
-  const min = Math.floor(sec / 60);
-  const avg = sec > 0 ? speed((km * 3600) / sec, mph) : 0;
-  const time = min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min` : `${min} min`;
-  return `${km.toFixed(1)} km · ${time} · avg ${avg} · top ${speed(top, mph)} ${mph ? 'mph' : 'km/h'}`;
 }
 
 // ---------------------------------------------------------------- compass box

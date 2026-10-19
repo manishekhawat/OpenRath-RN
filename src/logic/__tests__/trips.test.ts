@@ -1,14 +1,14 @@
 /// <reference types="node" />
 /**
- * Trips, mileage and money: the mileage coach, commute insights, fuel-low planner, routes and the
- * 0–100 timer, tolls and the trip history, and the weekly report (from Tests.java, plus a few more).
+ * Trips, mileage and money: the mileage coach, the fuel-low planner, routes and the 0–100 timer,
+ * tolls and the trip history, and the weekly report (from Tests.java, plus a few more).
+ * (Commute insights were removed in 1.35.)
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import * as care from '../care.ts';
 import * as coach from '../coach.ts';
-import * as commute from '../commute.ts';
 import * as fuel from '../fuel.ts';
 import * as fuelplan from '../fuelplan.ts';
 import { memoryPrefs } from '../prefs.ts';
@@ -83,37 +83,12 @@ test('coach: tips and the report', () => {
   const smooth = { ...coach.newTrip(0), km: 10, end: 600000 };
   assert.equal(coach.reasons(smooth, coach.waste(smooth, 18)), 'smooth drive');
   const p = memoryPrefs();
-  assert.equal(coach.report(p), coach.EMPTY);
+  assert.equal(coach.report(p), coach.empty());
   coach.save(p, { ...coach.newTrip(Date.UTC(2026, 9, 12, 3)), end: Date.UTC(2026, 9, 12, 4), km: 40, idleSec: 1200, starts: 3 });
   const r = coach.report(p);
   assert.ok(r.startsWith('Your last 1 drives used about 0.3 litres more than they needed.'), r);
   assert.ok(r.includes('20 min idling, 3 hard starts'), r);
   assert.ok(r.endsWith('using 18.0 km/l.'), r);
-});
-
-test('commute: the quickest time to leave', () => {
-  const day = 1760000000000 - (1760000000000 % 86400000);
-  const starts = [day + 3 * 3600000, day + 86400000 + 3 * 3600000, day + 2 * 86400000 + 4 * 3600000];
-  const mins = [25, 25, 45];
-  const trips = starts.map((s, i) => ({ ...coach.newTrip(s), end: s + mins[i] * 60000, km: 12, sLat: 28.6 + i * 0.0005, sLon: 77.2, eLat: 28.7, eLon: 77.1 }));
-  const r = commute.learn(trips, { Home: [28.6001, 77.2001] }, 330);
-  assert.equal(r.length, 1, 'one route');
-  assert.equal(r[0].from, 'Home');
-  assert.equal(r[0].to, 'place B');
-  assert.equal(commute.time(r[0].best), '8:30 am');
-  assert.ok(commute.describe(r).includes('Quickest: leave between 8:30 am and 9:00 am'), commute.describe(r));
-  assert.ok(commute.describe(r).includes('• Leaving 9:30 am–10:00 am: 45 min on average (1 drive)'));
-  assert.equal(commute.describe([]), commute.EMPTY);
-  assert.equal(commute.time(0), '12:00 am');
-  assert.equal(commute.time(13 * 60 + 30), '1:30 pm');
-  // round trips and short hops don't count
-  assert.equal(commute.learn(trips.map((t) => ({ ...t, eLat: t.sLat, eLon: t.sLon })), {}, 330).length, 0);
-  assert.equal(commute.learn(trips.map((t) => ({ ...t, km: 1 })), {}, 330).length, 0);
-});
-
-test('commute: Home and Office from the map', () => {
-  const p = memoryPrefs({ 'place:Home': '28.6,77.2', 'place:Office': 'bad' });
-  assert.deepEqual(commute.places(p), { Home: [28.6, 77.2] });
 });
 
 test('fuel plan: litres left', () => {
@@ -147,7 +122,7 @@ test('fuel plan: tank, range and the low warning', () => {
   assert.ok(low.check(p, 100 + 40 * 17 - 20)?.startsWith('About 20 kilometres'), 'again below half');
   assert.equal(low.check(p, 200), null, 'filled up');
   assert.equal(low.told, Number.MAX_SAFE_INTEGER);
-  p.put('feat:fuelPlan', 'off');
+  p.put('feat:fuelPrice', 'off');   // one switch since 1.35
   assert.equal(low.check(p, 100 + 40 * 17 - 20), null);
   assert.equal(fuelplan.summaryRange(p, 200), -1);
   assert.equal(fuelplan.nextWarnKm(60), 80);
@@ -276,7 +251,7 @@ test('weekly: due on Sundays, report text', () => {
   assert.equal(weekly.due(p, new Date(2026, 9, 25, 8)), true, 'a week on, Sunday');
   assert.equal(weekly.due(p, new Date(2026, 9, 26, 8)), false, 'shown yesterday');
   assert.equal(weekly.due(p, new Date(2026, 10, 3, 9)), true, 'missed Sunday: after 8 days');
-  p.put('feat:weekly', 'off');
+  p.put('feat:startSummary', 'off');   // one switch since 1.35
   assert.equal(weekly.due(p, new Date(2026, 11, 3, 9)), false);
 
   const q = memoryPrefs();
@@ -302,4 +277,17 @@ test('weekly: start-up summary extras', () => {
   assert.equal(weekly.summaryExtras(p, 0, new Date(2026, 10, 3)).rangeKm, -1);
   fuel.setLog(p, [{ t: 1, l: 35, rs: 3500, odo: 10000, gps: 0, full: true }]);
   near(680, weekly.summaryExtras(p, 0).rangeKm, 1e-6);
+});
+
+test('the trip menu, one row since 1.35', () => {
+  const p = memoryPrefs();
+  assert.equal(care.TRIP_MENU.length, 5);
+  assert.equal(care.tripMenuTitle(12.34, 4567.8), 'Today 12.3 km  ·  GPS odometer 4568 km');
+  assert.equal(care.tripRow(12.34, 92, 0), 'today 12.3 km, score 92; no fill-ups yet');
+  fuel.setLog(p, [{ t: 1, l: 30, rs: 3000, odo: 1000, full: true }]);
+  assert.equal(care.tripRow(0, 100, fuel.stats(fuel.log(p)).fills), 'today 0.0 km, score 100; 1 fill-ups');
+  // the parking spot only from a fix of the last 30 seconds (Hub.liveFix)
+  assert.ok(care.liveFix(1000, 20000));
+  assert.ok(!care.liveFix(1000, 40000));
+  assert.ok(!care.liveFix(0, 1000));
 });

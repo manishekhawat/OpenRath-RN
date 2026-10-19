@@ -1,7 +1,7 @@
 /// <reference types="node" />
 /**
- * The everyday helpers: QR codes, news, chores, trip games, the documents wallet and accident
- * help (the matching checks from Tests.java, and a few more).
+ * The everyday helpers: QR codes, news, chores, trip games and the documents wallet (the matching
+ * checks from Tests.java, and a few more). The car wash reminder and accident help went in 1.35.
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -13,7 +13,6 @@ import * as kids from '../kids.ts';
 import * as news from '../news.ts';
 import { memoryPrefs } from '../prefs.ts';
 import * as qr from '../qr.ts';
-import * as rescue from '../rescue.ts';
 import { dayKey } from '../trip.ts';
 import * as wallet from '../wallet.ts';
 
@@ -164,33 +163,10 @@ test('chores: parking', () => {
   assert.equal(chores.PARK_MINUTES.length, chores.PARK_LABELS.length);
 });
 
-test('chores: wash reminder', () => {
-  const p = memoryPrefs();
-  const now = 100 * DAY;
-  // the first check only starts the count
-  assert.equal(chores.washCheck(p, 0, ['w_sun'], now), null);
-  assert.equal(p.str('washAt', ''), String(now));
-  // moving: not asked
-  const later = now + 15 * DAY;
-  assert.equal(chores.washCheck(p, 20, ['w_sun'], later), null);
-  // rain coming: waits
-  assert.equal(chores.washCheck(p, 0, chores.forecastIcons([0, 61]), later), null);
-  const ask = chores.washCheck(p, 0, chores.forecastIcons([0, 3]), later);
-  assert.equal(ask?.message, "It's been 15 days since the last car wash, and no rain is expected for the next two days.");
-  assert.equal(p.str('washAsked', ''), dayKey(later));
-  // once a day
-  assert.equal(chores.washCheck(p, 0, ['w_sun'], later + 1000), null);
-  chores.washed(p, later);
-  assert.equal(chores.washRow(p, later), 'Washed today; reminds every 14 days');
-  p.put('washDays', '7');
-  assert.equal(chores.washRow(p, later + 3 * DAY), 'Last washed 3 days ago; reminds every 7 days');
-  assert.deepEqual(chores.forecastIcons([0, 2, 3, 45, 55, 81, 85, 95]), ['w_sun', 'w_partly', 'w_cloud', 'w_fog', 'w_rain', 'w_rain', 'w_snow', 'w_storm']);
-});
-
 test('chores: guest Wi-Fi', () => {
   const p = memoryPrefs();
   assert.equal(chores.hotspot(p), null);
-  assert.equal(chores.setHotspot(p, ' ', 'x'), 'Enter the hotspot name');
+  assert.equal(chores.setHotspot(p, ' ', 'x'), 'Hotspot name (as set on the unit)');
   assert.equal(chores.setHotspot(p, 'My;Car', 'p:ss'), null);
   const c = chores.hotspot(p);
   assert.equal(c?.text, 'WIFI:T:WPA;S:My\\;Car;P:p\\:ss;;');
@@ -278,50 +254,7 @@ test('wallet', () => {
   assert.equal(wallet.importText(['Insurance']), 'Imported: Insurance.');
 });
 
-test('rescue', () => {
-  assert.ok(rescue.crash(60, 2, 1000));
-  assert.ok(!rescue.crash(60, 30, 1000), 'hard brake is not a crash');
-  assert.ok(!rescue.crash(30, 0, 1000), 'slow bump is not a crash');
-  assert.ok(!rescue.crash(60, 0, 5000), 'gap in readings is not a crash');
-  assert.equal(rescue.SECONDS, 30);
-  assert.equal(rescue.where(28.4595, 77.0266), '28.45950, 77.02660');
-
-  const T = 1_760_000_000_000;
-  const w = new rescue.CrashWatch();
-  assert.equal(w.feed(60, T + 1000, true), false);
-  assert.equal(w.feed(2, T + 2000, true), true);
-  assert.equal(w.feed(60, T + 3000, true), false);
-  assert.equal(w.feed(0, T + 4000, true), false, 'quiet for two minutes after one');
-  w.feed(60, T + 200000, true);
-  assert.equal(w.feed(0, T + 201000, true), true);
-  const off = new rescue.CrashWatch();
-  off.feed(60, T + 1000, false);
-  assert.equal(off.feed(2, T + 2000, false), false, 'accident help off');
-
-  const p = memoryPrefs();
-  assert.equal(rescue.contactRow(p, true), 'not set (accident help calls 112 only if you tap it)');
-  assert.equal(rescue.startText(p), 'A very hard stop was detected. Set an emergency contact in Settings > Driving to be called.');
-  assert.equal(rescue.sentText(p, false), 'No emergency contact is set. Tap "Call 112" if you need help.');
-  rescue.setContact(p, ' Papa ', '+91 98100-12345');
-  assert.equal(rescue.contact(p), '+919810012345');
-  assert.equal(rescue.contactName(p), 'Papa');
-  assert.equal(rescue.contactRow(p, false), 'Papa (accident help is off)');
-  assert.equal(rescue.spoken(p, false), "Are you OK? Tap I'm OK, or I will message Papa in thirty seconds.");
-  assert.equal(rescue.spoken(p, true), 'Accident help test. Are you OK?');
-  rescue.setContact(p, '', '112233');
-  assert.equal(rescue.contactName(p), '112233');
-
-  const m = rescue.message(28.4595, 77.0266);
-  assert.equal(m, 'I may have been in an accident. The car is at 28.45950, 77.02660: https://maps.google.com/?q=28.45950,77.02660');
-  assert.equal(rescue.message(0, 0), "I may have been in an accident. The car's location isn't known.");
-  assert.equal(rescue.smsLink('+9198', 'a b&c'), 'sms:+9198?body=a%20b%26c');
-  assert.equal(rescue.smsLink('+9198', 'x', true), 'sms:+9198&body=x');
-  assert.equal(rescue.telLink('+91 98-1'), 'tel:+91981');
-  assert.equal(rescue.sosHref(28.5, 77.25), '/sos?crash=1&lat=28.500000&lon=77.250000');
-  assert.ok(rescue.sosHref(1, 2, true).endsWith('&test=1'));
-});
-
-test('chores: trip share and manual SOS words', () => {
+test('chores: trip share', () => {
   const p = memoryPrefs();
   assert.equal(chores.tripShare(p, 0, 0), 'Waiting for the GPS to find the car');
   const here = chores.tripShare(p, 28.5, 77.2);
@@ -332,8 +265,4 @@ test('chores: trip share and manual SOS words', () => {
   assert.equal(trip.title, 'Our trip to Agra');
   assert.ok(trip.text.includes('destination=27.17510,78.04210'));
   assert.ok(/^About \d+ km to go in a straight line\. /.test(trip.caption));
-  assert.equal(rescue.startText(p, true), 'SOS. No emergency contact is set: set one under Accident help, or call 112.');
-  rescue.setContact(p, 'Papa', '98100');
-  assert.equal(rescue.startText(p, true), 'SOS: texting Papa where the car is in 30 seconds.');
-  assert.equal(rescue.startText(p), 'A very hard stop was detected. Texting Papa where the car is in 30 seconds.');
 });

@@ -1,15 +1,21 @@
 /**
- * Apps (AppsActivity in the Android version). A launcher lists every installed app through
- * PackageManager, which Expo has no module for; until a small native module adds that (see
- * PORTING.md), this page opens the apps you add by their package name.
+ * All apps (AppsActivity in the Android version), with the better screen of 1.38 (appDrawer): a
+ * search box, a row of pinned and recently opened apps, an A to Z column to jump with, and a long
+ * press for Pin to the top, App info or Uninstall.
+ *
+ * A launcher lists every installed app through PackageManager, which Expo has no module for; until
+ * a small native module adds that (see PORTING.md), this page opens the apps you add by their
+ * package name, with their own icon when Android gives it to us.
  */
 import * as IntentLauncher from 'expo-intent-launcher';
-import { useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Button, Field, Heading, Screen } from '../components/ui';
+import { Button, Field, Heading, PickList, Screen, toast } from '../components/ui';
+import * as Apps from '../logic/apps';
 import * as ChildLock from '../logic/childlock';
 import * as Features from '../logic/features';
+import { f, t } from '../logic/i18n';
 import { useDrive } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
@@ -27,10 +33,12 @@ const DEFAULTS: App[] = [
   { label: 'Settings', pkg: 'com.android.settings' },
 ];
 
-export default function Apps() {
+export default function AppsScreen() {
   const { prefs, version } = usePrefs();
   const look = useLook();
-  const { trip } = useDrive();
+  const drive = useDrive();
+  const { trip } = drive;
+  const extras = Features.on(prefs, 'appDrawer');
   const locked = ChildLock.apps(prefs);
   const apps = useMemo<App[]>(() => {
     try {
@@ -38,67 +46,175 @@ export default function Apps() {
     } catch {
       return DEFAULTS;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefs, version]);
   const [label, setLabel] = useState('');
   const [pkg, setPkg] = useState('');
+  const [query, setQuery] = useState('');
+  const [menu, setMenu] = useState<App | null>(null);
+  const [icons, setIcons] = useState<Record<string, string>>({});
+  const grid = useRef<ScrollView | null>(null);
+  const rowY = useRef<Record<string, number>>({});
+
+  // the apps' own icons, when Android hands them over
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    let gone = false;
+    (async () => {
+      const out: Record<string, string> = {};
+      for (const a of apps) {
+        try {
+          out[a.pkg] = await IntentLauncher.getApplicationIconAsync(a.pkg);
+        } catch {
+          // not installed: the tile shows its first letter
+        }
+      }
+      if (!gone) setIcons(out);
+    })();
+    return () => {
+      gone = true;
+    };
+  }, [apps]);
+
+  const shown = extras ? apps.filter((a) => Apps.matches(a.label, a.pkg, query)) : apps;
+  const sorted = extras ? [...shown].sort((a, b) => a.label.localeCompare(b.label)) : shown;
+  const pinned = Apps.split(prefs.str('pinnedApps', ''));
+  const recent = Apps.split(prefs.str('recentApps', ''));
+  const strip = extras ? [...pinned, ...recent.filter((p) => !pinned.includes(p))].map((p) => apps.find((a) => a.pkg === p)).filter((a): a is App => !!a) : [];
+  const letters: string[] = [];
+  for (const a of sorted) {
+    const l = Apps.letter(a.label);
+    if (letters[letters.length - 1] !== l) letters.push(l);
+  }
 
   const open = (a: App) => {
-    if (Platform.OS !== 'android') return Alert.alert('Opening other apps works on Android only');
-    if (ChildLock.blocked(prefs, a.pkg, trip.kmh, trip.prevAt)) return Alert.alert(ChildLock.SORRY);
+    if (Platform.OS !== 'android') return toast('Opening other apps works on Android only');
+    if (ChildLock.blocked(prefs, a.pkg, trip.kmh, drive.fixAt)) return toast(ChildLock.SORRY);
+    if (extras) prefs.put('recentApps', Apps.join(Apps.push(recent, a.pkg, Apps.RECENT)));
     try {
       IntentLauncher.openApplication(a.pkg);
     } catch {
-      Alert.alert(`${a.label} isn't installed`, a.pkg);
+      toast(f("%1$s isn't installed", a.label), true);
     }
   };
 
-  const remove = (a: App) =>
-    Alert.alert(a.label, undefined, [
-      ...(Features.on(prefs, 'childLock')
-        ? [{ text: locked.has(a.pkg) ? 'Unlock while moving' : 'Lock while moving', onPress: () => void ChildLock.toggle(prefs, a.pkg) }]
-        : []),
-      { text: 'Remove', style: 'destructive' as const, onPress: () => prefs.put('apps', JSON.stringify(apps.filter((x) => x.pkg !== a.pkg))) },
-      { text: 'Keep', style: 'cancel' as const },
-    ]);
+  const start = (action: string, data: string) => {
+    IntentLauncher.startActivityAsync(action, { data }).catch(() => toast('This unit doesn’t allow that'));
+  };
+
+  // the long-press menu: pin, the child lock, Android's own app info and uninstall, remove
+  const items: { label: string; run: () => void }[] = menu
+    ? [
+        ...(extras
+          ? [
+              pinned.includes(menu.pkg)
+                ? { label: 'Unpin', run: () => prefs.put('pinnedApps', Apps.join(Apps.remove(pinned, menu.pkg))) }
+                : { label: 'Pin to the top', run: () => prefs.put('pinnedApps', Apps.join(Apps.push(Apps.remove(pinned, menu.pkg), menu.pkg, Apps.PINS))) },
+            ]
+          : []),
+        { label: 'App info', run: () => start(IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS, 'package:' + menu.pkg) },
+        { label: 'Uninstall', run: () => start('android.intent.action.DELETE', 'package:' + menu.pkg) },
+        ...(Features.on(prefs, 'childLock')
+          ? [
+              {
+                label: locked.has(menu.pkg) ? 'Unlock while moving' : 'Lock while moving',
+                run: () => void ChildLock.toggle(prefs, menu.pkg),
+              },
+            ]
+          : []),
+        {
+          label: 'Remove from this screen',
+          run: () => prefs.put('apps', JSON.stringify(apps.filter((x) => x.pkg !== menu.pkg))),
+        },
+      ]
+    : [];
+
+  const tile = (a: App, size: number) => (
+    <Pressable
+      key={a.pkg}
+      onPress={() => open(a)}
+      onLongPress={() => setMenu(a)}
+      style={[styles.tile, { width: size, height: size - 10, backgroundColor: look.panel, borderColor: look.edge, borderRadius: look.radius }]}
+    >
+      {icons[a.pkg] ? (
+        <Image source={{ uri: icons[a.pkg] }} style={styles.icon} />
+      ) : (
+        <Text style={[styles.initial, { color: look.accent }]}>{a.label.substring(0, 1)}</Text>
+      )}
+      <Text style={{ color: look.text, textAlign: 'center' }} numberOfLines={1}>
+        {a.label}
+        {locked.has(a.pkg) ? ' 🔒' : ''}
+      </Text>
+    </Pressable>
+  );
 
   return (
-    <Screen title="Apps">
-      <View style={styles.grid}>
-        {apps.map((a) => (
-          <Pressable
-            key={a.pkg}
-            onPress={() => open(a)}
-            onLongPress={() => remove(a)}
-            style={[styles.tile, { backgroundColor: look.panel, borderColor: look.edge, borderRadius: look.radius }]}
-          >
-            <Text style={[styles.initial, { color: look.accent }]}>{a.label.substring(0, 1)}</Text>
-            <Text style={{ color: look.text, textAlign: 'center' }} numberOfLines={2}>
-              {a.label}
-              {locked.has(a.pkg) ? ' 🔒' : ''}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-      <Text style={{ color: look.textDim, marginTop: 8 }}>Long-press an app to remove it, or to lock it while the car is moving (Child-lock in Features).</Text>
-      <Heading>Add an app</Heading>
-      <Field label="Name" value={label} onChange={setLabel} />
-      <Field label="Package name (from the app's Play Store link, id=…)" value={pkg} onChange={setPkg} placeholder="com.example.app" />
-      <Button
-        label="Add"
-        kind="primary"
-        onPress={() => {
-          if (!/^[a-zA-Z][\w]*(\.[a-zA-Z][\w]*)+$/.test(pkg.trim())) return Alert.alert('That is not a package name', 'It looks like com.example.app');
-          prefs.put('apps', JSON.stringify([...apps, { label: label.trim() || pkg.trim(), pkg: pkg.trim() }]));
-          setLabel('');
-          setPkg('');
-        }}
-      />
+    <Screen title="All apps" scroll={false}>
+      <ScrollView ref={grid} contentContainerStyle={styles.body}>
+        {extras ? (
+          <>
+            <Field label="Search apps" value={query} onChange={setQuery} placeholder={t('Search apps')} />
+            {strip.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
+                {strip.map((a) => tile(a, 96))}
+              </ScrollView>
+            ) : null}
+          </>
+        ) : null}
+        <View style={styles.grid}>
+          {sorted.map((a, i) => (
+            <View
+              key={a.pkg}
+              onLayout={(e) => {
+                const l = Apps.letter(a.label);
+                if (!(l in rowY.current) || i === 0) rowY.current[l] = e.nativeEvent.layout.y;
+              }}
+            >
+              {tile(a, 120)}
+            </View>
+          ))}
+        </View>
+        <Text style={{ color: look.textDim, marginTop: 8 }}>
+          {t('Long-press an app to pin it, see its app info, uninstall it, lock it while the car is moving, or remove it from this screen.')}
+        </Text>
+        <Heading>Add an app</Heading>
+        <Field label="Name" value={label} onChange={setLabel} />
+        <Field label="Package name (from the app's Play Store link, id=…)" value={pkg} onChange={setPkg} placeholder="com.example.app" />
+        <Button
+          label="Add"
+          kind="primary"
+          onPress={() => {
+            if (!/^[a-zA-Z][\w]*(\.[a-zA-Z][\w]*)+$/.test(pkg.trim())) return toast('That is not a package name, it looks like com.example.app', true);
+            prefs.put('apps', JSON.stringify([...apps, { label: label.trim() || pkg.trim(), pkg: pkg.trim() }]));
+            setLabel('');
+            setPkg('');
+          }}
+        />
+      </ScrollView>
+      {/* the A to Z column: a tap jumps to the first app filed under that letter */}
+      {extras && letters.length > 1 ? (
+        <View style={styles.letters}>
+          {letters.map((l) => (
+            <Pressable key={l} onPress={() => grid.current?.scrollTo({ y: Math.max(0, rowY.current[l] ?? 0), animated: true })} hitSlop={6}>
+              <Text style={[styles.letter, { color: look.textDim }]}>{l}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      {menu ? (
+        <PickList title={menu.label} options={items.map((i) => i.label)} onPick={(i) => items[i].run()} onClose={() => setMenu(null)} />
+      ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  body: { padding: 16, paddingBottom: 48, paddingRight: 48 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  tile: { width: 120, height: 110, borderWidth: 1, alignItems: 'center', justifyContent: 'center', padding: 8 },
+  strip: { gap: 12, paddingBottom: 12 },
+  tile: { borderWidth: 1, alignItems: 'center', justifyContent: 'center', padding: 8 },
+  icon: { width: 48, height: 48, marginBottom: 6, resizeMode: 'contain' },
   initial: { fontSize: 34, fontWeight: '600' },
+  letters: { position: 'absolute', right: 4, top: 70, bottom: 20, justifyContent: 'center' },
+  letter: { fontSize: 14, paddingVertical: 3, textAlign: 'center', width: 28 },
 });

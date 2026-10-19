@@ -1,6 +1,8 @@
 /**
  * The dashboard (HomeActivity + Cards in the Android version): the car with live speed and the
- * moving road, the clock, weather, trip computer and fuel log, and the dock along the bottom.
+ * moving road, the clock, weather with the next 24 hours, the calendar, compass, trip computer and
+ * fuel log, and the dock along the bottom with the status icons. Night-drive mode, the start-up
+ * summary with the petrol range, the weekly report and the clock screensaver.
  */
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, router } from 'expo-router';
@@ -8,25 +10,32 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import LayoutView, { useLayout } from '../components/LayoutView';
+import { CalendarBox } from '../components/CalendarBox';
+import { CompassBox } from '../components/CompassBox';
 import { DashcamView } from '../components/DashcamView';
+import { Dock } from '../components/Dock';
+import LayoutView, { useLayout } from '../components/LayoutView';
 import MicButton from '../components/MicButton';
 import { MusicBox } from '../components/MusicBox';
 import { NewsBox } from '../components/NewsBox';
-import { RoadAhead } from '../components/RoadAhead';
-import { Box } from '../components/ui';
 import { Road } from '../components/Road';
-import * as Air from '../logic/air';
+import { RoadAhead } from '../components/RoadAhead';
+import { SoundboardBox } from '../components/SoundboardBox';
+import { TapBox } from '../components/Tap';
+import { VideoBox } from '../components/VideoBox';
+import { WeatherBox } from '../components/WeatherBox';
+import { PickList, toast } from '../components/ui';
 import * as Cab from '../logic/cab';
+import * as CabEarnings from '../logic/cabEarnings';
 import * as Car from '../logic/car';
 import * as Care from '../logic/care';
-import * as Chores from '../logic/chores';
 import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
 import * as Fuel from '../logic/fuel';
-import * as Holidays from '../logic/holidays';
+import { f, t } from '../logic/i18n';
 import { num } from '../logic/prefs';
 import * as Trip from '../logic/trip';
+import * as Units from '../logic/units';
 import * as Weekly from '../logic/weekly';
 import { useParkedSnap } from '../state/camera';
 import { say, useDrive } from '../state/drive';
@@ -57,6 +66,7 @@ export default function Home() {
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
   const layout = useLayout();
+  const [menu, setMenu] = useState<string | null>(null);
   // the parking photo when the car parks
   useParkedSnap();
 
@@ -64,9 +74,11 @@ export default function Home() {
   const odoKm = Care.odo(prefs, trip.odoKm);
   const tripCost = Fuel.cost(prefs, trip.todayKm, Car.kmpl(Car.fuel(prefs)));
   const careAlert = Features.on(prefs, 'care') ? Care.alert(prefs, odoKm, now) : '';
-  const rush = Features.on(prefs, 'holidayTraffic') ? Holidays.rush(now) : null;
   const dark = trip.lat !== 0 && Errands.dark(trip.lat, trip.lon, now.getTime());
-  const nightDrive = Features.on(prefs, 'nightDrive') && dark && trip.kmh > 20;
+  const driving = trip.kmh > 20;
+  // 1.39: the number eases between fixes and shows "--" without one
+  const mph = Units.mph(prefs);
+  const speedText = drive.speedShown < 0 ? '--' : String(Units.speed(drive.speedShown, mph));
 
   // the start-up summary, once a day, when the weather is in
   useEffect(() => {
@@ -80,23 +92,15 @@ export default function Home() {
       prefs.str('ownerName', ''),
       weather.wx.temp + '°',
       weather.wx.text,
-      weather.wx.rainSoon > 0.2 ? 'Rain is expected within the hour' : '',
+      weather.wx.rain,
       weather.aqi,
       rangeKm,
       careAlert,
       holiday,
     );
     say(text);
-    Alert.alert(Errands.greeting(new Date()), text.substring(text.indexOf('.') + 1).trim());
+    Alert.alert(t(Errands.greeting(new Date())), text.substring(text.indexOf('.') + 1).trim());
   }, [weather.wx, prefs, careAlert, fuelStats]);
-
-  // the wash reminder, when parked and the next days look dry
-  useEffect(() => {
-    if (!weather.wx || trip.kmh > 3) return;
-    const ask = Chores.washCheck(prefs, trip.kmh, Chores.forecastIcons(weather.wx.daily.map((d) => d.code)));
-    if (ask) Alert.alert(ask.title, ask.message, [{ text: 'Washed today', onPress: () => Chores.washed(prefs) }, { text: 'Later' }]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weather.wx]);
 
   // the automatic daily backup (Backup.daily)
   useEffect(() => {
@@ -104,7 +108,7 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // the service booking reminder: once a day when parked, if a service is near (HomeActivity)
+  // the service booking reminder: once a day when parked, if a service is near (HomeDialogs)
   useEffect(() => {
     if (!Car.ready(prefs) || !Features.on(prefs, 'serviceBooking') || !Features.on(prefs, 'care') || trip.kmh > 3) return;
     const today = Trip.dayKey(Date.now());
@@ -115,15 +119,17 @@ export default function Home() {
     const mine = prefs.str('myService', '').split('|');
     const have = mine.length === 2 && mine[1] !== '';
     const k = Care.kmLeft(prefs, i, odoKm);
-    const when = k < 0 ? `is overdue by ${-k} km` : `is due in ${k} km`;
+    const when = k < 0 ? f('is overdue by %1$s km', -k) : f('is due in %1$s km', k);
     Alert.alert(
-      'Book the service?',
-      `${Care.NAMES[i]} ${when}.` +
-        (have ? ` Call ${mine[0]} to book a slot?` : " Find your service centre on the map and tap Mine next to it, so next time it's one tap to call."),
+      t('Book the service?'),
+      `${t(Care.NAMES[i])} ${when}.` +
+        (have
+          ? ' ' + f('Call %1$s to book a slot?', mine[0])
+          : ' ' + t("Find your service centre on the map and tap Mine next to it, so next time it's one tap to call.")),
       [
-        { text: 'Later', style: 'cancel' },
+        { text: t('Later'), style: 'cancel' },
         {
-          text: have ? 'Call' : 'Find one',
+          text: have ? t('Call') : t('Find one'),
           onPress: () => (have ? Linking.openURL('tel:' + mine[1].replace(/[^0-9+]/g, '')).catch(() => {}) : router.push('/map?go=service')),
         },
       ],
@@ -133,13 +139,13 @@ export default function Home() {
 
   // the clock screensaver: after a few idle minutes while parked (Extras.saverCheck)
   const touchAt = useRef(Date.now());
-  const tripRef = useRef(trip);
-  tripRef.current = trip;
+  const driveRef = useRef(drive);
+  driveRef.current = drive;
   const [saver, setSaver] = useState(false);
   useEffect(() => {
     const id = setInterval(() => {
-      const t = tripRef.current;
-      const parked = Date.now() - (t.last?.t ?? 0) > 10000 || t.kmh < 5;
+      const d = driveRef.current;
+      const parked = Date.now() - d.fixAt > 10000 || d.trip.kmh < 5;
       if (Features.on(prefs, 'saver') && parked && Date.now() - touchAt.current > num(prefs, 'saverMin', 5) * 60000) setSaver(true);
     }, 20000);
     return () => clearInterval(id);
@@ -155,6 +161,12 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // night-drive mode comes back on the next drive after it is tapped away
+  const [nightOff, setNightOff] = useState(false);
+  useEffect(() => {
+    if (!driving) setNightOff(false);
+  }, [driving]);
+
   if (!Car.ready(prefs)) return <Redirect href="/setup" />;
 
   if (saver) {
@@ -166,19 +178,23 @@ export default function Home() {
       <Pressable style={[styles.fill, styles.saver]} onPress={wake}>
         <Text style={styles.saverTime}>{`${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')}`}</Text>
         <Text style={styles.saverDate}>
-          {DAYS[now.getDay()]}  {now.getDate()} {MONTHS[now.getMonth()]}
+          {t(DAYS[now.getDay()])}  {now.getDate()} {t(MONTHS[now.getMonth()])}
         </Text>
-        {weather.wx ? <Text style={[styles.saverNow, { color: look.accent }]}>{`${weather.wx.temp}°  ${weather.wx.text}`}</Text> : null}
+        {weather.wx ? (
+          <Text style={[styles.saverNow, { color: look.accent }]}>{`${Units.temp(prefs, weather.wx.tempC)}  ${t(weather.wx.text)}`}</Text>
+        ) : null}
       </Pressable>
     );
   }
 
-  if (nightDrive) {
-    // after sunset while driving: big red speed, nothing else
+  if (Features.on(prefs, 'nightDrive') && dark && driving && !nightOff) {
+    // after sunset while driving: big red speed, nothing else; a tap leaves it until the next drive
     return (
-      <Pressable style={[styles.fill, { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }]} onPress={() => router.push('/map')}>
-        <Text style={{ color: '#C62828', fontSize: 160, fontWeight: '700' }}>{Math.round(trip.kmh)}</Text>
-        <Text style={{ color: '#7F1D1D', fontSize: 22 }}>km/h</Text>
+      <Pressable style={[styles.fill, styles.night]} onPress={() => setNightOff(true)} onLongPress={() => router.push('/map')}>
+        <Text style={styles.nightTime}>{`${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')}`}</Text>
+        <Text style={styles.nightSpeed}>{speedText}</Text>
+        <Text style={styles.nightUnit}>{Units.speedLabel(prefs).toUpperCase()}</Text>
+        <Text style={styles.nightHint}>{t('Tap here to leave night-drive mode')}</Text>
       </Pressable>
     );
   }
@@ -188,155 +204,156 @@ export default function Home() {
   const time = `${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')}`;
   const ampm = now.getHours() < 12 ? 'AM' : 'PM';
   const carName = Car.name(prefs);
+  // 1.42: no greeting line until the owner types their name
+  const owner = prefs.str('ownerName', '').trim();
+  const stopped = Features.on(prefs, 'stopSummary') ? drive.stopped : null;
 
   const carBox = (
-    <Box style={landscape ? { flex: 1.4 } : { height: 300 }} onPress={() => router.push('/map')} onLongPress={() => router.push('/settings')}>
-      <Text style={[styles.welcome, { color: look.textDim }]}>{look.welcomeTitle}</Text>
+    <TapBox style={landscape ? { flex: 1.4 } : { height: 300 }} onPress={() => router.push('/map')} onLongPress={() => router.push('/settings')}>
+      {owner ? (
+        <>
+          <Text style={[styles.welcome, { color: look.textDim }]}>{t(look.welcomeTitle)}</Text>
+          <Text style={[styles.owner, { color: look.chrome ? '#E9ECF0' : look.text }]} numberOfLines={1}>
+            {owner.toUpperCase()}
+          </Text>
+        </>
+      ) : null}
       <Text style={[styles.carName, { color: look.chrome ? '#E9ECF0' : look.text }]} numberOfLines={1}>
-        {carName || 'MY CAR'}
+        {carName || t('MY CAR')}
       </Text>
       <View style={styles.speedRow}>
-        <Text style={[styles.speed, { color: drive.over ? '#E5484D' : look.text }]}>{Math.round(trip.kmh)}</Text>
-        <Text style={[styles.unit, { color: look.textDim }]}>km/h</Text>
+        <Text style={[styles.speed, { color: drive.over ? '#E5484D' : look.text }]}>{speedText}</Text>
+        <Text style={[styles.unit, { color: look.textDim }]}>{Units.speedLabel(prefs)}</Text>
         {drive.limit > 0 ? (
           <View style={styles.limit}>
-            <Text style={styles.limitText}>{drive.limit}</Text>
+            <Text style={styles.limitText}>{Units.speed(drive.limit, mph)}</Text>
           </View>
         ) : null}
       </View>
       <View style={styles.roadWrap}>
         {look.road && Features.on(prefs, 'road') ? (
-          <Road width={landscape ? width * 0.36 : width - 56} height={90} kmh={trip.kmh} fill={look.roadFill} line={look.roadLine} />
+          <Road width={landscape ? width * 0.36 : width - 56} height={90} kmh={Math.max(0, drive.speedShown)} fill={look.roadFill} line={look.roadLine} />
         ) : null}
       </View>
+      {stopped ? (
+        <Text style={[styles.small, { color: look.textDim, textAlign: 'center' }]} numberOfLines={1}>
+          {Trip.stopText(stopped.km, stopped.sec, stopped.topKmh, mph)}
+        </Text>
+      ) : null}
       <View style={styles.carFoot}>
         <Text style={[styles.small, { color: careAlert ? look.accent : look.textDim }]} numberOfLines={1}>
-          {careAlert || (drive.gps === 'denied' ? 'LOCATION OFF: ALLOW IT IN SETTINGS' : drive.gps ? 'WAITING FOR GPS' : '')}
+          {t(careAlert) || (drive.gps === 'denied' ? t('LOCATION OFF: ALLOW IT IN SETTINGS') : drive.gps ? t('WAITING FOR GPS') : '')}
         </Text>
-        {drive.cameraM >= 0 ? <Text style={[styles.small, { color: '#E5484D' }]}>SPEED CAMERA {drive.cameraM} m</Text> : null}
+        {drive.cameraM >= 0 ? (
+          <Text style={[styles.small, { color: '#E5484D' }]}>{f('SPEED CAMERA  %1$s m', Math.floor(drive.cameraM / 10) * 10)}</Text>
+        ) : null}
       </View>
-    </Box>
+    </TapBox>
   );
 
   const clockBox = (
-    <Box style={styles.flexBox}>
+    <TapBox style={styles.flexBox}>
       <Text style={[styles.time, { color: look.text }]}>
         {time} <Text style={[styles.ampm, { color: look.textDim }]}>{ampm}</Text>
       </Text>
       <Text style={{ color: look.textDim }}>
-        {DAYS[now.getDay()]}, {now.getDate()} {MONTHS[now.getMonth()]}
+        {t(DAYS[now.getDay()])}, {now.getDate()} {t(MONTHS[now.getMonth()])}
       </Text>
-      {rush ? <Text style={[styles.small, { color: look.accent, marginTop: 6 }]}>It's {rush}: highways will be busy</Text> : null}
-    </Box>
+    </TapBox>
   );
 
-  const wx = weather.wx;
   const weatherBox = Features.on(prefs, 'weather') ? (
-    <Box title={weather.place ? weather.place.toUpperCase() : 'WEATHER'} style={styles.flexBox}>
-      {wx ? (
-        <>
-          <Text style={[styles.big, { color: look.text }]}>{wx.temp}°</Text>
-          <Text style={{ color: look.textDim }}>
-            {wx.text} · {Math.round(wx.humidity)}% · wind {Math.round(wx.wind)} km/h
-          </Text>
-          {Features.on(prefs, 'rain') && wx.rainSoon > 0.2 ? (
-            <Text style={[styles.small, { color: look.accent }]}>Rain expected within the hour</Text>
-          ) : null}
-          {weather.aqi > 0 ? (
-            <Text style={[styles.small, { color: weather.aqi > 200 ? '#E5484D' : look.textDim }]}>
-              Air: {Air.band(weather.aqi)} (AQI {weather.aqi})
-            </Text>
-          ) : null}
-          {wx.savedNote ? <Text style={[styles.small, { color: look.textDim }]}>{wx.savedNote}</Text> : null}
-        </>
-      ) : (
-        <Text style={{ color: look.textDim }}>{trip.lat === 0 ? 'Waiting for the location' : 'Loading the weather'}</Text>
-      )}
-    </Box>
+    <WeatherBox weather={weather} waiting={trip.lat === 0} style={styles.flexBox} />
   ) : null;
 
   const tripBox = (
-    <Box
-      title="TRIP COMPUTER"
-      style={styles.flexBox}
-      onPress={() =>
-        Alert.alert('Trip computer', undefined, [
-          { text: 'Reset today', onPress: drive.resetToday },
-          { text: 'Save parking spot here', onPress: () => trip.lat !== 0 && drive.setPark(trip.lat, trip.lon) },
-          { text: 'Fuel log', onPress: () => router.push('/fuel') },
-          { text: 'Close', style: 'cancel' },
-        ])
-      }
-    >
+    <TapBox title="TRIP COMPUTER" style={styles.flexBox} onPress={() => setMenu('trip')}>
       <Text style={[styles.big, { color: look.text }]}>
-        {trip.todayKm.toFixed(1)} <Text style={[styles.unit, { color: look.textDim }]}>km today</Text>
+        {trip.todayKm.toFixed(1)} <Text style={[styles.unit, { color: look.textDim }]}>{t('km today')}</Text>
       </Text>
       <Text style={{ color: look.textDim }}>
-        {Trip.duration(trip.todaySec)} · avg {Math.round(Trip.avgKmh(trip.todayKm, trip.todaySec))} km/h
-        {Features.on(prefs, 'score') ? ` · score ${Trip.score(trip)}` : ''}
+        {Trip.duration(trip.todaySec)} · {f('avg %1$s %2$s', Units.speed(Trip.avgKmh(trip.todayKm, trip.todaySec), mph), Units.speedLabel(prefs))}
+        {Features.on(prefs, 'score') ? ` · ${f('score %1$s', Trip.score(trip))}` : ''}
       </Text>
       {Features.on(prefs, 'fuelPrice') && tripCost > 0 ? (
-        <Text style={[styles.small, { color: look.textDim }]}>About ₹{Math.round(tripCost)} of {Car.word(Car.fuel(prefs))} today</Text>
+        <Text style={[styles.small, { color: look.textDim }]}>{f('About ₹%1$s of %2$s today', Math.round(tripCost), t(Car.word(Car.fuel(prefs))))}</Text>
       ) : null}
       <Text style={[styles.small, { color: look.textDim }]}>
-        This drive {trip.driveKm.toFixed(1)} km
-        {trip.park && Features.on(prefs, 'parking') ? ` · parked ${Errands.clock(trip.park.at)}` : ''}
+        {f('This drive %1$s km', trip.driveKm.toFixed(1))}
+        {trip.park && Features.on(prefs, 'parking') ? ' · ' + f('parked %1$s', Errands.clock(trip.park.at)) : ''}
       </Text>
-    </Box>
+    </TapBox>
   );
 
   // the dashcam records through this box, so it stays mounted while either camera feature is on
   const camBox = Features.on(prefs, 'dashcam') || Features.on(prefs, 'parkPhoto') ? <DashcamView style={styles.flexBox} /> : null;
 
+  const cabSum = Features.on(prefs, 'cab') ? Cab.sum(Cab.log(prefs), Cab.dayStart(now.getTime()), now.getTime() + 1) : null;
   const cabShare = Cab.targetShare(prefs, now.getTime());
-  const cabBox = Features.on(prefs, 'cab') ? (
-    <Box title="CAB" style={styles.flexBox} onPress={() => router.push('/cab')}>
-      <Text style={{ color: look.text, fontSize: 18 }}>{Cab.title(prefs, now.getTime()).replace(/^Cab\s+·\s+/, '')}</Text>
+  const cabBox = cabSum ? (
+    <TapBox title="CAB  ·  TODAY" style={styles.flexBox} onPress={() => router.push('/cab')}>
+      <View style={styles.figures}>
+        {([
+          ['EARNED', Cab.rs(cabSum.in)],
+          ['RIDES', String(cabSum.rides)],
+          ['NET', Cab.rs(Cab.net(cabSum))],
+        ] as const).map(([label, value]) => (
+          <View key={label} style={styles.figure}>
+            <Text style={[styles.figValue, { color: look.text }]}>{value}</Text>
+            <Text style={[styles.figLabel, { color: look.textDim }]}>{t(label)}</Text>
+          </View>
+        ))}
+      </View>
       {cabShare >= 0 ? (
         <View style={[styles.bar, { backgroundColor: look.edge }]}>
           <View style={{ width: `${Math.round(cabShare * 100)}%`, height: '100%', backgroundColor: look.accent, borderRadius: 3 }} />
         </View>
       ) : null}
-    </Box>
+      <Text style={[styles.small, { color: look.textDim, textAlign: 'center' }]} numberOfLines={1}>
+        {CabEarnings.boxFoot(prefs, now.getTime(), trip.odoKm)}
+      </Text>
+    </TapBox>
   ) : null;
 
   const fuelWord = Car.word(Car.fuel(prefs));
   const fuelBox = (
-    <Box title={`${fuelWord.toUpperCase()} LOG`} style={styles.flexBox} onPress={() => router.push('/fuel')}>
+    <TapBox title={`${t(fuelWord).toUpperCase()} ${t('LOG')}`} style={styles.flexBox} onPress={() => router.push('/fuel')}>
       {fuelStats.avgKmpl > 0 ? (
         <>
           <Text style={[styles.big, { color: look.text }]}>
-            {Fuel.fmt(fuelStats.avgKmpl)} <Text style={[styles.unit, { color: look.textDim }]}>km/l average</Text>
+            {Fuel.fmt(fuelStats.avgKmpl)} <Text style={[styles.unit, { color: look.textDim }]}>{t('km/l average')}</Text>
           </Text>
           <Text style={{ color: look.textDim }}>
-            Last tank {Fuel.fmt(fuelStats.lastKmpl)} km/l · ₹{Fuel.fmt(fuelStats.rupeesPerKm)} a km
+            {f('Last tank %1$s km/l', Fuel.fmt(fuelStats.lastKmpl))} · {f('₹%1$s a km', Fuel.fmt(fuelStats.rupeesPerKm))}
           </Text>
         </>
       ) : (
         <Text style={{ color: look.textDim }}>
-          {fuelStats.fills === 0 ? 'Tap to add your first fill-up' : 'Mileage shows after two full tanks'}
+          {fuelStats.fills === 0 ? t('Tap to add your first fill-up') : t('Mileage shows after two full tanks')}
         </Text>
       )}
-    </Box>
+    </TapBox>
   );
 
-  const dock = (
-    <View style={[styles.dock, { borderColor: look.edge, backgroundColor: look.panelTop }]}>
-      {[
-        ['Map', '/map'],
-        ['Music', '/music'],
-        ['Apps', '/apps'],
-        ['Fuel', '/fuel'],
-        ['Care', '/care'],
-        ['Settings', '/settings'],
-      ].map(([label, href]) => (
-        <Pressable key={href} onPress={() => router.push(href as never)} style={styles.dockItem} hitSlop={8}>
-          <Text style={[styles.dockText, { color: look.icons }]}>{label}</Text>
-        </Pressable>
-      ))}
-      {Features.on(prefs, 'voice') ? <MicButton size={40} aqi={weather.aqi} /> : null}
-    </View>
-  );
+  const calendarBox = Features.on(prefs, 'calendar') ? <CalendarBox style={styles.flexBox} /> : null;
+  const soundBox = Features.on(prefs, 'soundboard') ? <SoundboardBox style={styles.flexBox} /> : null;
+  const videoBox = Features.on(prefs, 'video') ? <VideoBox style={styles.flexBox} /> : null;
+
+  // the trip menu (HomeActivity.tripMenu)
+  const tripMenu = [
+    "Start today's trip again",
+    'Save the parking spot here',
+    'Fuel log and fill-ups',
+    'Trip history and driving score',
+    'Add a toll payment',
+  ];
+  const tripPick = (i: number) => {
+    if (i === 0) drive.resetToday();
+    else if (i === 1) toast(drive.parkHere());
+    else if (i === 2) router.push('/fuel');
+    else if (i === 3) router.push('/trips');
+    else router.push('/tolls');
+  };
 
   const body = landscape ? (
     <View style={styles.cols}>
@@ -346,11 +363,15 @@ export default function Home() {
         <RoadAhead style={styles.flexBox} />
         <MusicBox style={styles.flexBox} />
         {camBox}
+        {videoBox}
         {weatherBox}
       </View>
       <View style={styles.col}>
         {tripBox}
         {cabBox ?? fuelBox}
+        {calendarBox}
+        {soundBox}
+        <CompassBox style={styles.flexBox} />
         {Features.on(prefs, 'news') ? <NewsBox style={styles.flexBox} /> : null}
       </View>
     </View>
@@ -364,9 +385,15 @@ export default function Home() {
       <RoadAhead />
       <MusicBox />
       {camBox}
+      {videoBox}
+      {soundBox}
       <View style={styles.pair}>
         {tripBox}
         {cabBox ?? fuelBox}
+      </View>
+      {calendarBox ? <View style={styles.pair}>{calendarBox}</View> : null}
+      <View style={styles.pair}>
+        <CompassBox style={styles.flexBox} />
       </View>
     </View>
   );
@@ -374,7 +401,12 @@ export default function Home() {
   const content = (
     <SafeAreaView style={styles.fill} onTouchStart={() => (touchAt.current = Date.now())}>
       {body}
-      {dock}
+      <Dock />
+      {/* 1.42: the mic floats on the home screen unless it belongs to the map only (Features.micPlace) */}
+      {Features.on(prefs, 'voice') && Features.micPlace(prefs) !== 'map' ? <MicButton style={styles.mic} aqi={weather.aqi} /> : null}
+      {menu === 'trip' ? (
+        <PickList title="Trip computer" options={tripMenu} onPick={tripPick} onClose={() => setMenu(null)} />
+      ) : null}
     </SafeAreaView>
   );
   return look.gradient ? (
@@ -393,7 +425,8 @@ const styles = StyleSheet.create({
   rows: { flex: 1, gap: 10, padding: 10 },
   pair: { flex: 1, flexDirection: 'row', gap: 10 },
   flexBox: { flex: 1 },
-  welcome: { fontSize: 12, letterSpacing: 4 },
+  welcome: { fontSize: 11, letterSpacing: 4 },
+  owner: { fontSize: 18, letterSpacing: 3 },
   carName: { fontSize: 26, fontWeight: '700', letterSpacing: 3 },
   speedRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 8 },
   speed: { fontSize: 72, fontWeight: '300', lineHeight: 76 },
@@ -416,12 +449,19 @@ const styles = StyleSheet.create({
   time: { fontSize: 54, fontWeight: '300' },
   ampm: { fontSize: 18 },
   big: { fontSize: 34, fontWeight: '300' },
+  figures: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  figure: { flex: 1, alignItems: 'center' },
+  figValue: { fontSize: 30, fontWeight: '300' },
+  figLabel: { fontSize: 10, letterSpacing: 1.5 },
   saver: { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
   saverTime: { color: '#C9CDD2', fontSize: 150, fontWeight: '200' },
   saverDate: { color: '#7D838A', fontSize: 22 },
   saverNow: { fontSize: 18, paddingTop: 26 },
+  night: { backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
+  nightTime: { color: '#7A1C1C', fontSize: 30 },
+  nightSpeed: { color: '#C62828', fontSize: 160, fontWeight: '300' },
+  nightUnit: { color: '#7A1C1C', fontSize: 22, letterSpacing: 4, fontWeight: '500' },
+  nightHint: { color: '#7A1C1C', fontSize: 13, paddingTop: 30 },
   bar: { height: 6, borderRadius: 3, marginTop: 10, overflow: 'hidden' },
-  dock: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', borderTopWidth: StyleSheet.hairlineWidth, paddingVertical: 10 },
-  dockItem: { paddingHorizontal: 12, paddingVertical: 6 },
-  dockText: { fontSize: 16, fontWeight: '500' },
+  mic: { position: 'absolute', right: 16, bottom: 80 },
 });

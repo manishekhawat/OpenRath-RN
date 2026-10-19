@@ -144,22 +144,15 @@ test('geo', () => {
 });
 
 test('holidays', () => {
-  const day = (y: number, m: number, d: number) => new Date(y, m - 1, d, 10, 0);
-  assert.equal(holidays.rush(day(2026, 11, 6)), 'Diwali');
-  assert.equal(holidays.rush(day(2026, 10, 17)), 'the Dussehra long weekend');
-  assert.equal(holidays.rush(day(2026, 10, 13)), null);
-  assert.equal(holidays.rush(day(2026, 10, 4)), 'the Gandhi Jayanti long weekend');
-  assert.equal(holidays.rush(day(2026, 12, 31)), 'the New Year long weekend');
-  assert.ok(holidays.upcoming(new Date(2026, 9, 13, 9), 3)[0].startsWith('Dussehra'));
+  // the next ones, for Settings and the start-up summary; the traffic warning went in 1.35
+  const next = holidays.upcoming(new Date(2026, 9, 13, 9), 3);
+  assert.equal(next.length, 3);
+  assert.ok(next[0].startsWith('Dussehra'));
+  assert.equal(next[1], 'Diwali, Sun 8 Nov');
+  assert.equal(holidays.of(2026).length, 12);
 });
 
 test('errands', () => {
-  const dayMs = 86400000;
-  const now = 100 * dayMs;
-  assert.equal(errands.washDue(now - 15 * dayMs, now, 14, ['w_sun', 'w_cloud']), true);
-  assert.equal(errands.washDue(now - 5 * dayMs, now, 14, ['w_sun']), false);
-  assert.equal(errands.washDue(now - 20 * dayMs, now, 14, ['w_sun', 'w_rain']), false);
-  assert.equal(errands.washDue(0, now, 14, []), false);
   assert.equal(errands.share(1000, 3), 334);
   assert.equal(errands.share(1000, 2), 500);
   assert.equal(

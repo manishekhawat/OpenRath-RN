@@ -126,7 +126,7 @@ export default function TripsScreen() {
       )}
 
       <Heading>{t('0–100 km/h timer') + off('accel')}</Heading>
-      <Row name="0–100 km/h" value={Tracks.accelText(prefs)} onPress={accel} />
+      <Row name={t('0–100 km/h')} value={Tracks.accelText(prefs)} onPress={accel} />
 
       <Heading>{t('Export routes as GPX') + off('gpx')}</Heading>
       {days.length === 0 ? (

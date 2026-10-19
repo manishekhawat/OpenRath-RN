@@ -9,6 +9,7 @@ import * as Apps from '../apps.ts';
 import { memoryPrefs } from '../prefs.ts';
 import * as Status from '../status.ts';
 import * as Tap from '../tap.ts';
+import * as Trip from '../trip.ts';
 import * as Weather from '../weather.ts';
 
 test('compass points', () => {
@@ -47,8 +48,8 @@ test('status icons', () => {
 });
 
 test('drive summary when stopped', () => {
-  assert.equal(Status.summary(12, 1800, 68, false), '12.0 km · 30 min · avg 24 · top 68 km/h');
-  assert.equal(Status.summary(12, 3900, 100, true), '12.0 km · 1 h 05 min · avg 7 · top 62 mph');
+  assert.equal(Trip.stopText(12, 1800, 68, false), '12.0 km · 30 min · avg 24 · top 68 km/h');
+  assert.equal(Trip.stopText(12, 3900, 100, true), '12.0 km · 1 h 05 min · avg 7 · top 62 mph');
 });
 
 test('calendar', () => {

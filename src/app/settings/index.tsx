@@ -166,6 +166,7 @@ export default function Settings() {
     prefs.put('lang', lang(prefs) === 'hi' ? 'en' : 'hi');
     loadLanguage(prefs);
   });
+  add('Level', 'Features', f('%1$s of %2$s on', String(Features.ALL.filter((x) => Features.on(prefs, x.id)).length), String(Features.ALL.length)), '/settings/features');
   add('Level', 'Developer mode', 'on: every switch, diagnostics and tests. Tap to turn off', () => {
     prefs.put('devMode', 'off');
     taps.current.n = 0;
@@ -242,6 +243,7 @@ export default function Settings() {
   add('Radio and music', 'FM radio app', appName(prefs, 'media:radio'), () => askPackage('media:radio', 'Radio'));
   add('Radio and music', 'Music app', appName(prefs, 'media:music'), () => askPackage('media:music', 'Music'));
   add('Radio and music', 'Sound', 'profiles, quiet hours, louder with speed', '/music');
+  add('Radio and music', 'Video window', 'plays a video in a box; the picture shows only when the car is stopped', '/video', on('video'));
 
   // ---- Phone
   for (let i = 0; i < 3; i++) {

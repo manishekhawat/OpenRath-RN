@@ -21,16 +21,10 @@ export default function TripMenu() {
   const drive = useDrive();
   const { trip } = drive;
 
-  const parkHere = () => {
-    // only a live GPS fix: an old one can be hundreds of metres off
-    if (!trip.last || !Care.liveFix(trip.last.t) || (trip.lat === 0 && trip.lon === 0)) return Alert.alert(t('No GPS position yet'));
-    drive.setPark(trip.lat, trip.lon);
-    Alert.alert(t('Parking spot saved'));
-  };
-
   const go = [
     () => drive.resetToday(),
-    parkHere,
+    // only a live GPS fix: an old one can be hundreds of metres off (Engine.parkHere says which)
+    () => Alert.alert(drive.parkHere()),
     () => router.push('/fuel'),
     () => router.push('/trips'),
     () => router.push('/tolls'),

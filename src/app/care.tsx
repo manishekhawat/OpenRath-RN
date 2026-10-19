@@ -1,7 +1,7 @@
 /**
  * Car care (Settings > Car care in the Android version): the odometer, service reminders by
- * distance (oil, tyres, alignment, service) or by date (insurance, PUC), and links to the trip
- * history and the toll log.
+ * distance (oil, tyres, alignment, service) or by date (insurance, PUC), and the way to the trip
+ * menu (trips, fuel and tolls, one row since 1.35).
  */
 import { router } from 'expo-router';
 import { useState } from 'react';
@@ -9,6 +9,9 @@ import { Alert, Text, View } from 'react-native';
 
 import { Button, Field, Heading, Row, Screen } from '../components/ui';
 import * as Care from '../logic/care';
+import { f, t } from '../logic/i18n';
+import * as Fuel from '../logic/fuel';
+import * as Trip from '../logic/trip';
 import { useDrive } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
@@ -41,15 +44,15 @@ export default function CareScreen() {
     if (editing === null) return;
     if (editing === 'odo') {
       const v = parseFloat(a);
-      if (!Number.isFinite(v)) return Alert.alert('Enter the odometer in km');
+      if (!Number.isFinite(v)) return Alert.alert(t('Odometer reading now (km)'));
       Care.setOdo(prefs, v, trip.odoKm);
     } else if (Care.byDate(editing)) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(a.trim())) return Alert.alert('Enter the date as yyyy-mm-dd', `For example ${today()}`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(a.trim())) return Alert.alert(f('%1$s: next due date', t(Care.NAMES[editing])), today());
       prefs.put(`care:${Care.ITEMS[editing]}:due`, a.trim());
     } else {
       const last = parseInt(a, 10);
       const every = parseInt(b, 10);
-      if (!Number.isFinite(last) || !(every > 0)) return Alert.alert('Enter the odometer and the distance as numbers');
+      if (!Number.isFinite(last) || !(every > 0)) return Alert.alert(t('Odometer when it was last done (km)'));
       prefs.put(`care:${Care.ITEMS[editing]}:last`, String(last));
       prefs.put(`care:${Care.ITEMS[editing]}:every`, String(every));
     }
@@ -59,39 +62,43 @@ export default function CareScreen() {
   const editor =
     editing === null ? null : (
       <View style={{ marginVertical: 12 }}>
-        <Heading>{editing === 'odo' ? 'Odometer reading now' : Care.NAMES[editing]}</Heading>
+        <Heading>{editing === 'odo' ? t('Odometer reading now (km)') : t(Care.NAMES[editing])}</Heading>
         {editing === 'odo' ? (
-          <Field label="Odometer (km)" value={a} onChange={setA} numeric />
+          <Field label={t('Odometer (km)')} value={a} onChange={setA} numeric />
         ) : Care.byDate(editing) ? (
-          <Field label="Due date (yyyy-mm-dd)" value={a} onChange={setA} placeholder={today()} />
+          <Field label={f('%1$s: next due date', t(Care.NAMES[editing]))} value={a} onChange={setA} placeholder={today()} />
         ) : (
           <>
-            <Field label="Odometer at the last one (km)" value={a} onChange={setA} numeric />
-            <Field label="Every (km)" value={b} onChange={setB} numeric />
+            <Field label={t('Odometer when it was last done (km)')} value={a} onChange={setA} numeric />
+            <Field label={f('Change how often (now every %1$s km)', Care.every(prefs, editing))} value={b} onChange={setB} numeric />
           </>
         )}
-        <Button label="Save" kind="primary" onPress={save} />
-        <Button label="Cancel" onPress={() => setEditing(null)} />
+        <Button label={t('Save')} kind="primary" onPress={save} />
+        <Button label={t('Cancel')} onPress={() => setEditing(null)} />
       </View>
     );
 
   const alert = Care.alert(prefs, odo);
   return (
-    <Screen title="Car care">
+    <Screen title={t('Car care')}>
       {alert ? <Text style={{ color: look.accent, marginBottom: 8 }}>{alert}</Text> : null}
-      <Row name="Odometer" value={`${odo} km (corrected once, then counted by GPS)`} onPress={() => open('odo')} />
+      <Row name={t('Odometer')} value={`${odo} km`} onPress={() => open('odo')} />
       {editing === 'odo' ? editor : null}
-      <Heading>Service reminders</Heading>
+      <Heading>{t('Service reminders')}</Heading>
       {Care.ITEMS.map((_, i) => (
         <View key={i}>
-          <Row name={Care.NAMES[i]} value={Care.describe(prefs, i, odo)} onPress={() => open(i)} />
+          <Row name={t(Care.NAMES[i])} value={Care.describe(prefs, i, odo)} onPress={() => open(i)} />
           {editing === i ? editor : null}
         </View>
       ))}
-      <Heading>Trips and spending</Heading>
-      <Row name="Trip history" value="weekly and monthly distance, time and costs" onPress={() => router.push('/trips')} />
-      <Row name="Add a toll payment" value={Care.tollsThisMonth(prefs).replace('  ·  ', '') || 'no tolls this month'} onPress={() => router.push('/tolls')} />
-      <Row name="Weekly report" value="the last seven days in one card" onPress={() => router.push('/report')} />
+      <Heading>{t('Trips, fuel and tolls')}</Heading>
+      {/* one row since 1.35: it opens the trip menu, with the history, the score and the tolls */}
+      <Row
+        name={t('Trips, fuel and tolls')}
+        value={Care.tripRow(trip.todayKm, Trip.score(trip), Fuel.stats(Fuel.log(prefs)).fills)}
+        onPress={() => router.push('/tripmenu')}
+      />
+      <Row name={t("This week's report")} value={t('km, time, petrol, tolls, score; or say "weekly report"')} onPress={() => router.push('/report')} />
     </Screen>
   );
 }
