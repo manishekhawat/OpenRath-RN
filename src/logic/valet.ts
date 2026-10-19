@@ -31,6 +31,39 @@ export function warnAt(p: Prefs): number {
   return w > 0 ? Math.min(w, speed(p)) : speed(p);
 }
 
+/** Wrong PINs in a row before no PIN is taken for a while (Valet.Tries). */
+export const MAX_TRIES = 5;
+export const LOCK_MS = 60000;
+
+/** The wrong tries so far and, after five of them, the moment a PIN may be tried again. */
+export interface Tries {
+  wrong: number;
+  until: number;
+}
+
+export const noTries: Tries = { wrong: 0, until: 0 };
+
+/** Milliseconds left before a PIN may be tried again; 0 when it may be now. */
+export function waitMs(tries: Tries, now: number): number {
+  return now < tries.until ? tries.until - now : 0;
+}
+
+/** A wrong PIN: the fifth in a row locks entry for a minute. Kept while the app runs, as in Java. */
+export function failed(tries: Tries, now: number): Tries {
+  const wrong = tries.wrong + 1;
+  return wrong >= MAX_TRIES ? { wrong: 0, until: now + LOCK_MS } : { wrong, until: tries.until };
+}
+
+/** The right PIN: the count and any wait go. */
+export function passed(): Tries {
+  return { wrong: 0, until: 0 };
+}
+
+/** "Too many wrong PINs. Try again in 43 s", for the screen that asked. */
+export function lockedText(leftMs: number): string {
+  return f('Too many wrong PINs. Try again in %1$s s', Math.ceil(leftMs / 1000));
+}
+
 export function validPin(pin: string): boolean {
   return /^\d{4,8}$/.test(pin);
 }

@@ -31,6 +31,29 @@ export const KEEP = 7;
 /** Where the types of restored settings are remembered (not itself backed up). */
 export const TYPES_KEY = 'backupTypes';
 
+/**
+ * Secrets never written to a backup: a backup is a file that leaves the unit, so the valet PIN,
+ * the hotspot password and the key-action token stay behind (Backup.SECRET).
+ */
+export const SECRET = ['valetPin', 'apPass', 'keyToken'];
+
+/**
+ * Never taken from a backup, whatever it holds: the secrets, valet mode (it goes with its PIN) and
+ * the addresses updates come from and reports go to. What the unit has for these stays as it is,
+ * and so does anything a fleet manages, whose keys begin "m:".
+ */
+export const KEPT = [...SECRET, 'valet', 'updateUrl', 'reportUrl'];
+
+/** Whether a setting goes into backups. */
+export function backedUp(key: string): boolean {
+  return !SECRET.includes(key);
+}
+
+/** Whether a setting may be restored from a backup. */
+export function restorable(key: string): boolean {
+  return !KEPT.includes(key) && !key.startsWith('m:');
+}
+
 export type Typed = ['s', string] | ['i', number] | ['l', number] | ['f', number] | ['b', boolean] | ['ss', string[]];
 
 export interface BackupJson {
@@ -201,7 +224,7 @@ export function build(p: Prefs, now: number, drive?: { trip: Partial<TripState> 
   if (!p.all) throw new Error('backups need a settings store that lists its keys');
   const t = types(p);
   const home: Record<string, Typed> = {};
-  for (const [k, v] of Object.entries(p.all())) if (k !== TYPES_KEY) home[k] = typed(v, t[k]);
+  for (const [k, v] of Object.entries(p.all())) if (k !== TYPES_KEY && backedUp(k)) home[k] = typed(v, t[k]);
   const prefs: Record<string, Record<string, Typed>> = { home };
   if (drive) prefs.drive = driveOf(drive.trip, drive.history);
   return { app: 'OpenRath', format: 1, made: now, prefs };
@@ -263,7 +286,7 @@ export function restore(p: Prefs, json: BackupJson): { settings: number; drive: 
     for (const [k, v] of Object.entries(home)) {
       const s = text(v);
       if (s == null) continue;
-      if (!okValue(k, s)) {
+      if (!restorable(k) || !okValue(k, s)) {
         kept.add(k);
         continue;
       }

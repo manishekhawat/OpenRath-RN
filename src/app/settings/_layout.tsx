@@ -19,6 +19,8 @@ export default function SettingsLayout() {
   const look = useLook();
   const [unlocked, setUnlocked] = useState(false);
   const [pinTry, setPinTry] = useState('');
+  // kept while the app runs, as Valet.Tries is: five wrong PINs and no PIN is taken for a minute
+  const [tries, setTries] = useState(Valet.noTries);
 
   if (Valet.on(prefs) && !unlocked) {
     return (
@@ -29,8 +31,22 @@ export default function SettingsLayout() {
           label="OK"
           kind="primary"
           onPress={() => {
-            if (pinTry.trim() === Valet.pin(prefs)) setUnlocked(true);
-            else Alert.alert(t('Wrong PIN'));
+            const now = Date.now();
+            const left = Valet.waitMs(tries, now);
+            if (left > 0) {
+              Alert.alert(Valet.lockedText(left));
+              setPinTry('');
+              return;
+            }
+            if (pinTry.trim() === Valet.pin(prefs)) {
+              setTries(Valet.passed());
+              setUnlocked(true);
+            } else {
+              const next = Valet.failed(tries, now);
+              setTries(next);
+              const wait = Valet.waitMs(next, now);
+              Alert.alert(wait > 0 ? Valet.lockedText(wait) : t('Wrong PIN'));
+            }
             setPinTry('');
           }}
         />

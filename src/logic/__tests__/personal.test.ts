@@ -276,14 +276,17 @@ test('backup: a restore writes only what the settings screens would have accepte
     cabSos2: '9123456789|9123456789',
     fav1: 'Mummy|+91 98765 43210',
     'app:dock:navi': 'com.google.android.apps.maps',
-    valetPin: '4321',
     carModel: 'Dzire',
   };
+  // 1.43: a backup never carries the valet PIN or the hotspot password, and never writes them back
+  const secret: Record<string, string> = { valetPin: '4321', apPass: 'hotspot123' };
   // a genuine backup comes back exactly as it went in
-  const b = backup.build(memoryPrefs(mine), 1000);
+  const b = backup.build(memoryPrefs({ ...mine, ...secret }), 1000);
+  for (const k of Object.keys(secret)) assert.ok(!(k in b.prefs.home), k + ' is not in the backup');
   const q = memoryPrefs();
   backup.restore(q, backup.unzip(backup.zip(b)).json);
   for (const [k, v] of Object.entries(mine)) assert.equal(q.str(k, ''), v, k + ' is restored as it was');
+  for (const k of Object.keys(secret)) assert.equal(q.str(k, ''), '', k + ' stays on the unit it was set on');
   assert.deepEqual(backup.build(q, 1000).prefs.home, b.prefs.home, 'and a backup of the restore is the same backup');
 
   // a .zip handed to a driver: each doctored value is left out and the one here now is kept
@@ -293,14 +296,15 @@ test('backup: a restore writes only what the settings screens would have accepte
   doctored.prefs.home.fav1 = ['s', 'Mummy|#31#9000000000'];
   doctored.prefs.home['app:dock:navi'] = ['s', 'com.Evil.app/../Boom'];
   doctored.prefs.home.valetPin = ['s', 'letmein'];
+  doctored.prefs.home.apPass = ['s', 'letmein too'];
   doctored.prefs.home.carModel = ['s', 'Alto'];
-  const r = memoryPrefs({ ...mine });
+  const r = memoryPrefs({ ...mine, ...secret });
   const n = backup.restore(r, doctored);
-  for (const k of ['upiId', 'cabSos2', 'fav1', 'app:dock:navi', 'valetPin']) {
-    assert.equal(r.str(k, ''), mine[k], k + ' is not what the file says');
+  for (const k of ['upiId', 'cabSos2', 'fav1', 'app:dock:navi', 'valetPin', 'apPass']) {
+    assert.equal(r.str(k, ''), { ...mine, ...secret }[k], k + ' is not what the file says');
   }
   assert.equal(r.str('carModel', ''), 'Alto', 'everything else still restores');
-  assert.equal(n.settings, Object.keys(mine).length - 5, 'and the dropped ones are not counted');
+  assert.equal(n.settings, Object.keys(mine).length - 4, 'and the dropped ones are not counted');
   assert.ok(!backup.okValue('cabSos1', 'Papa|'), 'a contact with no number is no contact');
   assert.ok(backup.okValue('app:offlineNav', ''), 'nothing chosen is still nothing chosen');
 });
