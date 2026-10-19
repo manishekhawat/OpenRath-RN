@@ -4,15 +4,23 @@
  * through a Java bridge called `OpenRath`; here a small shim with the same methods forwards each
  * call as a message, and answers the questions the page asks synchronously from values the app
  * keeps up to date in `window.__OR`. What the bridge saves uses the Java bridge's keys and
- * formats (Cards.MapCard.Bridge, 1.30): 'place:Home' / 'place:Office' as "lat,lon", 'dest' as
+ * formats (MapCard.Bridge, 1.42): 'place:Home' / 'place:Office' as "lat,lon", 'dest' as
  * "name|lat|lon", 'myService' as "name|phone", the navigation choice in 'src:navi'.
  *
  * Opened with ?q=<place> it searches for that place, and with ?go=home|office|fuel|rest|service
  * it runs that voice command, once the page has loaded (how the mic button hands over).
+ *
+ * 1.38: a crashing map no longer closes OpenRath. Android's WebView renderer can die (out of
+ * memory, a WebView update); the page is then built again, and after two deaths in five minutes
+ * it rests for five minutes with a note (MapCard.resting). 1.35: night dimming ('dim',
+ * 'dimLevel') darkens the map as it does the dashboard, and 1.39's deep-sleep recovery loads the
+ * page again after the stereo wakes.
  */
+import * as IntentLauncher from 'expo-intent-launcher';
 import * as Linking from 'expo-linking';
+import * as Network from 'expo-network';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
@@ -20,9 +28,12 @@ import { heard, listen, mapCall } from '../components/MicButton';
 import { QrSheet } from '../components/Qr';
 import { Button } from '../components/ui';
 import * as Car from '../logic/car';
+import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
 import { mapsLink } from '../logic/geo';
+import { t } from '../logic/i18n';
 import { num } from '../logic/prefs';
+import * as Wake from '../logic/wake';
 import { MAP_HTML } from '../map/mapHtml';
 import { say, useDrive } from '../state/drive';
 import { useLook } from '../state/look';
@@ -41,7 +52,7 @@ const SHIM = `
   var o = {};
   calls.forEach(function (n) { o[n] = function () { if (n === 'setNavMode') window.__OR.navMode = arguments[0]; send(n, arguments); }; });
   o.online = function () { return cfg().online !== false; };
-  o.offlineNavName = function () { return ''; };
+  o.offlineNavName = function () { return cfg().offlineNav || ''; };
   o.navMode = function () { return cfg().navMode || 'own'; };
   o.tollRate = function () { return cfg().tollRate == null ? 100 : cfg().tollRate; };
   o.parkLink = function () { return !!cfg().parkLink; };
@@ -61,6 +72,37 @@ function navMode(v: string): string {
 /** Java's String.format(Locale.US, "%.6f", x). */
 const f6 = (x: unknown) => Number(x).toFixed(6);
 
+/**
+ * The offline map app Go hands over to (OfflineNav): the one chosen in Settings
+ * ('app:offlineNav'), by its name when it is one of the known ones. Android also looked through
+ * the installed apps for Organic Maps, OsmAnd or Google Maps; listing apps needs native code, so
+ * with nothing chosen the `geo:` link lets Android pick, and the page says nothing by name.
+ */
+const OFFLINE_NAMES: Record<string, string> = {
+  'app.organicmaps': 'Organic Maps',
+  'net.osmand.plus': 'OsmAnd+',
+  'net.osmand': 'OsmAnd',
+  'com.google.android.apps.maps': 'Google Maps',
+};
+
+function offlineNavName(pkg: string): string {
+  return pkg === '' ? '' : (OFFLINE_NAMES[pkg] ?? pkg);
+}
+
+/** When the map's renderer last died, newest first (MapCard.deaths). */
+const deaths = [0, 0];
+
+/** True when the map died twice in five minutes: show a note instead, until five minutes pass. */
+export function resting(now: number, last: number, before: number): boolean {
+  return before > 0 && last - before < 5 * 60000 && now - last < 5 * 60000;
+}
+
+/** How dark the night layer over the map is, 0–1 ('dim' and 'dimLevel', one row since 1.35). */
+export function dimAlpha(mode: string, level: number, lightsOn: boolean, dark: boolean): number {
+  const night = mode === 'lights' ? lightsOn : mode === 'sunset' ? dark : false;
+  return night ? Math.max(0, Math.min(100, level)) / 100 : 0;
+}
+
 export default function MapScreen() {
   const { prefs } = usePrefs();
   const params = useLocalSearchParams<{ q?: string; go?: string }>();
@@ -71,15 +113,22 @@ export default function MapScreen() {
   const web = useRef<WebView>(null);
   const ready = useRef(false);
   const sent = useRef({ lat: 0, lon: 0, park: 0 });
+  /** rebuilt after the renderer dies, so the WebView starts over (1.38) */
+  const [build, setBuild] = useState(0);
+  const [rest, setRest] = useState(() => resting(Date.now(), deaths[0], deaths[1]));
+  const net = Network.useNetworkState();
+  const offlineNav = prefs.str('app:offlineNav', '');
 
   const cfg = {
-    online: true,
+    online: net.isInternetReachable !== false && net.isConnected !== false,
     navMode: navMode(prefs.str('src:navi', 'own')),
     tollRate: Features.on(prefs, 'tolls') ? num(prefs, 'tollRate', 100) : 0,
-    parkLink: Features.on(prefs, 'parkLink'),
+    // 'parkLink' and 'serviceFinder' became part of 'parking' and 'care' in 1.35
+    parkLink: Features.on(prefs, 'parking'),
     carBrand: Car.brandName(prefs),
     brandWords: Car.searchWords(Car.brand(prefs), Car.brandName(prefs)),
-    serviceFinder: Features.on(prefs, 'serviceFinder'),
+    serviceFinder: Features.on(prefs, 'care'),
+    offlineNav: offlineNavName(offlineNav),
   };
   const cfgJs = `window.__OR = ${JSON.stringify(cfg)};`;
 
@@ -98,6 +147,36 @@ export default function MapScreen() {
   };
 
   useEffect(push);
+
+  // the page asks these as it needs them, so new values only have to be put where it looks
+  useEffect(() => {
+    if (ready.current) web.current?.injectJavaScript(cfgJs + 'true;');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cfgJs]);
+
+  // after deep sleep the page's tiles and position are stale: load it again (Wake.java, 1.39)
+  useEffect(
+    () =>
+      Wake.onWoke(() => {
+        ready.current = false;
+        setBuild((n) => n + 1);
+      }),
+    [],
+  );
+
+  // the renderer died: build the map again, or rest for five minutes after twice in five
+  const died = () => {
+    deaths[1] = deaths[0];
+    deaths[0] = Date.now();
+    ready.current = false;
+    if (resting(Date.now(), deaths[0], deaths[1])) {
+      setRest(true);
+      setTimeout(() => {
+        setRest(false);
+        setBuild((n) => n + 1);
+      }, 5 * 60000 + 1000);
+    } else setBuild((n) => n + 1);
+  };
 
   /** Run a function of the map page (MapCard.js). */
   const js = (code: string) => web.current?.injectJavaScript(code + ';true;');
@@ -137,9 +216,19 @@ export default function MapScreen() {
           Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${a[0]},${a[1]}&travelmode=driving`),
         );
         break;
-      case 'navigateOffline':
-        Linking.openURL(`geo:${a[0]},${a[1]}?q=${a[0]},${a[1]}(${encodeURIComponent(String(a[2] ?? ''))})`).catch(() => {});
+      case 'navigateOffline': {
+        // Google Maps starts guiding; the others show the place to route to (OfflineNav.uri)
+        const url =
+          offlineNav === 'com.google.android.apps.maps'
+            ? `google.navigation:q=${f6(a[0])},${f6(a[1])}`
+            : `geo:${f6(a[0])},${f6(a[1])}?q=${f6(a[0])},${f6(a[1])}(${encodeURIComponent(String(a[2] ?? ''))})`;
+        if (offlineNav !== '' && Platform.OS === 'android') {
+          IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.VIEW, { data: url, packageName: offlineNav }).catch(() =>
+            Linking.openURL(url).catch(() => {}),
+          );
+        } else Linking.openURL(url).catch(() => {});
         break;
+      }
       case 'setNavMode':
         prefs.put('src:navi', navMode(String(a[0])));
         break;
@@ -166,8 +255,8 @@ export default function MapScreen() {
         break;
       case 'bigQr':
         // the parking spot as a QR code, to walk back to the car with the phone (HomeActivity.parkQr)
-        if (!Features.on(prefs, 'parkLink')) Alert.alert('Turn on "Parking spot to your phone" in Settings > Features');
-        else if (!trip.park) Alert.alert('No parking spot saved yet');
+        if (!Features.on(prefs, 'parking')) Alert.alert(t('Turn on Parking in Settings, Driving'));
+        else if (!trip.park) Alert.alert(t('No parking spot saved yet'));
         else setParkQr(true);
         break;
       case 'routeRain':

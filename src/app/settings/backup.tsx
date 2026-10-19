@@ -165,19 +165,19 @@ export default function BackupScreen() {
   };
 
   return (
-    <Screen title={t('Backup and restore')}>
+    <Screen title="Backup and restore">
       <Text style={{ color: look.textDim, marginBottom: 8 }}>
         {t('Every setting, the fuel and toll logs, trip history and your own pictures, in a .zip that the Android version of OpenRath can restore too.')}
       </Text>
       <Button label={t(busy ? 'Making the backup…' : 'Back up now and share')} kind="primary" onPress={busy ? () => {} : backUp} />
-      <Button label={t('Restore from a file…')} onPress={pick} />
+      <Button label="Restore from a file…" onPress={pick} />
       <Row
-        name={t('Daily automatic backup')}
+        name="Daily automatic backup"
         value={Features.on(prefs, 'backup') ? (last > 0 ? f('on; last %1$s', new Date(last).toLocaleDateString()) : t('on; none yet')) : t('off')}
-        right={<Text style={{ color: look.accent, fontSize: 18 }}>{Features.on(prefs, 'backup') ? '✓' : ''}</Text>}
+        split
         onPress={() => Features.set(prefs, 'backup', !Features.on(prefs, 'backup'))}
       />
-      <Heading>{t('Backups on this device')}</Heading>
+      <Heading>Backups on this device</Heading>
       {files.length === 0 ? <Text style={{ color: look.textDim }}>{t('None yet.')}</Text> : null}
       {files.map((f) => (
         <Row

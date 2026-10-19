@@ -12,6 +12,7 @@
 import { zlibSync } from 'fflate';
 
 import * as Car from './car.ts';
+import { f, t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 
 /** 25 frames a second for 3.6 s; the last frame then holds until Android has started. */
@@ -729,20 +730,22 @@ export function preview(w: number, h: number, t: number, m: Mark, brand: string,
 
 /** What to do with the files, as the Android version said it once they were made. */
 export function instructions(where: string, usbPath: string | null, appLabel: string | null): string {
-  const saved = 'Saved in ' + where + (usbPath ? ' and on ' + usbPath : '') + '.';
-  const usb = usbPath === null
-    ? 'Copy bootlogo.bmp and bootanimation.zip to the top folder of a USB stick, plus bootlogo.bmp into a folder ' +
-      'named logo on it (with the file manager, or from a computer), and plug it into the stereo.'
-    : "They're already on the USB stick; keep it plugged in.";
+  const saved = usbPath === null ? f('Saved in %1$s.', where) : f('Saved in %1$s and on %2$s.', where, usbPath);
+  const usb = t(
+    usbPath === null
+      ? 'Copy bootlogo.bmp and bootanimation.zip to the top folder of a USB stick, plus bootlogo.bmp into a folder ' +
+        'named logo on it (with the file manager, or from a computer), and plug it into the stereo.'
+      : "They're already on the USB stick; keep it plugged in.",
+  );
   return saved + '\n\n' + usb + '\n\n' +
-    'STILL BOOT LOGO (safe):\n' +
-    "1. Open the stereo's Settings, then Factory settings (the code is in the stereo's manual or from the seller).\n" +
-    '2. Find Logo, Car logo or Boot logo, choose Custom or Import, and pick bootlogo.bmp.\n' +
-    '3. Note which logo was chosen before, so you can go back to it.\n\n' +
-    'BOOT ANIMATION:\n' +
+    t('STILL BOOT LOGO (safe):\n' +
+      "1. Open the stereo's Settings, then Factory settings (the code is in the stereo's manual or from the seller).\n" +
+      '2. Find Logo, Car logo or Boot logo, choose Custom or Import, and pick bootlogo.bmp.\n' +
+      '3. Note which logo was chosen before, so you can go back to it.') + '\n\n' +
+    t('BOOT ANIMATION:') + '\n' +
     (appLabel !== null
-      ? 'This stereo has "' + appLabel + '". Open it and import bootanimation.zip from the USB stick.\n'
-      : 'Some stereos have a Boot animation app (in the app list, or in Factory settings) that imports bootanimation.zip from a USB stick. ') +
-    (appLabel !== null ? '' : 'Without one it needs a computer with ADB, and a mistake can stop the stereo from starting, so ' +
-      "follow BOOT.md in OpenRath's source carefully and keep a copy of the original.");
+      ? f('This stereo has "%1$s". Open it and import bootanimation.zip from the USB stick.', appLabel) + '\n'
+      : t('Some stereos have a Boot animation app (in the app list, or in Factory settings) that imports bootanimation.zip from a USB stick.') + ' ') +
+    (appLabel !== null ? '' : t('Without one it needs a computer with ADB, and a mistake can stop the stereo from starting, so ' +
+      "follow BOOT.md in OpenRath's source carefully and keep a copy of the original."));
 }

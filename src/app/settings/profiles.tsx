@@ -39,20 +39,20 @@ export default function ProfilesScreen() {
     ]);
 
   return (
-    <Screen title={t("Who's driving?")}>
+    <Screen title={"Who's driving?"}>
       <Row
-        name={t('Driver profiles')}
-        value={t(on ? 'On: the driver part of a layout opens this page' : 'off')}
-        right={<Text style={{ color: look.accent, fontSize: 18 }}>{on ? '✓' : ''}</Text>}
+        name="Driver profiles"
+        value={on ? 'On: the driver part of a layout opens this page' : 'off'}
+        on={on}
         onPress={() => Features.set(prefs, 'profiles', !on)}
       />
-      <Heading>{t('Drivers')}</Heading>
+      <Heading>Drivers</Heading>
       {names.length === 0 ? <Text style={{ color: look.textDim, marginVertical: 8 }}>{t('No drivers yet.')}</Text> : null}
       {names.map((n) => (
         <Row
           key={n}
           name={(n === current ? '✓  ' : '     ') + n}
-          value={t(n === current ? 'Driving now' : 'Tap to switch')}
+          value={n === current ? 'Driving now' : 'Tap to switch'}
           onPress={() => {
             if (n === current) return;
             Profiles.switchTo(prefs, n);
@@ -67,16 +67,16 @@ export default function ProfilesScreen() {
               {t("Your current settings become this driver's. Add a second driver to switch between them.")}
             </Text>
           ) : null}
-          <Field label={t('Name')} value={name} onChange={setName} />
-          <Button label={t('Add')} kind="primary" onPress={add} />
-          <Button label={t('Cancel')} onPress={() => setAdding(false)} />
+          <Field label="Name" value={name} onChange={setName} />
+          <Button label="Add" kind="primary" onPress={add} />
+          <Button label="Cancel" onPress={() => setAdding(false)} />
         </>
       ) : (
-        <Button label={t('Add a driver…')} onPress={() => setAdding(true)} />
+        <Button label="Add a driver…" onPress={() => setAdding(true)} />
       )}
       {names.length > 0 ? (
         <>
-          <Heading>{t('Remove a driver')}</Heading>
+          <Heading>Remove a driver</Heading>
           {names.filter((n) => n !== current).length === 0 ? (
             <Text style={{ color: look.textDim }}>{f('Switch to another driver to remove %1$s', current)}</Text>
           ) : (

@@ -24,6 +24,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { t } from '../logic/i18n';
 import { split as splitValue } from '../logic/settings';
 import { useLook } from '../state/look';
+import { usePrefs } from '../state/prefs';
+import { feedback } from './Tap';
 
 /** A short message at the bottom of the screen (Android's Toast), or an alert elsewhere. */
 export function toast(message: string, long = false): void {
@@ -46,10 +48,19 @@ export function Box({
   onLongPress?: () => void;
 }) {
   const look = useLook();
+  const { prefs } = usePrefs();
+  // every box ticks and buzzes when that is on (Cards.Card.clickable)
+  const tap = (fn?: () => void) =>
+    fn
+      ? () => {
+          feedback(prefs);
+          fn();
+        }
+      : undefined;
   return (
     <Pressable
-      onPress={onPress}
-      onLongPress={onLongPress}
+      onPress={tap(onPress)}
+      onLongPress={tap(onLongPress)}
       style={[
         styles.box,
         { backgroundColor: look.panel, borderColor: look.edge, borderRadius: look.radius },

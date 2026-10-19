@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Dimensions, Image, PixelRatio, Text, View } from 'react-native';
 
 import { Button, Choice, Heading, Screen } from '../components/ui';
+import { f, t } from '../logic/i18n';
 import * as Art from '../logic/bootart';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
@@ -24,10 +25,10 @@ function here(): [number, number] {
   return [Math.max(a, b), Math.min(a, b)];
 }
 
-const MOMENTS = [
-  { id: '1.0', label: 'Wheel rolling in' },
-  { id: '2.0', label: 'Light sweep' },
-  { id: String(Art.FRAMES / Art.FPS), label: 'Last frame' },
+const MOMENTS = () => [
+  { id: '1.0', label: t('Wheel rolling in') },
+  { id: '2.0', label: t('Light sweep') },
+  { id: String(Art.FRAMES / Art.FPS), label: t('Last frame') },
 ];
 
 export default function BootArtScreen() {
@@ -35,7 +36,7 @@ export default function BootArtScreen() {
   const look = useLook();
   const sizes = useMemo(() => [here(), ...Art.SIZES], []);
   const [size, setSize] = useState('0');
-  const [moment, setMoment] = useState(MOMENTS[2].id);
+  const [moment, setMoment] = useState(String(Art.FRAMES / Art.FPS));
   const [busy, setBusy] = useState('');
   const [made, setMade] = useState<{ zip: string; logo: string; dir: string } | null>(null);
   const [error, setError] = useState('');
@@ -56,10 +57,10 @@ export default function BootArtScreen() {
   const make = async () => {
     setError('');
     setMade(null);
-    setBusy('Drawing frame 1 of ' + (Art.FRAMES + 1) + '…');
+    setBusy(f('Drawing frame %1$s of %2$s…', 1, Art.FRAMES + 1));
     try {
-      const files = await Art.make(w, h, mark, brand, name, async (f) => {
-        if (f % 5 === 0) setBusy('Drawing frame ' + (f + 1) + ' of ' + (Art.FRAMES + 1) + '…');
+      const files = await Art.make(w, h, mark, brand, name, async (n) => {
+        if (n % 5 === 0) setBusy(f('Drawing frame %1$s of %2$s…', n + 1, Art.FRAMES + 1));
         await new Promise((r) => setTimeout(r, 0)); // let the screen redraw between frames
       });
       const dir = new Directory(Paths.document, 'OpenRath boot ' + w + 'x' + h);
@@ -80,15 +81,15 @@ export default function BootArtScreen() {
   };
 
   const share = async (uri: string, mimeType: string) => {
-    if (!(await Sharing.isAvailableAsync())) return setError('Sharing is not available on this device');
-    await Sharing.shareAsync(uri, { mimeType, dialogTitle: 'Save or send the file' });
+    if (!(await Sharing.isAvailableAsync())) return setError(t('Sharing is not available on this unit'));
+    await Sharing.shareAsync(uri, { mimeType, dialogTitle: t('Save or send the file') });
   };
 
   return (
     <Screen title="Boot logo and animation">
       <Heading>Make a boot logo and animation for</Heading>
       <Choice
-        options={sizes.map(([a, b], i) => ({ id: String(i), label: (i === 0 ? 'This screen, ' : '') + a + ' x ' + b }))}
+        options={sizes.map(([a, b], i) => ({ id: String(i), label: (i === 0 ? t('This screen, ') : '') + a + ' x ' + b }))}
         value={size}
         onChange={(v) => {
           setSize(v);
@@ -96,24 +97,24 @@ export default function BootArtScreen() {
         }}
       />
       <Heading>Preview</Heading>
-      <Choice options={MOMENTS} value={moment} onChange={setMoment} />
+      <Choice options={MOMENTS()} value={moment} onChange={setMoment} />
       <Image source={{ uri: preview.uri }} style={{ width: '100%', aspectRatio: preview.pw / preview.ph, borderRadius: 6, backgroundColor: '#000' }} />
       <Text style={{ color: look.textDim, marginTop: 6 }}>
-        {brand + (name ? ' · ' + name : '')}: from the car profile. {Art.FRAMES + 1} frames at {Art.FPS} a second, then the last frame holds until the
-        stereo has started.
+        {brand + (name ? ' · ' + name : '') + ': '}
+        {f('from the car profile. %1$s frames at %2$s a second, then the last frame holds until the stereo has started.', Art.FRAMES + 1, Art.FPS)}
       </Text>
 
       {busy ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 16 }}>
           <ActivityIndicator color={look.accent} />
-          <Text style={{ color: look.text }}>Making the boot animation: {busy}</Text>
+          <Text style={{ color: look.text }}>{t('Making the boot animation')}: {busy}</Text>
         </View>
       ) : (
-        <Button label={'Make them for ' + w + ' x ' + h} kind="primary" onPress={make} />
+        <Button label={f('Make them for %1$s x %2$s', w, h)} kind="primary" onPress={make} />
       )}
       {error ? (
         <>
-          <Heading>Couldn't make them</Heading>
+          <Heading>Couldn&apos;t make them</Heading>
           <Text style={{ color: look.text }}>{error}</Text>
         </>
       ) : null}

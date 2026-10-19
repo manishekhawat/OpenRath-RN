@@ -24,6 +24,7 @@ import * as Player from '../logic/player';
 import { FILES, WEB, type Mode, type Track } from '../logic/player';
 import { num, type Prefs } from '../logic/prefs';
 import * as Sound from '../logic/sound';
+import * as Wake from '../logic/wake';
 import { useDrive } from './drive';
 import { usePrefs } from './prefs';
 import { onSpeaking, say } from './speech';
@@ -560,6 +561,24 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // after deep sleep (the ignition, with OpenRath still on screen) the sound session is stale:
+  // set the audio mode again and carry the song on where it stopped (Wake.java, 1.39)
+  useEffect(
+    () =>
+      Wake.onWoke(() => {
+        modeSet = false;
+        if (!state.playing) return;
+        audioMode().then(() => {
+          try {
+            ap?.play();
+          } catch {
+            open(); // the player let go of the song: load it again
+          }
+        });
+      }),
+    [],
+  );
 
   // the music dips while the car speaks
   useEffect(

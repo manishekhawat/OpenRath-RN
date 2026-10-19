@@ -21,7 +21,7 @@ import { Box, toast } from './ui';
 export function VideoBox({ style }: { style?: StyleProp<ViewStyle> }) {
   const look = useLook();
   const { prefs } = usePrefs();
-  const { trip } = useDrive();
+  const { trip, fixAt } = useDrive();
   const [path, setPath] = useState<string | null>(null);
   const [error, setError] = useState(false);
   const [, setNow] = useState(0);
@@ -48,7 +48,7 @@ export function VideoBox({ style }: { style?: StyleProp<ViewStyle> }) {
     return () => sub.remove();
   }, [player]);
 
-  const fixAge = trip.last ? Date.now() - trip.last.t : -1;
+  const fixAge = fixAt > 0 ? Date.now() - fixAt : -1;
   const parked = Videos.parked(trip.kmh, fixAge);
   const show = path != null && parked;
 

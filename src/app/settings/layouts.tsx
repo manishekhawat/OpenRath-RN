@@ -72,7 +72,7 @@ export default function LayoutsScreen() {
 
   if (!cur) {
     return (
-      <Screen title={t('Screen layout')}>
+      <Screen title="Screen layout">
         {gallery}
       </Screen>
     );
@@ -83,7 +83,7 @@ export default function LayoutsScreen() {
   const showing = stats ? Layouts.statItems(prefs, cur.id, stats) : [];
 
   return (
-    <Screen title={t('Screen layout')}>
+    <Screen title="Screen layout">
       {gallery}
 
       {opts.length > 0 ? (
@@ -94,8 +94,8 @@ export default function LayoutsScreen() {
             return (
               <Row
                 key={o}
-                name={Layouts.OPT_NAMES[o] ? t(Layouts.OPT_NAMES[o]) : o}
-                value={t(on ? 'shown' : 'hidden')}
+                name={Layouts.OPT_NAMES[o] ?? o}
+                value={on ? 'shown' : 'hidden'}
                 right={<Text style={{ color: look.accent, fontSize: 18 }}>{check(on)}</Text>}
                 onPress={() => Layouts.setShown(prefs, cur.id, o, !on)}
               />
@@ -120,8 +120,8 @@ export default function LayoutsScreen() {
             );
           })}
           <Row
-            name={t('Change the order')}
-            value={t(ordering ? 'Tap one to put it first; tap here when done' : 'tap one to put it first')}
+            name="Change the order"
+            value={ordering ? 'Tap one to put it first; tap here when done' : 'tap one to put it first'}
             onPress={() => {
               if (!ordering && showing.length < 2) return Alert.alert(t('Show two or more details first'));
               setOrdering(!ordering);
@@ -130,24 +130,26 @@ export default function LayoutsScreen() {
         </>
       ) : null}
 
-      <Heading>{t('Layout')}</Heading>
+      <Heading>Layout</Heading>
       <Row
-        name={t('Phone mirroring button')}
-        value={t(Layouts.mirrorOn(prefs) ? "on the layout's buttons" : 'off')}
+        name="Phone mirroring button"
+        value={Layouts.mirrorOn(prefs) ? "on the layout's buttons" : 'off'}
+        split
         onPress={() => {
           prefs.put('layMirror', Layouts.mirrorOn(prefs) ? 'off' : 'on');
           if (Layouts.mirrorOn(prefs)) Alert.alert(t('Phone mirroring'), t('Long-press the new button to choose your mirroring app'));
         }}
       />
       <Row
-        name={t('Background movement')}
-        value={t(Layouts.animOn(prefs) ? 'gentle, while driving' : 'off')}
+        name="Background movement"
+        value={Layouts.animOn(prefs) ? 'gentle, while driving' : 'off'}
+        split
         onPress={() => prefs.put('layAnim', Layouts.animOn(prefs) ? 'off' : 'on')}
       />
       {Layouts.part(cur, 'favourites') ? (
         <Row
-          name={t('Clear the favourite apps')}
-          value={t('tap a tile on the layout to choose, long-press to change')}
+          name="Clear the favourite apps"
+          value="tap a tile on the layout to choose, long-press to change"
           onPress={() =>
             Alert.alert(t('Clear the favourite apps'), undefined, [
               { text: t('Keep'), style: 'cancel' },
@@ -163,7 +165,7 @@ export default function LayoutsScreen() {
           }
         />
       ) : null}
-      <Row name={t('Back to the boxes')} value={t('The classic dashboard')} onPress={() => Layouts.choose(prefs, Layouts.BOXES)} />
+      <Row name="Back to the boxes" value="The classic dashboard" onPress={() => Layouts.choose(prefs, Layouts.BOXES)} />
     </Screen>
   );
 }
