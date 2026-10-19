@@ -107,21 +107,41 @@ release signed with Android's debug key could be forged by anyone, so it is neve
 ## Doing it by hand instead
 
 If you would rather not put the key on GitHub, build and sign on your own machine and upload the
-APK to the release yourself. You need the Android SDK and a JDK.
+APK to the release yourself. You need the Android SDK and a JDK, and step 2 above still applies:
+the key is yours to make and keep. Step 3 is the one you skip, and with no secrets to read the
+`release` workflow builds nothing and passes with a note, so the tag is still pushed as in step 4.
+
+Build and sign:
 
 ```sh
+VER=$(node -p "require('./package.json').version")
 npx expo prebuild --platform android --no-install
 (cd android && ./gradlew assembleRelease)
 # the APK Gradle made, signed with the debug key
 APK=$(find android/app/build/outputs/apk/release -name '*.apk' | head -1)
-TOOLS=$ANDROID_HOME/build-tools/35.0.0
-"$TOOLS/zipalign" -p -f 4 "$APK" openrath-rn-v1.43.0.apk
-"$TOOLS/apksigner" sign --ks openrath-release.keystore --ks-key-alias openrath openrath-rn-v1.43.0.apk
-"$TOOLS/apksigner" verify --print-certs openrath-rn-v1.43.0.apk
-sha256sum openrath-rn-v1.43.0.apk > SHA256SUMS
-gh release create v1.43.0 openrath-rn-v1.43.0.apk SHA256SUMS \
-  --title "OpenRath (React Native) 1.43.0" --notes-file notes.md --verify-tag
+TOOLS=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+"$TOOLS/zipalign" -p -f 4 "$APK" "openrath-rn-v$VER.apk"
+"$TOOLS/apksigner" sign --ks openrath-release.keystore --ks-key-alias openrath "openrath-rn-v$VER.apk"
+"$TOOLS/apksigner" verify --print-certs "openrath-rn-v$VER.apk"
 ```
+
+Then the files, the notes and the release. The tag has to be pushed before this, because
+`--verify-tag` refuses to invent one:
+
+```sh
+git archive --format=zip --prefix=openrath-rn/ -o "openrath-rn-v$VER-source.zip" HEAD
+sha256sum "openrath-rn-v$VER.apk" "openrath-rn-v$VER-source.zip" > SHA256SUMS
+# this version's CHANGELOG section, from its "## X.Y" heading to the next one
+awk -v v="$VER" '
+  /^## / { if (on) exit; if ($2 == v || $2 == substr(v, 1, length(v) - 2)) on = 1 }
+  on' CHANGELOG.md > notes.md
+gh release create "v$VER" "openrath-rn-v$VER.apk" "openrath-rn-v$VER-source.zip" SHA256SUMS \
+  --title "OpenRath (React Native) $VER" --notes-file notes.md --verify-tag
+```
+
+Put the `Signer #1 certificate SHA-256 digest` line `apksigner verify` printed into the release
+notes as well, under a "Checking the download" heading, so a reader can tell your signature from
+anyone else's. The next section says how they check it.
 
 ## Checking a download
 
