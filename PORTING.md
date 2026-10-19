@@ -1,16 +1,26 @@
-# Porting OpenRath 1.42 to React Native
+# Porting OpenRath 1.43 to React Native
 
-OpenRath 1.42 is a native Android launcher: about 34,000 lines of Java in 132 classes, talking
+OpenRath 1.43 is a native Android launcher: about 35,000 lines of Java in 135 classes, talking
 straight to Android services and to stereo makers' firmware (Topway, FYT, MTC and szchoiceway
 units, the FM chip driver, accessibility and notification services). This folder is the React
 Native (Expo SDK 57, TypeScript) version. Everything that can be done in TypeScript with Expo's
-modules is ported — 71 of the Android version's 89 feature switches — and what is left needs
+modules is ported — 71 of the Android version's 90 feature switches — and what is left needs
 native Android code, and is listed at the end with what it would take.
 
 ## What changed from the 1.30 port
 
+- **Safer and lighter** (1.43): the map page is the only page the map's WebView loads, and a tap on
+  a phone number there asks before it dials; backups leave out the valet PIN, the hotspot password
+  and the update key, and a restore never writes them; five wrong valet PINs lock entry for a
+  minute; speed limits come from the roads already fetched and are asked for again only after about
+  5 km or when the car leaves them; a square of about 5 km keeps its speed cameras for a week, in
+  memory and on the unit; every question to Overpass goes through one gate (8 seconds apart, and a
+  doubling wait up to 5 minutes after a failure); GPS fixes drop to one every 15 seconds after five
+  minutes parked; and Settings > Help > Diagnostics lists the errors OpenRath caught and carried on
+  from, with web addresses and coordinates taken out, as the crash notes now are.
+
 - **The whole app in Hindi** (1.34): `src/logic/i18n.ts` is the `Hindi` class, and
-  `src/data/hi.json` its 2,230 English-to-Hindi pairs, built from the Android project's
+  `src/data/hi.json` its 2,239 English-to-Hindi pairs, built from the Android project's
   `res/values` and `res/values-hi` string files by `scripts/hindi.py`. Every string on screen goes
   through `t()` or `f()`. Spoken prompts stay in English, as in the Android version.
 - **How much OpenRath shows** (1.36): Simple, Full or Custom, asked during setup and in Settings;
@@ -57,10 +67,11 @@ native Android code, and is listed at the end with what it would take.
 | `Drive` as a foreground service, `Wake` | `src/state/{engine,background,store}.ts`, `src/logic/wake.ts`, `index.js` | The per-fix work runs outside React; a background location task feeds it behind other apps, and after deep sleep the GPS, music and map start again. Setting: Road helpers > Count trips behind other apps (`bgTrips`). |
 | `Dashcam`, `Snap` | `src/logic/{dashcam,snap}.ts`, `src/state/camera.ts`, `src/components/DashcamView.tsx`, `src/app/{dashcam,parkphoto}.tsx` | expo-camera; a jolt (accelerometer or harsh braking) keeps the clip. |
 | `Player`, `Resume`, `ParkedMusic`, `Duck`, `Sound`, `Quiet`, `Speak`, `Soundboard`, `Videos`, `Projection` | `src/logic/{player,sound,soundboard,videos}.ts`, `src/state/{player.tsx,speech.ts}`, `src/app/{music,video}.tsx`, `src/components/{MusicBox,VideoBox,SoundboardBox}.tsx` | expo-audio with background playback and seeking, expo-video for the video box; songs from the media library or picked files, stations from Radio Browser, the soundboard's sounds generated in TypeScript. |
-| `Valet`, `ChildLock` | `src/logic/{valet,childlock}.ts`, Settings and the app drawer | |
+| `Valet`, `ChildLock` | `src/logic/{valet,childlock}.ts`, Settings and the app drawer | Five wrong PINs lock entry for a minute (1.43). |
+| `OverpassGate`, `Diag`, `Crash` | `src/logic/{overpass,diag}.ts`, `src/state/crash.ts`, `src/app/settings/diagnostics.tsx` | One gate for every Overpass question, speed cameras kept by square, and the errors carried on from, in Settings > Help > Diagnostics. |
 | Map card + `assets/map/map.html`, `OfflineNav`, `Tiles` | `src/app/map.tsx`, `src/map/mapHtml.ts` | The original map page in a WebView, with the 1.38 crash guard; offline guidance hands over to the chosen offline map app. |
 | `AppsActivity`, `AppPicker`, `Apps` | `src/logic/apps.ts`, `src/app/apps.tsx` | The 1.38 screen: search, pinned and recent, A to Z; opens apps by package name. |
-| `tests/Tests.java` | `src/logic/__tests__/*.test.ts` | 176 checks; run with `npm test`. |
+| `tests/Tests.java` | `src/logic/__tests__/*.test.ts` | 195 checks; run with `npm test`. |
 
 ## Done differently, because Expo can't do it from TypeScript
 
@@ -91,14 +102,14 @@ native Android code, and is listed at the end with what it would take.
 
 ## Still needs native Android code
 
-Each of these needs Kotlin or Java in an Expo module or a config plugin. They are the 18 feature
+Each of these needs Kotlin or Java in an Expo module or a config plugin. They are the 19 feature
 switches `src/logic/features.ts` marks as not ported, and the services behind them.
 
 - Being the Home app beyond the HOME intent filter (single task, clear task on launch): a small config plugin.
 - Listing installed apps (`Apps`, `AppsActivity`, `ChildLock` sending the screen home, finding the 360 camera, projection, offline map and ride apps): PackageManager.
 - What's playing, the notification ticker and the big radio frequency (`MediaListener`, `Ticker`, `RadioText`, `readAloud`): NotificationListenerService and a media session.
 - Album-cover colours for the music box (`ArtColour`): the pick-and-position maths is ported and tested, but reading an image's pixels needs native code.
-- Steering-wheel buttons (`Keys`, `KeyService`): key events and an AccessibilityService.
+- Steering-wheel buttons, and a second action when one is held down (`Keys`, `KeyService`, `longKeys`): key events and an AccessibilityService.
 - Equalizer and the unit's volume (`Eq`, the volume parts of `Sound`, `Valet`, `Cab` quiet-ride): Android audio effects and AudioManager.
 - OBD-II and TPMS over Bluetooth or Wi-Fi (`Obd`, `Tpms`, and so the engine box, the car's mood and the fault-code reader): a Bluetooth library such as react-native-ble-plx.
 - The LED light strip (`LedStrip`): the same Bluetooth library.
@@ -110,7 +121,7 @@ switches `src/logic/features.ts` marks as not ported, and the services behind th
 - Managed settings for fleets (`Managed`): Android's app restrictions.
 - App updates from GitHub (`Updates`): installing a package needs the install permission.
 - The performance box (`perf`): free memory and the reason the app last closed.
-- Crash guard and diagnostics beyond the map (`Crash`, `Strings`): reads other apps' dex files and guards native calls.
+- The rest of Diagnostics (`Crash`, `Strings`): the errors carried on from, the crash notes and what Diagnostics can know about this unit are ported (1.43); the stereo's own services, the reason the app last closed and the guards around native calls are not.
 - Offline map tiles (`offlineMap`, `Tiles`): a tile cache through the map bridge.
 - The maker's own screen (`maker`): the stereo firmware's settings app.
 
@@ -122,3 +133,8 @@ switches `src/logic/features.ts` marks as not ported, and the services behind th
 - The owner's name is kept under `welcome`, as the Android version and its backups call it; names
   typed into earlier builds of this port (`ownerName`) are still read.
 - The cab SOS has no built-in sender name; it uses the owner name you set.
+- The dashboard's boxes come from the chosen picture layout and a long-press on a box, so 1.43's
+  one "What the boxes show" row (which replaced the Android version's five slot rows) has nothing
+  to replace here.
+- Crash notes and the errors carried on from live in the app's own storage (AsyncStorage), with web
+  addresses and coordinates removed, and are never sent anywhere.

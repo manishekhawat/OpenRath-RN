@@ -11,7 +11,7 @@ import { Heading, Screen } from '../../components/ui';
 import { t } from '../../logic/i18n';
 import { useLook } from '../../state/look';
 
-const VERSION = '1.42';
+const VERSION = '1.43';
 export const PROJECT = 'https://github.com/manishekhawat/OpenRath';
 export const CREDIT = 'Based on OpenRath by Manish Shekhawat';
 
@@ -79,7 +79,7 @@ export default function About() {
         in the LICENSE file of the source code. Additional term under GPLv3 section 7(b): anyone who conveys OpenRath or a modified
         version must keep the credit &quot;{CREDIT}&quot;, with a link to {PROJECT}, in its About or credits screen.
       </Text>
-      <Text style={p}>{t('This is the React Native edition, built from OpenRath 1.42.')}</Text>
+      <Text style={p}>{t('This is the React Native edition, built from OpenRath 1.43.')}</Text>
       <Text style={p}>
         {t(
           'Not affiliated with or endorsed by any car or stereo maker; brand names belong to their owners. ' +

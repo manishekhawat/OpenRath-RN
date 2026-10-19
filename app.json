@@ -2,7 +2,7 @@
   "expo": {
     "name": "OpenRath",
     "slug": "openrath",
-    "version": "1.42.0",
+    "version": "1.43.0",
     "scheme": "openrath",
     "orientation": "default",
     "icon": "./assets/icon.png",
@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "org.openrath.rn",
-      "versionCode": 142,
+      "versionCode": 143,
       "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#000000",

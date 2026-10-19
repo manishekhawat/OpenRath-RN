@@ -16,7 +16,7 @@ test('levels: the counts and what each level takes in', () => {
     else if (x.level === Features.CUSTOM) c++;
     else d++;
   }
-  assert.equal(s, 15, 'simple count');
+  assert.equal(s, 16, 'simple count');
   assert.equal(c, 8, 'custom count');
   assert.equal(d, 2, 'dev count');
   assert.ok(f > s && f > c, 'full has the most');
@@ -107,19 +107,19 @@ test('the mic’s place, from the two old switches', () => {
   assert.ok(!Features.on(q, 'floatMic'), 'no floating mic without voice commands');
 });
 
-test('the 1.42 switches exist, and this edition says which it does', () => {
+test('the 1.42 and 1.43 switches exist, and this edition says which it does', () => {
   for (const id of [
     'smoothSpeed', 'places', 'appDrawer', 'dockStatus', 'hourlyWeather', 'calendar', 'artColour', 'seek', 'stopSummary',
     'setup', 'intro', 'autoTheme', 'tapFeedback', 'achievements', 'projection', 'soundboard', 'video', 'faultWords',
-    'askCar', 'ledStrip', 'wake', 'updates', 'reports',
+    'askCar', 'ledStrip', 'wake', 'updates', 'reports', 'longKeys',
   ]) {
     assert.ok(Features.get(id) != null, `feature ${id} exists`);
   }
-  assert.equal(Features.ALL.length, 89);
+  assert.equal(Features.ALL.length, 90);
   for (const id of ['intro', 'setup', 'reports', 'places', 'achievements', 'wake', 'video', 'soundboard']) {
     assert.ok(Features.PORTED.has(id), `${id} is ported`);
   }
-  for (const id of ['obd', 'tpms', 'keys', 'eq', 'widgets', 'updates', 'maker', 'ledStrip']) {
+  for (const id of ['obd', 'tpms', 'keys', 'longKeys', 'eq', 'widgets', 'updates', 'maker', 'ledStrip']) {
     assert.ok(!Features.PORTED.has(id), `${id} needs native Android code`);
   }
   for (const f of Features.ALL) assert.equal(f.ported, Features.PORTED.has(f.id), `${f.id}'s ported flag`);

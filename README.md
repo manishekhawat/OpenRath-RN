@@ -1,7 +1,7 @@
 # OpenRath (React Native)
 
 A free, open source home screen for Android car stereos, rebuilt in React Native with Expo. It is
-the React Native edition of OpenRath 1.42: setup screens on first open, a dashboard with your car
+the React Native edition of OpenRath 1.43: setup screens on first open, a dashboard with your car
 and its live speed on a moving road (or one of thirteen picture layouts), the clock, hourly
 weather, the calendar, news and a compass, a map with turn-by-turn guidance and saved places, a
 360° view of your car, voice commands and spoken answers from the car, a trip computer with a
@@ -10,6 +10,13 @@ road helpers for highways, fog and the monsoon, badges for good driving, chores,
 a documents wallet, its own music, radio and video player, a dashcam, cab driver tools, driver
 profiles, backups and a boot animation maker. All of it is in Hindi as well as English, and how
 much it shows is one setting: Simple, Full or Custom.
+
+1.43 is the safer and lighter round: the map only loads its own page and asks before calling a
+number from it, backups never carry the valet PIN or the hotspot password, five wrong valet PINs
+lock entry for a minute, speed limits and cameras come from roads already fetched (and a square's
+cameras are kept for a week), the GPS slows down after five minutes parked, and Settings > Help >
+Diagnostics lists the errors OpenRath caught and carried on from, with addresses and places
+removed.
 
 *Rath* (रथ) is Sanskrit for chariot.
 

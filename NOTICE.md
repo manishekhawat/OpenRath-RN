@@ -1,7 +1,7 @@
 # Notice
 
 OpenRath, a free home screen for Android car stereos. This is the React Native (Expo) edition,
-built from OpenRath 1.42; the Android (Java) version it is ported from is at the link below.
+built from OpenRath 1.43; the Android (Java) version it is ported from is at the link below.
 
 Copyright (C) Manish Shekhawat and the OpenRath contributors.
 

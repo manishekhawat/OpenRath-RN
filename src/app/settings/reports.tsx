@@ -16,7 +16,7 @@ import * as Reports from '../../logic/reports';
 import { useLook } from '../../state/look';
 import { usePrefs } from '../../state/prefs';
 
-const VERSION = '1.42';
+const VERSION = '1.43';
 
 /** The unit, as the report names it. */
 function unit(): string {

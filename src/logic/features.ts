@@ -36,7 +36,7 @@ export const LEVEL_ABOUT = [
 /** Off whatever the level until the owner turns them on: they need hardware, or change the home screen. */
 const ASK_FIRST = new Set(['cab', 'obd', 'dashcam', 'tpms', 'reports']);
 
-const SIMPLE_IDS = ['arrows', 'weather', 'news', 'ticker', 'nightDrive', 'speedAlerts', 'parking', 'reverse', 'lightsReminder', 'duck', 'keys', 'resume', 'offlineMap', 'backup', 'reports'];
+const SIMPLE_IDS = ['arrows', 'weather', 'news', 'ticker', 'nightDrive', 'speedAlerts', 'parking', 'reverse', 'lightsReminder', 'duck', 'keys', 'longKeys', 'resume', 'offlineMap', 'backup', 'reports'];
 const CUSTOM_IDS = ['pages', 'widgets', 'saver', 'perf', 'bootArt', 'soundProfiles', 'speedVolume', 'eq', 'profiles'];
 const DEV_IDS = ['maker', 'perf'];
 
@@ -134,6 +134,7 @@ export const ALL: Feature[] = [
   F("ledStrip", "LED light strip", "Car", false, "A Bluetooth ELK-BLEDOM strip takes the theme's colour, dims at night and turns red for a warning"),
   F("tpms", "Tyre pressure sensors (TPMS)", "Car", false, "Bluetooth valve-cap sensors"),
   F("keys", "Steering-wheel buttons", "Car", true, "Your own action for each button"),
+  F("longKeys", "Hold a steering-wheel button", "Car", true, "Each button can do a second action when held down"),
   F("wallet", "Car documents wallet", "Car", true, "Photos of the RC, insurance, PUC and licence, shown offline"),
   // family
   F("childLock", "Child-lock for apps", "Family", false, "Chosen apps can't be opened while moving"),

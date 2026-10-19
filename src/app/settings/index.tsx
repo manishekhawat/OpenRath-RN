@@ -45,7 +45,7 @@ import { themeName, useLook } from '../../state/look';
 import { usePrefs } from '../../state/prefs';
 import { getVoice } from '../../state/speech';
 
-const VERSION = Constants.expoConfig?.version ?? '1.42';
+const VERSION = Constants.expoConfig?.version ?? '1.43';
 
 /** A question with a typed answer: what it asks, and what to do with the answer (an error to show, or nothing). */
 interface Ask {
