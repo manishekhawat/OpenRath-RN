@@ -15,14 +15,19 @@ import * as TaskManager from 'expo-task-manager';
 import { Alert, AppState } from 'react-native';
 
 import * as Bg from '../logic/background';
+import * as Geo from '../logic/geo';
 import { t } from '../logic/i18n';
 import * as Engine from './engine';
 import * as Store from './store';
 
 export const TASK = 'openrath-drive';
 
-/** How long the car has been standing still, in fixes (Bg.parkedRun). */
-let parked = 0;
+/** Asking for fixes slowly, because the car has stood still for a while (Bg.parkedGps). */
+let slow = false;
+/** When the car stopped, or -1 while it moves (Bg.stillFrom). */
+let still = -1;
+/** The last fix fed, to see how far the car has moved since. */
+let was: Location.LocationObject | null = null;
 
 TaskManager.defineTask<{ locations: Location.LocationObject[] }>(TASK, async ({ data, error }) => {
   if (error) {
@@ -37,13 +42,22 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(TASK, async ({ 
   }
   const fixes = data?.locations ?? [];
   await Engine.feed(fixes);
-  // on a head unit that stays powered the GPS and its notification would otherwise run until the
-  // next reboot: once the car has stood still for a few minutes let go of them, and leave starting
-  // again to sync(), which runs whenever the app comes back on screen
-  parked = Bg.parkedRun(parked, fixes.length, Engine.snapshot().trip.kmh);
-  if (Bg.parkedLongEnough(parked)) {
-    parked = 0;
-    Location.stopLocationUpdatesAsync(TASK).catch(() => {});
+  // on a head unit that stays powered the GPS would otherwise stay at a fix a second until the
+  // next reboot, as the task is left running when the app goes away: once the car has stood still
+  // for five minutes ask for fixes every 15 seconds instead, and go back to one a second on the
+  // first fix that moves, so a drive after a long stop is still counted
+  const newest = fixes[fixes.length - 1];
+  if (newest) {
+    const now = Date.now();
+    const kmh = Engine.snapshot().trip.kmh;
+    const movedM = was ? Geo.dist(was.coords.latitude, was.coords.longitude, newest.coords.latitude, newest.coords.longitude) : 0;
+    was = newest;
+    still = Bg.stillFrom(still, slow, kmh, movedM, now);
+    const want = Bg.parkedGps(slow, kmh, movedM, still, now);
+    if (want !== slow) {
+      slow = want;
+      await startTask();
+    }
   }
 });
 
@@ -89,7 +103,7 @@ async function startTask(): Promise<boolean> {
   try {
     await Location.startLocationUpdatesAsync(TASK, {
       accuracy: Location.Accuracy.BestForNavigation,
-      timeInterval: 1000,
+      timeInterval: Bg.fixMs(slow),
       distanceInterval: 0,
       foregroundService: { ...Bg.NOTICE, killServiceOnDestroy: false },
       activityType: Location.ActivityType.AutomotiveNavigation,
@@ -127,7 +141,8 @@ async function switchTo(target: Bg.Source) {
   await stopTask();
   if (target === 'watch' && !sub) {
     sub = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
+      // the watch source only runs with one of our screens in front, so it stays at a fix a second
+      { accuracy: Location.Accuracy.BestForNavigation, timeInterval: Bg.FIX_MS, distanceInterval: 0 },
       (l) => {
         Engine.feed([l]);
       },

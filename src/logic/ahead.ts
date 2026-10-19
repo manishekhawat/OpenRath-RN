@@ -7,6 +7,7 @@
  */
 import { bearing, dist, ahead as isAhead } from './geo.ts';
 import { f, t } from './i18n.ts';
+import { code, Gate, shared } from './overpass.ts';
 
 /** A place ahead to speak about once: a toll plaza, school or hospital. */
 export interface Spot {
@@ -217,6 +218,13 @@ export interface View {
 }
 
 export class Ahead {
+  /** The gate between questions: the app's own, shared with the speed alerts, unless given one. */
+  private gate: Gate;
+
+  constructor(gate: Gate = shared) {
+    this.gate = gate;
+  }
+
   spots: Spot[] = [];
   roads: Road[] = [];
   view: View = { tollM: -1, tollName: '', zone: '', road: '', oneway: false, bendM: -1, bendDir: 0 };
@@ -242,7 +250,9 @@ export class Ahead {
     if (!(want.toll || want.zones || want.fog)) return say;
     const ms = now.getTime();
     const far = this.qAt === 0 || dist(this.qLat, this.qLon, lat, lon) > 350;
-    if (!this.busy && kmh > 3 && (far || ms - this.qAt > 180000) && ms - this.qAt > 10000) this.fetch(lat, lon, want.toll || want.zones, net, ms);
+    // the gate is shared with the speed alerts, so the two never crowd the free Overpass API
+    if (!this.busy && kmh > 3 && (far || ms - this.qAt > 180000) && ms - this.qAt > 10000 && this.gate.take(ms))
+      this.fetch(lat, lon, want.toll || want.zones, net, ms);
 
     const once = (id: string) => (this.told.has(id) ? false : (this.told.add(id), true));
     for (const s of this.spots) {
@@ -297,9 +307,12 @@ export class Ahead {
         const got = parse(JSON.parse(text));
         if (places) this.spots = got.spots;
         this.roads = got.roads;
+        this.gate.worked();
       })
-      .catch(() => {
-        this.qAt = Date.now() - 170000; // try again in ten seconds
+      .catch((e) => {
+        // the gate holds the next question back; this only undoes the three-minute wait above
+        this.qAt = Date.now() - 170000;
+        this.gate.failed(Date.now(), code(e));
       })
       .finally(() => {
         this.busy = false;

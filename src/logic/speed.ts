@@ -4,27 +4,34 @@
  * where the map has one. Also the speed shown (Fixes.java): replayed fixes skipped, the smooth
  * number, the speed filter and the speed correction.
  */
+import { nearest } from './ahead.ts';
 import { ahead, dist } from './geo.ts';
 import { f, t } from './i18n.ts';
+import { bbox, type Camera } from './overpass.ts';
 import { num, type Prefs } from './prefs.ts';
 
-export interface Camera {
-  lat: number;
-  lon: number;
-  limit: number;
+export type { Camera };
+
+/** A mapped road with a speed limit, and its shape, so the limit holds while the car is on it. */
+export interface Way {
+  kmh: number;
+  pts: [number, number][];
 }
 
 export const OVERPASS = 'https://overpass-api.de/api/interpreter';
 
-export function query(lat: number, lon: number): string {
+/**
+ * The roads with a limit around the car, the cameras of a square, or both (Drive.query). The roads
+ * come with their shape, so one answer serves the whole road rather than the spot it was asked at,
+ * and a square's cameras are asked for once a week rather than on every lookup.
+ */
+export function query(lat: number, lon: number, cams: string | null, wantLimit: boolean): string {
   const a = lat.toFixed(6);
   const o = lon.toFixed(6);
   return (
-    '[out:json][timeout:10];(' +
-    `way(around:25,${a},${o})[highway][maxspeed];` +
-    `node(around:3000,${a},${o})[highway=speed_camera];` +
-    `node(around:3000,${a},${o})[enforcement=maxspeed];` +
-    ');out tags center;'
+    '[out:json][timeout:15];' +
+    (wantLimit ? `way(around:600,${a},${o})[highway][maxspeed];out tags geom qt;` : '') +
+    (cams ? `(node${bbox(cams)}[highway=speed_camera];node${bbox(cams)}[enforcement=maxspeed];);out tags center qt;` : '')
   );
 }
 
@@ -38,22 +45,57 @@ export function speed(s: string | null | undefined): number {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/** The lowest tagged limit on the roads here, and the cameras near, from an Overpass answer. */
-export function parse(j: any): { limit: number; cameras: Camera[] } {
-  let limit = 0;
+/** The roads with their shape and limit, and the cameras, from an Overpass answer. */
+export function parse(j: any): { ways: Way[]; cameras: Camera[] } {
+  const ways: Way[] = [];
   const cameras: Camera[] = [];
   for (const e of j?.elements ?? []) {
     const tags = e.tags;
     if (!tags) continue;
     if (e.type === 'way') {
-      const v = speed(tags.maxspeed);
-      if (v > 0 && (limit === 0 || v < limit)) limit = v;
-    } else {
+      const kmh = speed(tags.maxspeed);
+      const pts: [number, number][] = (e.geometry ?? [])
+        .filter((g: any) => Number.isFinite(g?.lat) && Number.isFinite(g?.lon))
+        .map((g: any) => [g.lat, g.lon] as [number, number]);
+      if (kmh > 0 && pts.length > 1) ways.push({ kmh, pts });
+    } else if (Number.isFinite(e.lat) && Number.isFinite(e.lon)) {
       cameras.push({ lat: e.lat, lon: e.lon, limit: speed(tags.maxspeed) });
     }
   }
-  return { limit, cameras };
+  return { ways, cameras };
 }
+
+/** The lowest limit of the mapped roads within maxM of a place, or 0 when none is that close. */
+export function limitAt(ways: readonly Way[], lat: number, lon: number, maxM: number): number {
+  let lim = 0;
+  for (const w of ways) {
+    const n = nearest(w.pts, lat, lon);
+    if (n && n.d <= maxM && w.kmh > 0 && (lim === 0 || w.kmh < lim)) lim = w.kmh;
+  }
+  return lim;
+}
+
+/** Whether any of the roads from the last answer is within maxM. */
+export function onWay(ways: readonly Way[], lat: number, lon: number, maxM: number): boolean {
+  return ways.some((w) => {
+    const n = nearest(w.pts, lat, lon);
+    return n != null && n.d <= maxM;
+  });
+}
+
+/**
+ * Whether to ask the map for the limits again (Drive.limitsStale): never asked, the last answer
+ * failed, or over 500 m from where it was asked (the answer covers 600 m around it) and no longer
+ * on a road from that answer, or 5 km on whatever the roads say.
+ */
+export function limitsStale(asked: boolean, failed: boolean, metresFromAsked: number, onKnownRoad: boolean): boolean {
+  if (!asked || failed) return true;
+  if (metresFromAsked > 5000) return true;
+  return metresFromAsked > 500 && !onKnownRoad;
+}
+
+/** How close to a road the car counts as on it, in metres. */
+export const ON_ROAD_M = 25;
 
 /** Metres to the nearest camera ahead within 600 m, or -1. */
 export function nearestCamera(lat: number, lon: number, heading: number, kmh: number, cams: Camera[]): number {

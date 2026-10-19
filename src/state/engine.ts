@@ -24,6 +24,7 @@ import * as Features from '../logic/features';
 import { dist } from '../logic/geo';
 import { t } from '../logic/i18n';
 import * as Motion from '../logic/motion';
+import * as Overpass from '../logic/overpass';
 import * as Speed from '../logic/speed';
 import * as Shown from '../logic/speedShown';
 import * as Trip from '../logic/trip';
@@ -73,8 +74,19 @@ let snap: Snapshot = {
 };
 const listeners = new Set<(s: Snapshot) => void>();
 
-const speed = { limit: 0, cameras: [] as Speed.Camera[], warned: false, announced: new Set<string>() };
-const query = { busy: false, at: null as null | { lat: number; lon: number }, time: 0 };
+const speed = {
+  limit: 0,
+  /** the roads with a limit from the last answer, kept so the limit holds along the road */
+  ways: [] as Speed.Way[],
+  cameras: [] as Overpass.Camera[],
+  /** the square the kept cameras are for, or null when none are */
+  cell: null as string | null,
+  warned: false,
+  announced: new Set<string>(),
+};
+const query = { busy: false, at: null as null | { lat: number; lon: number }, failed: false, asked: false };
+/** The cameras of the squares driven through lately, so a square is asked for once a week. */
+const cams = new Overpass.Cameras();
 const road = new RoadWatch(prefs, say);
 let savedAt = 0;
 /** the trip as last written, so the 15-second save doesn't rewrite a blob nothing changed in */
@@ -232,26 +244,49 @@ export function stopTick() {
 
 // ---- speed limits and cameras
 
-async function lookUpLimits(lat: number, lon: number) {
+/**
+ * Asks the map for the roads with a limit around the car, and for a square's cameras when none are
+ * kept for it. The shared gate keeps 8 seconds between questions and stands back when one fails,
+ * and a square's cameras are kept a week, so most drives only ask about the limits.
+ */
+async function lookUpLimits(lat: number, lon: number, cell: string | null, wantLimit: boolean) {
+  const now = Date.now();
+  if (!Overpass.shared.take(now)) return;
   query.busy = true;
-  query.at = { lat, lon };
-  query.time = Date.now();
+  if (wantLimit) {
+    query.at = { lat, lon };
+    query.asked = true;
+  }
   // fetch() never times out here, and a lookup left hanging would keep query.busy set, so the
   // speed, camera and toll warnings would stop for the rest of the session (as in player.ts)
   const ctl = new AbortController();
-  const timeout = setTimeout(() => ctl.abort(), 10000);
+  const timeout = setTimeout(() => ctl.abort(), 15000);
   try {
     const r = await fetch(Speed.OVERPASS, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'data=' + encodeURIComponent(Speed.query(lat, lon)),
+      body: 'data=' + encodeURIComponent(Speed.query(lat, lon, cell, wantLimit)),
       signal: ctl.signal,
     });
+    if (!r.ok) throw new Error('overpass ' + r.status);
     const parsed = Speed.parse(await r.json());
-    speed.limit = parsed.limit;
-    speed.cameras = parsed.cameras;
-    set({ limit: parsed.limit, alertError: '' });
-  } catch {
+    if (wantLimit) {
+      speed.ways = parsed.ways;
+      speed.limit = Speed.limitAt(parsed.ways, lat, lon, Speed.ON_ROAD_M);
+      query.failed = false;
+    }
+    if (cell) {
+      speed.cameras = parsed.cameras;
+      speed.cell = cell;
+      cams.keep(cell, parsed.cameras, Date.now());
+      Store.maps.put(Overpass.key(cell), Overpass.write(parsed.cameras, Date.now()));
+      dropOldSquares();
+    }
+    Overpass.shared.worked();
+    set({ limit: speed.limit, alertError: '' });
+  } catch (e) {
+    if (wantLimit) query.failed = true;
+    Overpass.shared.failed(Date.now(), Overpass.code(e));
     set({ alertError: t('speed data unreachable') });
   } finally {
     clearTimeout(timeout);
@@ -259,12 +294,44 @@ async function lookUpLimits(lat: number, lon: number) {
   }
 }
 
+/** Squares last fetched over a week ago go, so the kept map data cannot grow without end. */
+function dropOldSquares() {
+  const now = Date.now();
+  const kept = Store.maps.all?.() ?? {};
+  for (const k of Overpass.stale(Object.keys(kept), (key) => kept[key] ?? '', now)) {
+    Store.maps.remove?.(k);
+  }
+}
+
+/** The cameras kept for a square, from memory or from the unit, or null when it must be asked for. */
+function keptCameras(cell: string, now: number): Overpass.Camera[] | null {
+  const mem = cams.remembered(cell, now);
+  if (mem) return mem;
+  const kept = Overpass.read(Store.maps.str(Overpass.key(cell), ''), now);
+  if (!kept) return null;
+  cams.keep(cell, kept, now);
+  return kept;
+}
+
 function speedAlerts(s: Trip.TripState, out: Partial<Snapshot>) {
   const now = Date.now();
-  const moved = query.at ? dist(query.at.lat, query.at.lon, s.lat, s.lon) : Infinity;
-  if (!query.busy && now - query.time > 8000 && (moved > 250 || (now - query.time > 120000 && moved > 30))) {
-    lookUpLimits(s.lat, s.lon);
+  // the cameras of the square the car is in, from the week's worth kept on the unit
+  const cell = Overpass.cell(s.lat, s.lon);
+  if (cell !== speed.cell) {
+    const kept = keptCameras(cell, now);
+    if (kept) {
+      speed.cell = cell;
+      speed.cameras = kept;
+    }
   }
+  const needCams = cell !== speed.cell;
+  const moved = query.at ? dist(query.at.lat, query.at.lon, s.lat, s.lon) : 0;
+  const needLimit = Speed.limitsStale(query.asked, query.failed, moved, Speed.onWay(speed.ways, s.lat, s.lon, Speed.ON_ROAD_M));
+  if (!query.busy && (needCams || needLimit) && Overpass.shared.may(now)) {
+    lookUpLimits(s.lat, s.lon, needCams ? cell : null, needLimit);
+  }
+  speed.limit = Speed.limitAt(speed.ways, s.lat, s.lon, Speed.ON_ROAD_M);
+  out.limit = speed.limit;
   const cam = Speed.nearestCamera(s.lat, s.lon, s.heading, s.kmh, speed.cameras);
   out.cameraM = cam;
   if (cam >= 0 && s.kmh > 10) {

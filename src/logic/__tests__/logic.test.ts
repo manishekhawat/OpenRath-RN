@@ -86,14 +86,30 @@ test('speed limits', () => {
   assert.equal(speed.speed('30 mph'), 48);
   assert.equal(speed.speed('IN:urban'), 0);
   assert.equal(speed.speed(null), 0);
+  const near: [number, number][] = [
+    [28.6, 77.2],
+    [28.601, 77.2],
+  ];
   const r = speed.parse({
     elements: [
-      { type: 'way', tags: { maxspeed: '60' } },
-      { type: 'way', tags: { maxspeed: '40' } },
+      { type: 'way', tags: { maxspeed: '60' }, geometry: near.map(([lat, lon]) => ({ lat, lon })) },
+      { type: 'way', tags: { maxspeed: '40' }, geometry: near.map(([lat, lon]) => ({ lat, lon })) },
+      { type: 'way', tags: { maxspeed: '80' }, geometry: [{ lat: 29, lon: 78 }, { lat: 29.001, lon: 78 }] },
+      { type: 'way', tags: { maxspeed: '30' } },
       { type: 'node', lat: 28.603, lon: 77.2, tags: { highway: 'speed_camera', maxspeed: '50' } },
     ],
   });
-  assert.equal(r.limit, 40);
+  assert.equal(r.ways.length, 3, 'a road with no shape is no use for a limit along it');
+  assert.equal(speed.limitAt(r.ways, 28.6, 77.2, speed.ON_ROAD_M), 40, 'the lowest limit of the roads here');
+  assert.equal(speed.limitAt(r.ways, 28.8, 77.5, speed.ON_ROAD_M), 0, 'no road here, no limit');
+  assert.ok(speed.onWay(r.ways, 28.6, 77.2, speed.ON_ROAD_M));
+  assert.ok(!speed.onWay(r.ways, 28.8, 77.5, speed.ON_ROAD_M));
+  assert.ok(!speed.limitsStale(true, false, 400, false), 'the answer covers 600 m around where it was asked');
+  assert.ok(speed.limitsStale(true, false, 700, false), 'past that, off the roads it named, ask again');
+  assert.ok(!speed.limitsStale(true, false, 700, true), 'still on one of them: keep it');
+  assert.ok(speed.limitsStale(true, false, 5200, true), 'and after 5 km ask whatever the roads say');
+  assert.ok(speed.limitsStale(true, true, 0, true), 'a failed answer is asked again');
+  assert.ok(speed.limitsStale(false, false, 0, true), 'so is never having asked');
   assert.equal(r.cameras.length, 1);
   assert.equal(speed.nearestCamera(28.6, 77.2, 0, 40, r.cameras), 334);
   assert.ok(speed.isOver(44, 40, 0));

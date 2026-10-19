@@ -75,14 +75,19 @@ test('status line', () => {
   assert.equal(bg.statusText(true, null, 'watch'), 'on');
 });
 
-test('the task lets go once the car has stood still long enough', () => {
-  // a fix above walking pace starts the count again
-  assert.equal(bg.parkedRun(120, 1, 30), 0);
-  assert.equal(bg.parkedRun(0, 1, 0), 1);
-  // a batch of fixes counts for all of them
-  assert.equal(bg.parkedRun(10, 4, 2), 14);
-  assert.equal(bg.parkedRun(10, -2, 2), 10, 'a batch of none changes nothing');
-  assert.equal(bg.parkedLongEnough(bg.PARKED_FIXES - 1), false);
-  assert.equal(bg.parkedLongEnough(bg.PARKED_FIXES), true);
-  assert.equal(bg.parkedLongEnough(bg.parkedRun(bg.PARKED_FIXES, 1, 40)), false, 'driving on keeps it running');
+test('the fixes slow down once the car has stood still long enough', () => {
+  const t0 = 1_700_000_000_000;
+  // standing still from t0: still at a fix a second until five minutes have passed
+  assert.equal(bg.stillFrom(-1, false, 0, 0, t0), t0);
+  assert.equal(bg.stillFrom(t0, false, 0, 0, t0 + 60000), t0, 'the moment it stopped is kept');
+  assert.equal(bg.parkedGps(false, 0, 0, t0, t0 + bg.PARKED_MS - 1000), false);
+  assert.equal(bg.parkedGps(false, 0, 0, t0, t0 + bg.PARKED_MS), true);
+  assert.equal(bg.fixMs(false), bg.FIX_MS);
+  assert.equal(bg.fixMs(true), bg.SLOW_FIX_MS);
+  // moving again: back to a fix a second, by speed or by having moved while slow
+  assert.equal(bg.stillFrom(t0, true, 0, bg.STILL_M + 5, t0 + bg.PARKED_MS), -1);
+  assert.equal(bg.parkedGps(true, 0, bg.STILL_M + 5, t0, t0 + bg.PARKED_MS), false, 'a fix that moved speeds it up');
+  assert.equal(bg.parkedGps(true, bg.STILL_KMH, 0, t0, t0 + bg.PARKED_MS), false, 'so does the speed');
+  assert.equal(bg.parkedGps(true, 0, 5, t0, t0 + bg.PARKED_MS), true, 'GPS drift of a few metres does not');
+  assert.equal(bg.stillFrom(-1, false, 40, 0, t0), -1, 'a moving car has no standing-still moment');
 });

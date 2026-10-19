@@ -15,6 +15,7 @@ import type { Prefs } from '../logic/prefs';
 const KEY = 'openrath:prefs';
 const REPORTS_KEY = 'openrath:reports';
 const WEATHER_KEY = 'openrath:weather';
+const MAPS_KEY = 'openrath:maps';
 
 const values = new Map<string, string>();
 const listeners = new Set<() => void>();
@@ -22,6 +23,7 @@ let loading: Promise<void> | null = null;
 let isLoaded = false;
 let changes = 0;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+const mapValues = new Map<string, string>();
 
 /** Reads the saved settings, once; later calls get the same promise. It never fails. */
 export function load(): Promise<void> {
@@ -40,6 +42,11 @@ export function load(): Promise<void> {
       .then((raw) => {
         if (raw) for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, string>)) wxValues.set(k, v);
         takeOldForecast();
+      })
+      .catch(() => {})
+      .then(() => AsyncStorage.getItem(MAPS_KEY))
+      .then((raw) => {
+        if (raw) for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, string>)) mapValues.set(k, v);
       })
       .catch(() => {})
       .finally(() => {
@@ -184,5 +191,38 @@ export const forecast: Prefs = {
   all: () => Object.fromEntries(wxValues),
   remove: (k) => {
     if (wxValues.delete(k)) wxChanged();
+  },
+};
+
+// ------------------------------------------------------------------ the map data kept for offline
+
+let mapTimer: ReturnType<typeof setTimeout> | null = null;
+
+function writeMaps(): Promise<void> {
+  return load().then(() => AsyncStorage.setItem(MAPS_KEY, JSON.stringify(Object.fromEntries(mapValues))).catch(() => {}));
+}
+
+function mapsChanged() {
+  if (mapTimer) clearTimeout(mapTimer);
+  mapTimer = setTimeout(() => {
+    mapTimer = null;
+    writeMaps();
+  }, 300);
+}
+
+/**
+ * What the map answers are kept in: the speed cameras of each square of about 5 km, under their own
+ * key, so a week of squares never rewrites the settings and never grows the file read at start-up.
+ */
+export const maps: Prefs = {
+  str: (k, d) => mapValues.get(k) ?? d,
+  put: (k, v) => {
+    if (mapValues.get(k) === v) return;
+    mapValues.set(k, v);
+    mapsChanged();
+  },
+  all: () => Object.fromEntries(mapValues),
+  remove: (k) => {
+    if (mapValues.delete(k)) mapsChanged();
   },
 };

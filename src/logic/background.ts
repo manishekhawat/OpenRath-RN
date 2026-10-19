@@ -69,33 +69,47 @@ export function fresh<T extends { timestamp: number }>(batch: readonly T[], last
   return out;
 }
 
-// ------------------------------------------------------------------ letting go of the GPS when parked
+// ------------------------------------------------------------------ the GPS rate while parked
 
 /**
- * The trip computer counts a car under this as standing still (Trip.feed's parking check), so the
- * background task uses the same line to tell a parked car from a crawling one.
+ * Under this the car counts as standing still for the GPS rate (Drive.parkedGps), and while the
+ * slow rate is on a fix further than STILL_M from the last one means it is moving again: at 15
+ * seconds a fix, a car pulling away reads as slow for one more fix.
  */
-export const PARKED_KMH = 8;
+export const STILL_KMH = 3;
+export const STILL_M = 25;
 
 /**
- * Standing-still fixes before the task gives up the GPS: it asks for one a second, so this is
- * about five minutes. That is well past the 90 s at which the parking spot is written, and long
- * enough not to let go at a level crossing or a long red light.
+ * Standing still this long and the fixes drop to one every 15 seconds instead of one a second.
+ * Five minutes is well past the 90 s at which the parking spot is written, and long enough not to
+ * slow down at a level crossing or a long red light.
  */
-export const PARKED_FIXES = 300;
+export const PARKED_MS = 5 * 60000;
+export const FIX_MS = 1000;
+export const SLOW_FIX_MS = 15000;
 
 /**
- * The run of standing-still fixes after a batch of them: back to zero as soon as the car moves.
- * Without this the task would keep the GPS and its notification going until the unit is rebooted,
- * as it is deliberately left running when the app goes away.
+ * When the car stopped, or -1 while it moves; fed the newest fix. The task keeps this between
+ * fixes, as the Android service keeps Drive.stillFrom.
  */
-export function parkedRun(run: number, fixes: number, kmh: number): number {
-  return kmh > PARKED_KMH ? 0 : run + Math.max(0, fixes);
+export function stillFrom(from: number, slow: boolean, kmh: number, movedM: number, now: number): number {
+  if (kmh >= STILL_KMH || (slow && movedM > STILL_M)) return -1;
+  return from < 0 ? now : from;
 }
 
-/** Parked long enough that the GPS is only draining the unit: stop the task until the app is back. */
-export function parkedLongEnough(run: number): boolean {
-  return run >= PARKED_FIXES;
+/**
+ * Whether to ask for fixes slowly (Drive.parkedGps). The task is deliberately left running when
+ * the app goes away, so without this the GPS would stay at one fix a second until the unit is
+ * rebooted; stopping it altogether instead would miss the next drive until a screen came back.
+ */
+export function parkedGps(slow: boolean, kmh: number, movedM: number, from: number, now: number): boolean {
+  if (kmh >= STILL_KMH || (slow && movedM > STILL_M)) return false;
+  return from >= 0 && now - from >= PARKED_MS;
+}
+
+/** Milliseconds between fixes to ask for. */
+export function fixMs(slow: boolean): number {
+  return slow ? SLOW_FIX_MS : FIX_MS;
 }
 
 /** A note for the screen that came up while the app was behind another one (Cab notes, new badges). */
