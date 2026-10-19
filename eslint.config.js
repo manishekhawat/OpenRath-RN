@@ -20,7 +20,7 @@ const expo = require('eslint-config-expo/flat');
 module.exports = [
   ...expo,
   {
-    ignores: ['src/map/mapHtml.ts', 'dist/*', 'node_modules/*', '.expo/*'],
+    ignores: ['src/map/mapHtml.ts', 'dist/*', 'node_modules/*', '.expo/*', '.shots/*'],
   },
   {
     rules: {

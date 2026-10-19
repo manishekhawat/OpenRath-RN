@@ -21,6 +21,9 @@ expo-env.d.ts
 # Metro
 .metro-health-check*
 
+# the screenshot harness's web build and frames (npm run shots)
+.shots/
+
 # debug
 npm-debug.*
 yarn-debug.*

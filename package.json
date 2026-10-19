@@ -47,6 +47,8 @@
     "@types/react": "~19.2.2",
     "eslint": "~9.39.5",
     "eslint-config-expo": "~57.0.2",
+    "playwright-core": "1.56.1",
+    "react-native-web": "~0.21.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -57,7 +59,8 @@
     "map": "node scripts/build-map.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"src/logic/__tests__/**/*.test.ts\"",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "shots": "node scripts/shots.mjs"
   },
   "private": true,
   "license": "GPL-3.0-or-later"
