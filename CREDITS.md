@@ -4,6 +4,8 @@ OpenRath is written by Manish Shekhawat. This is the React Native (Expo) edition
 
 Nothing from the projects below is copied into OpenRath unless NOTICE.md says so: they are where ideas came from, or where we learnt how something works.
 
+These credits cover the OpenRath project as a whole. Where a row names a Java class, that work lives in the [Android version](https://github.com/manishekhawat/OpenRath); the stereo makers' add-ons are among the parts this port does not have yet (see [PORTING.md](PORTING.md)).
+
 ## Open-source projects we learnt from
 
 | Project | What it taught us |
@@ -29,7 +31,7 @@ The Mission control, Electric and Roadster looks are drawn from scratch by OpenR
 
 - **OBD-II and the ELM327 adapter:** the SAE J1979 service and PID list, and the ELM327 command set, as documented by its maker and the community.
 - **ELK-BLEDOM LED strips:** the 9-byte command format, worked out and shared by people who reverse-engineered the "duoCo Strip" and "Lotus Lantern" apps.
-- **Stereo families and screen sizes:** the stores, product pages, XDA forum threads and guides listed under Sources in [docs/STEREOS.md](docs/STEREOS.md).
+- **Stereo families and screen sizes:** the stores, product pages, XDA forum threads and guides listed under Sources in [docs/STEREOS.md](https://github.com/manishekhawat/OpenRath/blob/main/docs/STEREOS.md) in the Android version.
 - **Code of conduct:** adapted from the Contributor Covenant, with Mozilla's enforcement ladder (see [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)).
 
 ## Data
