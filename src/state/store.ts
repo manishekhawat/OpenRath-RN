@@ -4,7 +4,8 @@
  * reads, loaded from AsyncStorage once and saved shortly after a change. prefs.tsx wraps this for
  * the screens; `subscribe` tells it about changes. The language is read as soon as they are in.
  * `reports` keeps the opt-in usage counts and crash notes (Reports.java) under their own key, so
- * they never go into backups or driver profiles.
+ * they never go into backups or driver profiles, and `forecast` keeps the weather box's last
+ * Open-Meteo answer under one of its own, as it is far too big to rewrite with every setting.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -13,6 +14,7 @@ import type { Prefs } from '../logic/prefs';
 
 const KEY = 'openrath:prefs';
 const REPORTS_KEY = 'openrath:reports';
+const WEATHER_KEY = 'openrath:weather';
 
 const values = new Map<string, string>();
 const listeners = new Set<() => void>();
@@ -32,6 +34,12 @@ export function load(): Promise<void> {
       .then(() => AsyncStorage.getItem(REPORTS_KEY))
       .then((raw) => {
         if (raw) for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, string>)) reportValues.set(k, v);
+      })
+      .catch(() => {})
+      .then(() => AsyncStorage.getItem(WEATHER_KEY))
+      .then((raw) => {
+        if (raw) for (const [k, v] of Object.entries(JSON.parse(raw) as Record<string, string>)) wxValues.set(k, v);
+        takeOldForecast();
       })
       .catch(() => {})
       .finally(() => {
@@ -65,10 +73,18 @@ function write(): Promise<void> {
 
 /** Saves now instead of in a moment (timers can wait while the app is behind another one). */
 export function flush(): Promise<void> {
-  if (!saveTimer) return Promise.resolve();
-  clearTimeout(saveTimer);
-  saveTimer = null;
-  return write();
+  const jobs: Promise<void>[] = [];
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    jobs.push(write());
+  }
+  if (wxTimer) {
+    clearTimeout(wxTimer);
+    wxTimer = null;
+    jobs.push(writeForecast());
+  }
+  return Promise.all(jobs).then(() => {});
 }
 
 function changed() {
@@ -117,5 +133,56 @@ export const reports: Prefs = {
   all: () => Object.fromEntries(reportValues),
   remove: (k) => {
     if (reportValues.delete(k)) reportChanged();
+  },
+};
+
+// ------------------------------------------------------------------ the kept forecast's own store
+
+const wxValues = new Map<string, string>();
+let wxTimer: ReturnType<typeof setTimeout> | null = null;
+
+function writeForecast(): Promise<void> {
+  return load().then(() => AsyncStorage.setItem(WEATHER_KEY, JSON.stringify(Object.fromEntries(wxValues))).catch(() => {}));
+}
+
+function wxChanged() {
+  if (wxTimer) clearTimeout(wxTimer);
+  wxTimer = setTimeout(() => {
+    wxTimer = null;
+    writeForecast();
+  }, 300);
+}
+
+/**
+ * Up to 1.42 the forecast sat in the settings under 'wxSaved', so every later setting rewrote it:
+ * an older install (or a backup restored into the settings) hands it over here, once.
+ */
+function takeOldForecast() {
+  const body = values.get('wxSaved');
+  if (body === undefined || wxValues.size > 0) return;
+  wxValues.set('wxSaved', body);
+  const at = values.get('wxSavedAt');
+  if (at !== undefined) wxValues.set('wxSavedAt', at);
+  wxChanged();
+  values.delete('wxSaved');
+  values.delete('wxSavedAt');
+  changed();
+}
+
+/**
+ * The weather box's last Open-Meteo answer ('wxSaved') and when it came in ('wxSavedAt'), under
+ * their own key: tens of KB that would otherwise be written again with the whole settings map
+ * every time any other setting changed.
+ */
+export const forecast: Prefs = {
+  str: (k, d) => wxValues.get(k) ?? d,
+  put: (k, v) => {
+    if (wxValues.get(k) === v) return;
+    wxValues.set(k, v);
+    wxChanged();
+  },
+  all: () => Object.fromEntries(wxValues),
+  remove: (k) => {
+    if (wxValues.delete(k)) wxChanged();
   },
 };

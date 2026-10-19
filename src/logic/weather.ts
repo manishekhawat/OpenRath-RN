@@ -29,6 +29,17 @@ export interface Wx {
   savedNote: string;
 }
 
+/**
+ * The most forecast text worth keeping for offline: an answer for this URL is 15-20 KB, so
+ * anything far past that is a service having gone wrong and is not written to the unit at all.
+ */
+export const SAVED_MAX = 64 * 1024;
+
+/** Worth keeping until the next answer comes in: something, and not absurdly large. */
+export function keep(body: string): boolean {
+  return body.length > 0 && body.length <= SAVED_MAX;
+}
+
 export function url(lat: number, lon: number): string {
   // the hourly part is for offline and the 24-hour curve: the box picks the hour that is now from it
   return (

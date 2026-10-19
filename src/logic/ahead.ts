@@ -318,13 +318,24 @@ export function line(v: View): string {
   return '';
 }
 
-/** POSTs an Overpass query with fetch(), as the Android version did with HttpURLConnection. */
+/**
+ * POSTs an Overpass query with fetch(), as the Android version did with HttpURLConnection. Given
+ * ten seconds: fetch() never times out here, and a query left hanging would hold `busy` for the
+ * rest of the session, so nothing ahead would be looked up again.
+ */
 export const overpass: Fetch = async (q) => {
-  const r = await fetch(OVERPASS, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'data=' + encodeURIComponent(q),
-  });
-  if (!r.ok) throw new Error('overpass ' + r.status);
-  return r.text();
+  const ctl = new AbortController();
+  const timeout = setTimeout(() => ctl.abort(), 10000);
+  try {
+    const r = await fetch(OVERPASS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(q),
+      signal: ctl.signal,
+    });
+    if (!r.ok) throw new Error('overpass ' + r.status);
+    return await r.text();
+  } finally {
+    clearTimeout(timeout);
+  }
 };

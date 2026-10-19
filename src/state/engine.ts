@@ -25,12 +25,13 @@ import { dist } from '../logic/geo';
 import { t } from '../logic/i18n';
 import * as Motion from '../logic/motion';
 import * as Speed from '../logic/speed';
+import * as Shown from '../logic/speedShown';
 import * as Trip from '../logic/trip';
 import * as Valet from '../logic/valet';
 import { EMPTY as NO_ROAD, RoadWatch, type RoadView } from './road';
+import { say as speak } from './speech';
 import * as Store from './store';
 import * as Trips from './trips';
-import { say as speak } from './speech';
 
 export const TRIP_KEY = 'openrath:trip';
 export const HIST_KEY = 'openrath:history';
@@ -76,6 +77,8 @@ const speed = { limit: 0, cameras: [] as Speed.Camera[], warned: false, announce
 const query = { busy: false, at: null as null | { lat: number; lon: number }, time: 0 };
 const road = new RoadWatch(prefs, say);
 let savedAt = 0;
+/** the trip as last written, so the 15-second save doesn't rewrite a blob nothing changed in */
+let savedJson = '';
 /** the speed shown, unrounded, and when it was worked out (the monotonic clock where there is one) */
 const shown = { kmh: 0, at: 0, stoppedAt: 0 };
 let easeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -119,7 +122,11 @@ export function ready(): Promise<void> {
 export async function reloadTrip(): Promise<void> {
   try {
     const raw = await AsyncStorage.getItem(TRIP_KEY);
-    if (raw) set({ trip: Trip.initial(Date.now(), JSON.parse(raw)) });
+    if (raw) {
+      // what is on the disk is not ours any more, so the next save must write whatever it holds
+      savedJson = '';
+      set({ trip: Trip.initial(Date.now(), JSON.parse(raw)) });
+    }
   } catch {
     // keep the one in memory
   }
@@ -162,10 +169,24 @@ export function foreground() {
 
 // ---- saving
 
+/** Keeps the trip, unless the very same text is on the disk already (it is saved every 15 s). */
+function writeTrip(s: Trip.TripState): Promise<void> {
+  const json = JSON.stringify(Trip.persisted(s));
+  if (json === savedJson) return Promise.resolve();
+  return AsyncStorage.setItem(TRIP_KEY, json).then(() => {
+    savedJson = json;
+  });
+}
+
 async function save(s: Trip.TripState, closed?: { day: string; row: number[] }) {
-  await AsyncStorage.setItem(TRIP_KEY, JSON.stringify(Trip.persisted(s)));
+  await writeTrip(s);
   if (closed) {
-    const hist: Trip.History = JSON.parse((await AsyncStorage.getItem(HIST_KEY)) ?? '{}');
+    let hist: Trip.History = {};
+    try {
+      hist = JSON.parse((await AsyncStorage.getItem(HIST_KEY)) ?? '{}');
+    } catch {
+      // a corrupt blob would otherwise stop every closed day from being kept: start again from empty
+    }
     hist[closed.day] = closed.row;
     const keys = Object.keys(hist).sort();
     for (const k of keys.slice(0, Math.max(0, keys.length - 430))) delete hist[k];
@@ -215,11 +236,16 @@ async function lookUpLimits(lat: number, lon: number) {
   query.busy = true;
   query.at = { lat, lon };
   query.time = Date.now();
+  // fetch() never times out here, and a lookup left hanging would keep query.busy set, so the
+  // speed, camera and toll warnings would stop for the rest of the session (as in player.ts)
+  const ctl = new AbortController();
+  const timeout = setTimeout(() => ctl.abort(), 10000);
   try {
     const r = await fetch(Speed.OVERPASS, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'data=' + encodeURIComponent(Speed.query(lat, lon)),
+      signal: ctl.signal,
     });
     const parsed = Speed.parse(await r.json());
     speed.limit = parsed.limit;
@@ -228,6 +254,7 @@ async function lookUpLimits(lat: number, lon: number) {
   } catch {
     set({ alertError: t('speed data unreachable') });
   } finally {
+    clearTimeout(timeout);
     query.busy = false;
   }
 }
@@ -325,23 +352,21 @@ const clock = () => (typeof performance !== 'undefined' && typeof performance.no
 /** The speed and stop summary for now, from the last fix (Hub.speed and CarCard.changed). */
 function speedNow(now: number): Partial<Snapshot> {
   const tk = clock();
-  const fresh = snap.fixAt > 0 && now - snap.fixAt < Speed.FIX_TIMEOUT_MS;
+  const fresh = Shown.fresh(snap.fixAt, now);
   let kmh = -1;
   if (!fresh) shown.kmh = 0;
   else {
     const raw = snap.trip.kmh;
-    const still = Speed.filter(prefs);
-    shown.kmh = Features.on(prefs, 'smoothSpeed') ? Speed.smooth(shown.kmh, raw, tk - shown.at, still) : raw < still ? 0 : raw;
+    shown.kmh = Shown.speed(shown.kmh, raw, tk - shown.at, Speed.filter(prefs), Features.on(prefs, 'smoothSpeed'));
     kmh = Math.round(shown.kmh);
     if (Math.abs(shown.kmh - raw) >= 0.5) ease();
   }
   shown.at = tk;
   // stopped for 5 seconds after some driving: how the drive went
   const isStill = kmh === 0;
-  if (!isStill) shown.stoppedAt = 0;
-  else if (shown.stoppedAt === 0) shown.stoppedAt = now;
+  shown.stoppedAt = Shown.stillSince(isStill, shown.stoppedAt, now);
   const tr = snap.trip;
-  const due = isStill && now - shown.stoppedAt >= Trip.STOP_SUMMARY_MS && tr.driveKm >= Trip.STOP_SUMMARY_KM && Features.on(prefs, 'stopSummary');
+  const due = Shown.summaryDue(isStill, shown.stoppedAt, now, tr.driveKm, Features.on(prefs, 'stopSummary'));
   const stopped = due ? (snap.stopped && snap.stopped.km === tr.driveKm && snap.stopped.sec === tr.driveSec ? snap.stopped : Trip.stopped(tr)) : null;
   return { speedShown: kmh, stopped };
 }
@@ -412,11 +437,11 @@ export function parkHere(): string {
 export function setPark(lat: number, lon: number) {
   const s = { ...snap.trip, park: { lat, lon, at: Date.now() } };
   set({ trip: s });
-  AsyncStorage.setItem(TRIP_KEY, JSON.stringify(Trip.persisted(s))).catch(() => {});
+  writeTrip(s).catch(() => {});
 }
 
 export function resetToday() {
   const s = { ...snap.trip, todayKm: 0, todaySec: 0, driveKm: 0, driveSec: 0, driveTop: 0, todayBrakes: 0, todayAccels: 0, todaySpeedSec: 0 };
   set({ trip: s });
-  AsyncStorage.setItem(TRIP_KEY, JSON.stringify(Trip.persisted(s))).catch(() => {});
+  writeTrip(s).catch(() => {});
 }

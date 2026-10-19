@@ -19,6 +19,7 @@ import { num, type Prefs } from '../logic/prefs';
 import * as Rest from '../logic/rest';
 import * as Sky from '../logic/sky';
 import * as Spots from '../logic/spots';
+import { forecast } from './store';
 
 /** What the dashboard can show about the road. */
 export interface RoadView {
@@ -205,12 +206,14 @@ export class RoadWatch {
 
   /** Rain and fog from the weather box's saved answer, checked once a minute. */
   private weather(now: number) {
-    const at = this.prefs.str('wxSavedAt', '');
+    // the forecast is too big to live in the settings, so it has a store of its own since 1.42;
+    // an install made before that still has it in the settings until the move happens
+    const at = forecast.str('wxSavedAt', this.prefs.str('wxSavedAt', ''));
     if (at === this.sky.at && now - this.sky.checked < 60000) return;
     this.sky.at = at;
     this.sky.checked = now;
     try {
-      const body = this.prefs.str('wxSaved', '');
+      const body = forecast.str('wxSaved', this.prefs.str('wxSaved', ''));
       const r = body ? Sky.now(JSON.parse(body), now, now - Number(at) < 20 * 60000) : { wet: false, fog: false };
       this.sky.wet = r.wet;
       this.sky.fog = r.fog;

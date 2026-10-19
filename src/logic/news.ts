@@ -154,10 +154,20 @@ function changed() {
 /** Fetches a page as text; the app passes fetch, tests a fake. */
 export type Get = (url: string) => Promise<string>;
 
+/**
+ * Given ten seconds: fetch() never times out here, and a page left hanging would hold
+ * `state.busy` for the rest of the session, so the headlines would never refresh again.
+ */
 export const get: Get = async (u) => {
-  const r = await fetch(u, { headers: { 'User-Agent': 'OpenRath (car head unit; open source home screen)' } });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  return r.text();
+  const ctl = new AbortController();
+  const timeout = setTimeout(() => ctl.abort(), 10000);
+  try {
+    const r = await fetch(u, { headers: { 'User-Agent': 'OpenRath (car head unit; open source home screen)' }, signal: ctl.signal });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return await r.text();
+  } finally {
+    clearTimeout(timeout);
+  }
 };
 
 /**

@@ -5,7 +5,10 @@
  * call as a message, and answers the questions the page asks synchronously from values the app
  * keeps up to date in `window.__OR`. What the bridge saves uses the Java bridge's keys and
  * formats (MapCard.Bridge, 1.42): 'place:Home' / 'place:Office' as "lat,lon", 'dest' as
- * "name|lat|lon", 'myService' as "name|phone", the navigation choice in 'src:navi'.
+ * "name|lat|lon", 'myService' as "name|phone", the navigation choice in 'src:navi'. The bridge is
+ * there for this page alone, so the pane stays on it: a link in the page (Leaflet's attribution,
+ * say) opens in the browser instead, and what the page hands the bridge is checked before it is
+ * used, as the Java bridge checked it.
  *
  * Opened with ?q=<place> it searches for that place, and with ?go=home|office|fuel|rest|service
  * it runs that voice command, once the page has loaded (how the mic button hands over).
@@ -19,6 +22,7 @@
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as Linking from 'expo-linking';
 import * as Network from 'expo-network';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -38,7 +42,6 @@ import { MAP_HTML } from '../map/mapHtml';
 import { say, useDrive } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
-import { router, useLocalSearchParams } from 'expo-router';
 
 /** The page's `OpenRath` object: calls become messages; answers come from window.__OR. */
 const SHIM = `
@@ -71,6 +74,31 @@ function navMode(v: string): string {
 
 /** Java's String.format(Locale.US, "%.6f", x). */
 const f6 = (x: unknown) => Number(x).toFixed(6);
+
+/** A place from the page, written as the bridge writes it; null when it isn't a pair of numbers. */
+function latLon(a: unknown, b: unknown): [string, string] | null {
+  const lat = Number(a);
+  const lon = Number(b);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return [f6(lat), f6(lon)];
+}
+
+/** A name or note from the page, cut to the length a setting holds. */
+const short = (v: unknown) => String(v ?? '').substring(0, 200);
+
+/** The map page's own address (the WebView's baseUrl); the whitelist is matched against the origin. */
+const ORIGIN = 'https://openrath.local';
+const BASE = ORIGIN + '/';
+
+/**
+ * Whether the pane may go there: the page itself, and the blank page Android loads it into. The
+ * page's links (Leaflet's attribution, the OSM copyright) would otherwise open the open web in
+ * the pane, where the bridge is still there to be called.
+ */
+export function pageUrl(url: string): boolean {
+  // the trailing slash matters: "https://openrath.local.example.com/" is somewhere else
+  return url === 'about:blank' || url.startsWith(BASE);
+}
 
 /**
  * The offline map app Go hands over to (OfflineNav): the one chosen in Settings
@@ -151,7 +179,7 @@ export default function MapScreen() {
   // the page asks these as it needs them, so new values only have to be put where it looks
   useEffect(() => {
     if (ready.current) web.current?.injectJavaScript(cfgJs + 'true;');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [cfgJs]);
 
   // after deep sleep the page's tiles and position are stale: load it again (Wake.java, 1.39)
@@ -210,18 +238,23 @@ export default function MapScreen() {
       case 'speak':
         say(String(a[0]));
         break;
-      case 'navigate':
+      case 'navigate': {
         // guide in Google Maps
-        Linking.openURL(`google.navigation:q=${a[0]},${a[1]}`).catch(() =>
-          Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${a[0]},${a[1]}&travelmode=driving`),
+        const at = latLon(a[0], a[1]);
+        if (!at) break;
+        Linking.openURL(`google.navigation:q=${at[0]},${at[1]}`).catch(() =>
+          Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${at[0]},${at[1]}&travelmode=driving`),
         );
         break;
+      }
       case 'navigateOffline': {
         // Google Maps starts guiding; the others show the place to route to (OfflineNav.uri)
+        const at = latLon(a[0], a[1]);
+        if (!at) break;
         const url =
           offlineNav === 'com.google.android.apps.maps'
-            ? `google.navigation:q=${f6(a[0])},${f6(a[1])}`
-            : `geo:${f6(a[0])},${f6(a[1])}?q=${f6(a[0])},${f6(a[1])}(${encodeURIComponent(String(a[2] ?? ''))})`;
+            ? `google.navigation:q=${at[0]},${at[1]}`
+            : `geo:${at[0]},${at[1]}?q=${at[0]},${at[1]}(${encodeURIComponent(String(a[2] ?? ''))})`;
         if (offlineNav !== '' && Platform.OS === 'android') {
           IntentLauncher.startActivityAsync('android.intent.action.VIEW', { data: url, packageName: offlineNav }).catch(() =>
             Linking.openURL(url).catch(() => {}),
@@ -232,27 +265,33 @@ export default function MapScreen() {
       case 'setNavMode':
         prefs.put('src:navi', navMode(String(a[0])));
         break;
-      case 'parkHere':
-        setPark(Number(a[0]), Number(a[1]));
+      case 'parkHere': {
+        const at = latLon(a[0], a[1]);
+        if (at) setPark(Number(at[0]), Number(at[1]));
         break;
+      }
       case 'call':
         Linking.openURL('tel:' + String(a[0]).replace(/[^0-9+]/g, '')).catch(() => {});
         break;
       case 'saveService':
         // "Mine" on a service centre: kept for the service booking reminder
-        prefs.put('myService', String(a[0] ?? '').replace(/\|/g, ' ') + '|' + String(a[1] ?? ''));
+        prefs.put('myService', short(a[0]).replace(/\|/g, ' ') + '|' + short(a[1]));
         break;
       case 'destination': {
         // where the map is taking you, for the kids' distance countdown
-        const name = String(a[0] ?? '').replace(/\|/g, ' ');
+        const at = latLon(a[1], a[2]);
+        if (!at) break;
+        const name = short(a[0]).replace(/\|/g, ' ');
         if (!prefs.str('dest', '').startsWith(name + '|')) prefs.put('destNick', ''); // a new place: the children's name for the old one no longer fits
-        prefs.put('dest', name + '|' + f6(a[1]) + '|' + f6(a[2]));
+        prefs.put('dest', name + '|' + at[0] + '|' + at[1]);
         break;
       }
-      case 'savedPlace':
+      case 'savedPlace': {
         // the map's saved Home and Office, so the dock's saved places and drive names can use them
-        if (a[0] === 'Home' || a[0] === 'Office') prefs.put('place:' + a[0], f6(a[1]) + ',' + f6(a[2]));
+        const at = latLon(a[1], a[2]);
+        if (at && (a[0] === 'Home' || a[0] === 'Office')) prefs.put('place:' + a[0], at[0] + ',' + at[1]);
         break;
+      }
       case 'bigQr':
         // the parking spot as a QR code, to walk back to the car with the phone (HomeActivity.parkQr)
         if (!Features.on(prefs, 'parking')) Alert.alert(t('Turn on "Parking spot to your phone" in Settings > Driving'));
@@ -260,7 +299,7 @@ export default function MapScreen() {
         else setParkQr(true);
         break;
       case 'routeRain':
-        prefs.put('routeRain', String(a[0] ?? ''));
+        prefs.put('routeRain', short(a[0]));
         break;
       case 'voice':
         // the page's mic: commands are carried out, anything else goes back to its search box
@@ -287,10 +326,16 @@ export default function MapScreen() {
           key={build}
           ref={web}
           style={styles.fill}
-          originWhitelist={['*']}
-          source={{ html: MAP_HTML, baseUrl: 'https://openrath.local/' }}
+          originWhitelist={[ORIGIN]}
+          source={{ html: MAP_HTML, baseUrl: BASE }}
           injectedJavaScriptBeforeContentLoaded={cfgJs + SHIM}
           onMessage={onMessage}
+          // a tap on a link in the page opens it outside, where there is no bridge to call
+          onShouldStartLoadWithRequest={(r) => {
+            if (pageUrl(r.url)) return true;
+            Linking.openURL(r.url).catch(() => {});
+            return false;
+          }}
           onLoadEnd={() => {
             ready.current = true;
             sent.current = { lat: 0, lon: 0, park: 0 };

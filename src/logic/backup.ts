@@ -18,9 +18,11 @@
  */
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 
+import { validVpa } from './errands.ts';
 import { t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
-import type { History, TripState } from './trip.ts';
+import { dayKey, type History, type TripState } from './trip.ts';
+import { validPin } from './valet.ts';
 
 /** Settings files that are worth keeping; "crash" is left out on purpose. */
 export const PREFS = ['home', 'drive', 'player'];
@@ -61,17 +63,14 @@ export function prune(names: string[], kind: string): string[] {
 
 /** Once a day: whether today's automatic backup is still to do. */
 export function dueToday(p: Prefs, now: Date): boolean {
-  return p.str('backupDay', '') !== dayKey(now);
+  return p.str('backupDay', '') !== dayKey(now.getTime());
 }
 
 export function markDone(p: Prefs, now: Date): void {
-  p.put('backupDay', dayKey(now));
+  p.put('backupDay', dayKey(now.getTime()));
   p.put('backupLast', String(now.getTime()));
 }
 
-function dayKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 // ------------------------------------------------------------------ values
 
@@ -109,6 +108,36 @@ export function text(t: unknown): string | null {
   if (k === 'b') return v === true || v === 'true' ? 'true' : 'false';
   if (k === 'ss') return JSON.stringify(Array.isArray(v) ? v.map(String) : []);
   return null;
+}
+
+// ------------------------------------------------------------------ what a restore may write
+
+/** An Android package name, for the apps the dock and the map hand over to. */
+const PACKAGE = /^[a-z][a-z0-9_.]*$/;
+
+/** "name|number", the way a favourite and an SOS contact are kept; the number as a number. */
+function namePhone(v: string): boolean {
+  if (v === '') return true;
+  const bar = v.indexOf('|');
+  if (bar <= 0 || v.indexOf('|', bar + 1) >= 0) return false;
+  const phone = v.substring(bar + 1);
+  const digits = phone.replace(/[^0-9+]/g, '');
+  return digits.length >= 3 && digits.length <= 20 && !/[^0-9+\s()-]/.test(phone);
+}
+
+/**
+ * Whether a restored value is one the owner could have typed into the screen it belongs to. A
+ * backup is a file like any other file, and a few of these settings are acted on without ever
+ * being typed again: the UPI id the cost-split QR pays, the SOS numbers, the voice-dial
+ * favourites, the apps a dock button starts and the valet PIN. Each goes through the check its
+ * own screen makes; the rest is text the owner sees on screen before anything is done with it.
+ */
+export function okValue(key: string, v: string): boolean {
+  if (key.startsWith('app:')) return v === '' || PACKAGE.test(v);
+  if (key === 'upiId') return v === '' || validVpa(v);
+  if (key === 'valetPin') return v === '' || validPin(v);
+  if (key === 'cabSos1' || key === 'cabSos2' || /^fav[1-9]$/.test(key)) return namePhone(v);
+  return true;
 }
 
 // ------------------------------------------------------------------ the trip computer ("drive")
@@ -218,7 +247,9 @@ export function unzip(bytes: Uint8Array): Opened {
 
 /**
  * Put the settings back (all of them are replaced, as the Android version clears its file
- * first). Returns how many were restored and the trip computer to put back, if the backup has it.
+ * first). A value `okValue` turns down is left out, and what is here now is kept in its place
+ * rather than cleared, so a doctored file can neither set one of those settings nor empty it.
+ * Returns how many were restored and the trip computer to put back, if the backup has it.
  */
 export function restore(p: Prefs, json: BackupJson): { settings: number; drive: ReturnType<typeof tripOf> | null } {
   if (!p.all || !p.remove) throw new Error('restoring needs a settings store that lists its keys');
@@ -228,14 +259,19 @@ export function restore(p: Prefs, json: BackupJson): { settings: number; drive: 
   if (home && typeof home === 'object') {
     const put: Record<string, string> = {};
     const kinds: Record<string, Typed[0]> = {};
+    const kept = new Set<string>();
     for (const [k, v] of Object.entries(home)) {
       const s = text(v);
       if (s == null) continue;
+      if (!okValue(k, s)) {
+        kept.add(k);
+        continue;
+      }
       put[k] = s;
       const kind = (v as Typed)[0];
       if (kind !== 's') kinds[k] = kind;
     }
-    for (const k of Object.keys(p.all())) if (!(k in put)) p.remove(k);
+    for (const k of Object.keys(p.all())) if (!(k in put) && !kept.has(k)) p.remove(k);
     for (const [k, v] of Object.entries(put)) p.put(k, v);
     p.put(TYPES_KEY, JSON.stringify(kinds));
     settings = Object.keys(put).length;

@@ -29,6 +29,15 @@ const HIST_KEY = 'openrath:history';
 const dir = () => new Directory(Paths.document, 'backup');
 const custom = () => new Directory(Paths.document, 'custom');
 
+/**
+ * A backup is the settings and the owner's own pictures, so a few megabytes; a file much bigger
+ * than that isn't one, and is turned down before anything is unpacked. The pictures it carries
+ * are capped as well, so a picked file can't fill the unit up.
+ */
+const MAX_ZIP = 16 * 1024 * 1024;
+const MAX_PICTURES = 40;
+const TOO_BIG = 'that file is too big to be a backup';
+
 async function readJson<T>(key: string, def: T): Promise<T> {
   try {
     const raw = await AsyncStorage.getItem(key);
@@ -81,9 +90,8 @@ function found(): File[] {
   }
 }
 
-/** Put everything back from a backup's bytes. */
-async function restore(prefs: Prefs, bytes: Uint8Array): Promise<number> {
-  const o = Backup.unzip(bytes);
+/** Put everything back from a backup already unpacked (once, by the caller). */
+async function restore(prefs: Prefs, o: Backup.Opened): Promise<number> {
   const r = Backup.restore(prefs, o.json);
   if (r.drive) {
     await AsyncStorage.setItem(TRIP_KEY, JSON.stringify(r.drive.trip));
@@ -91,7 +99,7 @@ async function restore(prefs: Prefs, bytes: Uint8Array): Promise<number> {
     // the drive service keeps running, so it takes the restored trip now rather than overwriting it
     await Engine.reloadTrip();
   }
-  const names = Object.keys(o.pictures);
+  const names = Object.keys(o.pictures).slice(0, MAX_PICTURES);
   if (names.length > 0) {
     const c = custom();
     c.create({ intermediates: true, idempotent: true });
@@ -145,9 +153,11 @@ export default function BackupScreen() {
         onPress: async () => {
           try {
             const b = await bytes();
-            Backup.unzip(b); // say "not an OpenRath backup" before a copy of what's here is made
+            if (b.length > MAX_ZIP) throw new Error(t(TOO_BIG));
+            // unpacked once, which also says "not an OpenRath backup" before a copy of what's here is made
+            const o = Backup.unzip(b);
             await make(prefs, 'before-restore');
-            const n = await restore(prefs, b);
+            const n = await restore(prefs, o);
             setRefresh((k) => k + 1);
             Alert.alert(t('Restored'), f('%1$s settings are back.', n));
           } catch (e) {
@@ -161,6 +171,8 @@ export default function BackupScreen() {
     const r = await DocumentPicker.getDocumentAsync({ type: ['application/zip', 'application/octet-stream', '*/*'], copyToCacheDirectory: true });
     if (r.canceled || !r.assets[0]) return;
     const a = r.assets[0];
+    // asked before the whole file is read, so a huge one isn't loaded to be turned down after
+    if ((a.size ?? new File(a.uri).size ?? 0) > MAX_ZIP) return Alert.alert(f("Couldn't restore: %1$s", t(TOO_BIG)));
     confirmRestore(a.name, () => new File(a.uri).bytes());
   };
 
