@@ -1,5 +1,5 @@
 import { f, t } from './i18n.ts';
-import type { Prefs } from './prefs.ts';
+import { num, type Prefs } from './prefs.ts';
 import { dayKey } from './trip.ts';
 
 /**
@@ -155,8 +155,7 @@ export function targets(p: Prefs): Target[] {
 
 /** Which target shows ('kidsTarget'), kept inside the list. */
 export function targetIndex(p: Prefs, count: number): number {
-  const v = parseInt(p.str('kidsTarget', '0'), 10);
-  return Math.max(0, Math.min(Number.isFinite(v) ? v : 0, count - 1));
+  return Math.max(0, Math.min(num(p, 'kidsTarget', 0), count - 1));
 }
 
 /** Tap the place: the next one. */

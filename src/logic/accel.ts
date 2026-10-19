@@ -4,8 +4,13 @@
  * as "t100|t60|time" and "accelBest" as "t100", as in the Android version.
  */
 import { f, t } from './i18n.ts';
-import type { Prefs } from './prefs.ts';
+import { dec, type Prefs } from './prefs.ts';
 
+/**
+ * Times standing starts: armed after a second at a standstill, starts when the car moves, and
+ * records the moment 60 and 100 km/h are passed (between two readings, the crossing time is
+ * interpolated). A run that slows down or takes over 40 s is dropped.
+ */
 export class Timer {
   private stillSince = 0;
   private startAt = 0;
@@ -66,7 +71,7 @@ export class Timer {
 export function done(p: Prefs, t100: number, t60: number, now: number): { text: string; record: boolean } {
   const s100 = t100.toFixed(1);
   p.put('accelLast', s100 + (t60 > 0 ? '|' + t60.toFixed(1) : '|') + '|' + now);
-  const best = parseFloat(p.str('accelBest', '0')) || 0;
+  const best = dec(p, 'accelBest', 0);
   const record = best <= 0 || t100 < best;
   if (record) p.put('accelBest', s100);
   return { text: 'Nought to hundred in ' + s100 + ' seconds' + (record ? ', your best' : ''), record };

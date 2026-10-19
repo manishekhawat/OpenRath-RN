@@ -3,6 +3,7 @@
  * main festival holidays, for Settings and the start-up summary. Moving festivals are listed to
  * 2027. (The holiday traffic warning on the dashboard was removed in 1.35.)
  */
+import { DAYS, MONTHS } from './dates.ts';
 
 /** [yyyy-mm-dd, name, days of heavy traffic before it] */
 const MOVING: [string, string, number][] = [
@@ -37,9 +38,6 @@ export function of(year: number): Day[] {
   return out;
 }
 
-const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MON_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
 /** The next holidays from today, for Settings: "Diwali, Sun 8 Nov". */
 export function upcoming(today: Date, n: number): string[] {
   const t = day(today.getFullYear(), today.getMonth() + 1, today.getDate());
@@ -47,5 +45,5 @@ export function upcoming(today: Date, n: number): string[] {
     .sort((a, b) => a.date.getTime() - b.date.getTime())
     .filter((h) => h.date >= t)
     .slice(0, n)
-    .map((h) => `${h.name}, ${DOW[h.date.getDay()]} ${h.date.getDate()} ${MON_NAMES[h.date.getMonth()]}`);
+    .map((h) => `${h.name}, ${DAYS[h.date.getDay()]} ${h.date.getDate()} ${MONTHS[h.date.getMonth()]}`);
 }

@@ -4,8 +4,8 @@
  * sent anywhere; turning the "reports" switch off forgets the counts. Sending a report to a
  * fleet's own address needs managed settings, which this edition leaves out.
  */
-import * as Sharing from 'expo-sharing';
 import { Directory, File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
 import { Alert, Platform, Text } from 'react-native';
 

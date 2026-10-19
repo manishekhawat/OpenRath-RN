@@ -10,14 +10,15 @@
  * Expo's own modules, and the apps step takes a package name, as the rest of this edition does.
  */
 import { Camera } from 'expo-camera';
+import * as IntentLauncher from 'expo-intent-launcher';
 import * as Location from 'expo-location';
 import * as MediaLibrary from 'expo-media-library';
-import * as IntentLauncher from 'expo-intent-launcher';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LAYOUTS } from '../components/LayoutView';
 import { Button, Field, PickList, Row, toast } from '../components/ui';
 import brands from '../data/brands.json';
 import * as Car from '../logic/car';
@@ -27,9 +28,8 @@ import { f, lang, load as loadLanguage, t } from '../logic/i18n';
 import * as Layouts from '../logic/layouts';
 import { num } from '../logic/prefs';
 import * as Setup from '../logic/setup';
-import { LAYOUTS } from '../components/LayoutView';
-import { available, themeName, useLook } from '../state/look';
 import { choose as chooseTheme, chosen as chosenTheme } from '../logic/theme';
+import { available, themeName, useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 
 type Fuel = (typeof Car.FUELS)[number];

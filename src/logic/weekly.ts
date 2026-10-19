@@ -7,10 +7,10 @@ import { spent, tolls, driven } from './care.ts';
 import * as Coach from './coach.ts';
 import { weekly as weeklyText } from './errands.ts';
 import * as Features from './features.ts';
-import { t } from './i18n.ts';
 import { log } from './fuel.ts';
 import { kmpl as planKmpl, summaryRange } from './fuelplan.ts';
 import { upcoming } from './holidays.ts';
+import { t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 import type { History } from './trip.ts';
 

@@ -49,7 +49,9 @@ export default function TripsScreen() {
     () => Care.withToday(hist, trip.day, [Math.round(trip.todayKm * 10) / 10, trip.todaySec, trip.todayBrakes, trip.todayAccels, trip.todaySpeedSec, Trip.score(trip)]),
     [hist, trip],
   );
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 'version' is the store counter the memo depends on; Store.prefs keeps one identity
   const periods = useMemo(() => Care.periods(new Date()).map((p) => Care.periodLine(p.name, Care.totals(prefs, withToday, p.from, p.to))), [prefs, version, withToday]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 'version' is the store counter the memo depends on; Store.prefs keeps one identity
   const coach = useMemo(() => Coach.summarize(prefs), [prefs, version]);
   const recent = [...coach.all].reverse().slice(0, showAll ? 40 : 6);
 

@@ -115,6 +115,12 @@ test('cab: rupees and hours', () => {
   assert.equal(cab.rs(1000), '₹1,000');
   assert.equal(cab.hm(45 * 60000), '45 min');
   assert.equal(cab.hm(125 * 60000), '2 h 5 min');
+  // the day the earnings log is kept under, and the dates on its rows
+  const at = new Date(2026, 9, 14, 9, 5).getTime();
+  assert.equal(cab.isoDay(at), '2026-10-14');
+  assert.equal(cab.isoDay(new Date(2026, 0, 5, 23, 59).getTime()), '2026-01-05');
+  assert.equal(cab.shortDate(at), '14 Oct');
+  assert.equal(cab.longDate(at), '14 Oct 2026, 09:05');
 });
 
 test('cab: meter waits while standing and stops with the fare', () => {

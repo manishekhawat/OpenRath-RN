@@ -11,8 +11,15 @@ export interface Prefs {
   remove?(key: string): void;
 }
 
+/** A whole number from the settings; anything after the digits is cut off, as parseInt does. */
 export function num(p: Prefs, key: string, def: number): number {
   const v = parseInt(p.str(key, String(def)), 10);
+  return Number.isFinite(v) ? v : def;
+}
+
+/** A number with a decimal part, for the fare rates and the like. */
+export function dec(p: Prefs, key: string, def: number): number {
+  const v = parseFloat(p.str(key, String(def)));
   return Number.isFinite(v) ? v : def;
 }
 

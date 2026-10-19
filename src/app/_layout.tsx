@@ -11,8 +11,8 @@ import * as Reports from '../logic/reports';
 // defines the background trip task as the app starts, before Android hands it any fixes
 import '../state/background';
 import { DriveProvider } from '../state/drive';
-import { PlayerProvider } from '../state/player';
 import { useLook } from '../state/look';
+import { PlayerProvider } from '../state/player';
 import { PrefsProvider, usePrefs } from '../state/prefs';
 import * as Store from '../state/store';
 

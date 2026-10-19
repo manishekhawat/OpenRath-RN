@@ -7,27 +7,29 @@ import { Alert, Text, View } from 'react-native';
 
 import { Button, Field, Heading, Row, Screen } from '../components/ui';
 import * as Care from '../logic/care';
+import { MONTHS } from '../logic/dates';
+import { clock } from '../logic/errands';
 import * as Fuel from '../logic/fuel';
 import { f, t } from '../logic/i18n';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const date = (t: number) => {
   const d = new Date(t);
-  const h = d.getHours() % 12 || 12;
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${h}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'AM' : 'PM'}`;
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${clock(t)}`;
 };
 
 export default function TollsScreen() {
   const { prefs, version } = usePrefs();
   const look = useLook();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 'version' is the store counter the memo depends on; Store.prefs keeps one identity
   const list = useMemo(() => Care.tolls(prefs), [prefs, version]);
   const [rs, setRs] = useState('');
 
   const totals = useMemo(() => {
     const fuel = Fuel.log(prefs);
     return Care.periods(new Date()).map((p) => ({ name: p.name, toll: Care.spent(list, p.from, p.to), fuel: Care.spent(fuel, p.from, p.to) }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 'version' is the store counter the memo depends on; Store.prefs keeps one identity
   }, [prefs, version, list]);
 
   const add = () => {

@@ -80,7 +80,7 @@ test('drive summary when stopped', () => {
 });
 
 test('places: saved places for any navigation app', () => {
-  assert.ok(places.point('28.61,77.20'));
+  assert.deepEqual(places.point('28.61,77.20'), [28.61, 77.2], 'the latitude first, then the longitude');
   assert.equal(places.point('abc'), null);
   assert.equal(places.point('0,0'), null);
   assert.equal(places.point(''), null);

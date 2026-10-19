@@ -7,7 +7,7 @@
  * owner's level show (all of them in developer mode: seven taps on Version), and only rows this
  * version can do: steering-wheel buttons, OBD, tyre sensors, the LED strip, the FM tuner, the
  * equalizer, managed settings, app updates and widgets need native Android code and are left out.
- * With valet mode on, Settings asks for the owner's PIN first.
+ * With valet mode on, the owner's PIN is asked for in front of the whole group (_layout.tsx).
  */
 import Constants from 'expo-constants';
 import * as IntentLauncher from 'expo-intent-launcher';
@@ -17,7 +17,7 @@ import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, useWi
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LAYOUTS } from '../../components/LayoutView';
-import { Button, Field, PickList, Row, Screen, toast } from '../../components/ui';
+import { Button, Field, PickList, Row, toast } from '../../components/ui';
 import * as Car from '../../logic/car';
 import * as Car3D from '../../logic/car3d';
 import * as Care from '../../logic/care';
@@ -83,28 +83,7 @@ export default function Settings() {
   const [ask, setAsk] = useState<Ask | null>(null);
   const [answer, setAnswer] = useState('');
   const [pick, setPick] = useState<Pick | null>(null);
-  const [unlocked, setUnlocked] = useState(false);
-  const [pinTry, setPinTry] = useState('');
   const taps = useRef({ n: 0, at: 0 });
-
-  // valet mode: Settings needs the owner's PIN
-  if (Valet.on(prefs) && !unlocked) {
-    return (
-      <Screen title="Settings">
-        <Text style={{ color: look.textDim, marginBottom: 12 }}>{t('Valet mode is on. Enter the PIN')}</Text>
-        <Field label="PIN" value={pinTry} onChange={setPinTry} numeric secret />
-        <Button
-          label="OK"
-          kind="primary"
-          onPress={() => {
-            if (pinTry.trim() === Valet.pin(prefs)) setUnlocked(true);
-            else Alert.alert(t('Wrong PIN'));
-            setPinTry('');
-          }}
-        />
-      </Screen>
-    );
-  }
 
   const askText = (a: Ask) => {
     setAnswer(a.value);
@@ -152,6 +131,7 @@ export default function Settings() {
           prefs.put('valet', 'on');
           Alert.alert(t(Valet.onText(prefs)));
         }
+        return;
       },
     });
 
@@ -277,6 +257,18 @@ export default function Settings() {
   add('Map and navigation', 'Guide routes in', google ? 'Google Maps' : "OpenRath's map", () => prefs.put('src:navi', google ? 'own' : 'google'));
   add('Map and navigation', 'Navigation button opens', prefs.str('app:dock:navi', '') || 'com.google.android.apps.maps', () => askPackage('dock:navi', 'Navigation'));
   add('Map and navigation', 'Guide without internet in', appName(prefs, 'offlineNav'), () => askPackage('offlineNav', 'Offline map app'));
+  // one row for both halves, as in the Android version: when it dims, and how dark it gets.
+  // "With the headlights" needs the unit's own lights (native code), so only sunset is offered.
+  const dimOn = prefs.str('dim', 'off') !== 'off';
+  const dimLevel = num(prefs, 'dimLevel', 40);
+  const dimSteps = [0, 20, 40, 60, 80];
+  const dimText = (pc: number) => f('%1$s, %2$s%% darker', t('after sunset'), String(pc));
+  add('Map and navigation', 'Night dimming', dimOn ? dimText(dimLevel) : 'off', () =>
+    choose('How dark at night', dimSteps.map((pc) => (pc === 0 ? 'off' : dimText(pc))), dimOn ? dimSteps.indexOf(dimLevel) : 0, (i) => {
+      prefs.put('dim', i === 0 ? 'off' : 'sunset');
+      if (i > 0) prefs.put('dimLevel', String(dimSteps[i]));
+    }),
+  );
   // Expo can't list the installed voices, so the row always offers to pick one or get Google's
   add('Map and navigation', 'Spoken voice', "tap to pick a voice, or get Google's, which speaks Hindi", () => {
     getVoice();
@@ -299,7 +291,7 @@ export default function Settings() {
       numeric: true,
       save: (v) => {
         if (!(parseFloat(v) >= 0)) return 'Enter a number';
-        prefs.put('tollRate', String(Math.round(parseFloat(v))));
+        return prefs.put('tollRate', String(Math.round(parseFloat(v))));
       },
     }),
   on('tolls'));
@@ -310,7 +302,7 @@ export default function Settings() {
       numeric: true,
       save: (v) => {
         if (v !== '' && !(parseFloat(v) >= 0)) return 'Enter a number';
-        prefs.put('fuelPrice', v === '' ? '0' : v);
+        return prefs.put('fuelPrice', v === '' ? '0' : v);
       },
     }),
   on('fuelPrice'));
@@ -334,7 +326,7 @@ export default function Settings() {
       numeric: true,
       save: (v) => {
         if (!(parseFloat(v) >= 20)) return 'Enter a speed in km/h';
-        prefs.put('valetSpeed', String(Math.round(parseFloat(v))));
+        return prefs.put('valetSpeed', String(Math.round(parseFloat(v))));
       },
     }),
   );

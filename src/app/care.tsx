@@ -9,17 +9,14 @@ import { Alert, Text, View } from 'react-native';
 
 import { Button, Field, Heading, Row, Screen } from '../components/ui';
 import * as Care from '../logic/care';
-import { f, t } from '../logic/i18n';
 import * as Fuel from '../logic/fuel';
+import { f, t } from '../logic/i18n';
 import * as Trip from '../logic/trip';
 import { useDrive } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 
-const today = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
+const today = () => Trip.dayKey(Date.now());
 
 export default function CareScreen() {
   const { prefs } = usePrefs();

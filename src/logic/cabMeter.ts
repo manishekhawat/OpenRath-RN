@@ -7,21 +7,16 @@
 import { fare, hm, live, night, on, quiet, rs, RATES, startDuty, type Rates } from './cab.ts';
 import { fmt } from './fuel.ts';
 import { f, t } from './i18n.ts';
-import { num, type Prefs } from './prefs.ts';
-
-function dbl(p: Prefs, k: string, def: number): number {
-  const v = parseFloat(p.str(k, String(def)));
-  return Number.isFinite(v) ? v : def;
-}
+import { dec, num, type Prefs } from './prefs.ts';
 
 export function rates(p: Prefs): Rates {
   return {
-    base: dbl(p, 'cabBase', RATES.base),
-    baseKm: dbl(p, 'cabBaseKm', RATES.baseKm),
-    perKm: dbl(p, 'cabPerKm', RATES.perKm),
-    waitPerMin: dbl(p, 'cabWaitRs', RATES.waitPerMin),
-    freeWait: dbl(p, 'cabFreeWait', RATES.freeWait),
-    nightPct: dbl(p, 'cabNightPct', RATES.nightPct),
+    base: dec(p, 'cabBase', RATES.base),
+    baseKm: dec(p, 'cabBaseKm', RATES.baseKm),
+    perKm: dec(p, 'cabPerKm', RATES.perKm),
+    waitPerMin: dec(p, 'cabWaitRs', RATES.waitPerMin),
+    freeWait: dec(p, 'cabFreeWait', RATES.freeWait),
+    nightPct: dec(p, 'cabNightPct', RATES.nightPct),
   };
 }
 
@@ -29,7 +24,7 @@ export const running = (p: Prefs) => num(p, 'cabMeterAt', 0) > 0;
 
 /** Km since the meter started, by the GPS odometer. */
 export function meterKm(p: Prefs, odoKm: number): number {
-  return Math.max(0, odoKm - dbl(p, 'cabMeterOdo', odoKm));
+  return Math.max(0, odoKm - dec(p, 'cabMeterOdo', odoKm));
 }
 
 export function meterWaitMs(p: Prefs): number {
@@ -83,7 +78,7 @@ export function stopMeter(p: Prefs, odoKm: number, now: number): Stopped | null 
   const km = meterKm(p, odoKm);
   const w = Math.floor(meterWaitMs(p) / 60000);
   const said = f('%1$s km, %2$s min waiting', fmt(km), w) + (meterNight(p, now) ? t(', night charge') : '');
-  const s = { fare: fr, km, lat: dbl(p, 'cabMeterLat', 0), lon: dbl(p, 'cabMeterLon', 0), said };
+  const s = { fare: fr, km, lat: dec(p, 'cabMeterLat', 0), lon: dec(p, 'cabMeterLon', 0), said };
   p.put('cabMeterAt', '0');
   p.put('cabMeterWait', '0');
   live.waitMs = 0;

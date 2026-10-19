@@ -39,10 +39,26 @@ function utcStamp(t: number): string {
   return new Date(t).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 }
 
-export function clock(t: number): string {
+/** The shapes of the twelve-hour clock the screens ask for; plain clock(t) gives "8:30 PM". */
+export interface ClockStyle {
+  /** "8:30 pm" rather than "8:30 PM", as the dashcam writes a clip's time. */
+  lower?: boolean;
+  /** "8:30:05 PM", with the seconds a clip's name carries. */
+  seconds?: boolean;
+  /** "8:30" on its own, with no AM or PM, as the dashboard's clock parts show it. */
+  bare?: boolean;
+}
+
+/** Twelve-hour time, as SimpleDateFormat "h:mm a" wrote it. */
+export function clock(t: number, style: ClockStyle = {}): string {
   const d = new Date(t);
-  const h = d.getHours() % 12 || 12;
-  return `${h}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'AM' : 'PM'}`;
+  const two = (n: number) => String(n).padStart(2, '0');
+  const half = d.getHours() < 12 ? 'AM' : 'PM';
+  return (
+    `${d.getHours() % 12 || 12}:${two(d.getMinutes())}` +
+    (style.seconds ? ':' + two(d.getSeconds()) : '') +
+    (style.bare ? '' : ' ' + (style.lower ? half.toLowerCase() : half))
+  );
 }
 
 /** A Google Calendar link: an event that ends when the parking does, with a reminder before it. */

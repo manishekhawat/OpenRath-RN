@@ -6,8 +6,8 @@ import { Linking, Text } from 'react-native';
 
 import { Row, Screen } from '../../components/ui';
 import * as Cab from '../../logic/cab';
-import { t } from '../../logic/i18n';
 import { dist } from '../../logic/geo';
+import { t } from '../../logic/i18n';
 import { useDrive } from '../../state/drive';
 import { useLook } from '../../state/look';
 import { usePrefs } from '../../state/prefs';

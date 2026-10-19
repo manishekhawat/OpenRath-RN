@@ -17,6 +17,7 @@ import magmaGrey from '../data/theme-magma-grey.json';
 import minimal from '../data/theme-minimal.json';
 import mission from '../data/theme-mission.json';
 import roadster from '../data/theme-roadster.json';
+import type { Prefs } from '../logic/prefs';
 import {
   brokenPack,
   chosen,
@@ -33,7 +34,6 @@ import {
   type ThemeJson,
 } from '../logic/theme';
 import * as ThemeAuto from '../logic/themeauto';
-import type { Prefs } from '../logic/prefs';
 import * as Engine from './engine';
 import { usePrefs } from './prefs';
 

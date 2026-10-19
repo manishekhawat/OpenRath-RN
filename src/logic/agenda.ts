@@ -4,6 +4,9 @@
  * expo-calendar in components/CalendarBox.tsx; these helpers have no Expo types, so they are tested.
  */
 
+// the weekday names are shared with every other screen that writes a date
+import { DAYS as WEEK } from './dates.ts';
+
 export const DAYS = 4;
 export const MAX = 6;
 
@@ -41,8 +44,6 @@ export function upcoming(raw: { title?: string | null; start: number; end: numbe
   out.sort((a, b) => a.start - b.start);
   return out.slice(0, MAX);
 }
-
-const WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /** {day, time} for an event: "Today", "Tomorrow" or "Wed", and "14:30" ("" for all day, "now" while it runs). */
 export function when(start: number, end: number, allDay: boolean, now: number, tz?: string): [string, string] {

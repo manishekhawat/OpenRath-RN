@@ -46,7 +46,7 @@ export function f(format: string, ...args: unknown[]): string {
 
 export function fill(format: string, args: unknown[]): string {
   let next = 0;
-  return format.replace(/%(?:(\d+)\$)?([sd%])/g, (m, pos: string | undefined, kind: string) => {
+  return format.replace(/%(?:(\d+)\$)?([sd%])/g, (_m, pos: string | undefined, kind: string) => {
     if (kind === '%') return '%';
     const i = pos ? parseInt(pos, 10) - 1 : next++;
     const v = args[i];

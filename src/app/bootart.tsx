@@ -11,8 +11,8 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, Dimensions, Image, PixelRatio, Text, View } from 'react-native';
 
 import { Button, Choice, Heading, Screen } from '../components/ui';
-import { f, t } from '../logic/i18n';
 import * as Art from '../logic/bootart';
+import { f, t } from '../logic/i18n';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 

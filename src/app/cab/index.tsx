@@ -56,7 +56,7 @@ export default function CabMenu() {
   const on = (id: string) => Cab.on(prefs, id);
   const quiet = Cab.quiet(prefs);
   const setQuiet = (yes: boolean) => toast(Cab.setQuiet(prefs, yes));
-  const openApp = (name: string, pkg: string) => {
+  const openApp = (pkg: string) => {
     prefs.put('cabLastRideApp', pkg);
     if (Platform.OS === 'android') {
       try {
@@ -116,7 +116,7 @@ export default function CabMenu() {
         <>
           <Heading>{t('Ride apps')}</Heading>
           {Cab.rideApps(prefs).map(([name, pkg]) => (
-            <Row key={pkg} name={name} value={pkg} onPress={() => openApp(name, pkg)} />
+            <Row key={pkg} name={name} value={pkg} onPress={() => openApp(pkg)} />
           ))}
         </>
       ) : null}

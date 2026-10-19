@@ -1,10 +1,12 @@
 /**
- * Routes driven and the 0–100 timer (the pure parts of Tracks.java). A point is kept every 5 s or
- * 30 m while moving, as one CSV line in a file per day ("time,lat,lon,alt,kmh"); days are kept
- * 60 at most and turned into GPX on request. The file side is in src/state/tracks.ts.
+ * Routes driven (the pure parts of Tracks.java). A point is kept every 5 s or 30 m while moving,
+ * as one CSV line in a file per day ("time,lat,lon,alt,kmh"); days are kept 60 at most and turned
+ * into GPX on request. The file side is in src/state/tracks.ts. The 0–100 timer Tracks.java also
+ * held is src/logic/accel.ts now; the names the trip screen uses for it are re-exported below.
  */
+import { done } from './accel.ts';
 import { dist } from './geo.ts';
-import { f, t } from './i18n.ts';
+import { t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 import { dayKey } from './trip.ts';
 
@@ -126,91 +128,14 @@ export function gpxName(day: string): string {
 // ------------------------------------------------------------------ 0–100 timer
 
 /**
- * Times standing starts: armed after a second at a standstill, starts when the car moves, and
- * records the moment 60 and 100 km/h are passed (between two readings, the crossing time is
- * interpolated). A run that slows down or takes over 40 s is dropped.
+ * The timer itself, and the texts for a finished run, are in src/logic/accel.ts, which the drive
+ * engine uses; these are the names the trip screen has always called them by.
  */
-export class Timer {
-  stillSince = 0;
-  startAt = 0;
-  prevAt = 0;
-  prevKmh = 0;
-  armed = false;
-  running = false;
-  done60 = false;
-  /** seconds, from the latest run; -1 when none */
-  result60 = -1;
-  result100 = -1;
+export { Timer, forget as forgetAccel, summary as accelText } from './accel.ts';
 
-  /** Feed a speed reading; returns a finished 0–100 time in seconds, or -1. */
-  feed(kmh: number, now: number): number {
-    let out = -1;
-    if (kmh < 2) {
-      if (this.stillSince === 0) this.stillSince = now;
-      if (now - this.stillSince >= 1000) this.armed = true;
-      this.running = false;
-    } else {
-      this.stillSince = 0;
-      if (this.armed && !this.running) {
-        this.running = true;
-        this.armed = false;
-        // the car pulled away somewhere between the last still reading and this one
-        this.startAt = this.prevAt !== 0 && now - this.prevAt < 3000 ? this.prevAt + Math.trunc((now - this.prevAt) / 2) : now;
-        this.done60 = false;
-        this.result60 = this.result100 = -1;
-      }
-      if (this.running) {
-        if (kmh + 3 < this.prevKmh || now - this.startAt > 40000) this.running = false; // backed off: not a full run
-        else {
-          if (!this.done60 && kmh >= 60) {
-            this.result60 = this.cross(60, kmh, now);
-            this.done60 = true;
-          }
-          if (kmh >= 100) {
-            this.result100 = this.cross(100, kmh, now);
-            out = this.result100;
-            this.running = false;
-          }
-        }
-      }
-    }
-    this.prevKmh = kmh;
-    this.prevAt = now;
-    return out;
-  }
-
-  private cross(target: number, kmh: number, now: number): number {
-    const f = kmh <= this.prevKmh ? 1 : (target - this.prevKmh) / (kmh - this.prevKmh);
-    const at = this.prevAt + Math.trunc((now - this.prevAt) * Math.min(1, Math.max(0, f)));
-    return (at - this.startAt) / 1000;
-  }
-}
-
-/**
- * A finished run: saves it as 'accelLast' ("9.5|5.4|time") and, when it beats the old one,
- * 'accelBest'; returns what to say.
- */
+/** A finished run: saves it, and returns only the words to say, as this name always has. */
 export function accelDone(p: Prefs, t100: number, t60: number, now: number): string {
-  const s100 = t100.toFixed(1);
-  p.put('accelLast', s100 + (t60 > 0 ? '|' + t60.toFixed(1) : '|') + '|' + now);
-  const best = parseFloat(p.str('accelBest', '0')) || 0;
-  const record = best <= 0 || t100 < best;
-  if (record) p.put('accelBest', s100);
-  return 'Nought to hundred in ' + s100 + ' seconds' + (record ? ', your best' : '');
-}
-
-/** The Settings line: "last 9.5 s (0–60 5.4 s)  ·  best 9.1 s", or "no full run yet". */
-export function accelText(p: Prefs): string {
-  const last = p.str('accelLast', '');
-  if (last === '') return t('no full run yet');
-  const lf = last.split('|');
-  const best = p.str('accelBest', '');
-  return f('last %1$s s', lf[0]) + (lf.length > 1 && lf[1] !== '' ? ' (0–60 ' + lf[1] + ' s)' : '') + f('  ·  best %1$s s', best || '-');
-}
-
-export function forgetAccel(p: Prefs): void {
-  p.put('accelBest', '');
-  p.put('accelLast', '');
+  return done(p, t100, t60, now).text;
 }
 
 export const ACCEL_ABOUT =

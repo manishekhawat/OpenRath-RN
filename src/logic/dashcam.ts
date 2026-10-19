@@ -9,6 +9,8 @@
  * while its view is on screen (src/components/DashcamView.tsx does the camera and file work, this
  * the rules). A USB camera, or recording with the screen off, needs native code.
  */
+import { DAYS, MONTHS } from './dates.ts';
+import { clock } from './errands.ts';
 import * as Features from './features.ts';
 import { f, t } from './i18n.ts';
 import { num, type Prefs } from './prefs.ts';
@@ -95,16 +97,12 @@ export function clipTime(name: string): number {
   return new Date(y, mo - 1, d, h, mi, s).getTime();
 }
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
 /** "Wed 15 Oct, 8:30:05 am" for a clip's name in the list. */
 export function clipLabel(name: string): string {
   const t = clipTime(name);
   if (!t) return name;
   const d = new Date(t);
-  const h = d.getHours() % 12 || 12;
-  return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}, ${h}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${d.getHours() < 12 ? 'am' : 'pm'}`;
+  return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}, ${clock(t, { lower: true, seconds: true })}`;
 }
 
 export function sizeText(bytes: number): string {

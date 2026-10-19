@@ -8,6 +8,8 @@
  * from a view on screen: when the dashboard's dashcam box is showing it ends the clip and takes
  * the photo itself; otherwise the owner is asked, and the parking photo screen takes it.
  */
+import { DAYS } from './dates.ts';
+import { clock } from './errands.ts';
 import * as Features from './features.ts';
 import { f, t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
@@ -36,13 +38,9 @@ export function rotate(names: string[]): { from: string; to: string }[] {
   return names.includes(LATEST) ? [{ from: LATEST, to: PREVIOUS }] : [];
 }
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 /** "Taken Wed 8:30 PM" (SimpleDateFormat "EEE h:mm a"). */
 export function takenText(at: number): string {
-  const d = new Date(at);
-  const h = d.getHours() % 12 || 12;
-  return f('Taken %1$s', `${DAYS[d.getDay()]} ${h}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'AM' : 'PM'}`);
+  return f('Taken %1$s', `${DAYS[new Date(at).getDay()]} ${clock(at)}`);
 }
 
 /** The Settings row "Last parking photo". */

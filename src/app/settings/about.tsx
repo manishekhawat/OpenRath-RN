@@ -77,7 +77,7 @@ export default function About() {
         and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either
         version 3 of the License, or (at your option) any later version. It comes with ABSOLUTELY NO WARRANTY. The full licence is
         in the LICENSE file of the source code. Additional term under GPLv3 section 7(b): anyone who conveys OpenRath or a modified
-        version must keep the credit "{CREDIT}", with a link to {PROJECT}, in its About or credits screen.
+        version must keep the credit &quot;{CREDIT}&quot;, with a link to {PROJECT}, in its About or credits screen.
       </Text>
       <Text style={p}>{t('This is the React Native edition, built from OpenRath 1.42.')}</Text>
       <Text style={p}>

@@ -9,10 +9,12 @@
  * (cabMeter.ts), SOS (cabSos.ts) and the settings rows (cabSettings.ts) are files of their own.
  * The screens are in app/cab. Shown text goes through t()/f(); spoken text stays English.
  */
+import { MONTHS } from './dates.ts';
 import * as Features from './features.ts';
 import { compute as fuelCompute, fmt } from './fuel.ts';
 import { f, t } from './i18n.ts';
 import { num, type Prefs } from './prefs.ts';
+import { dayKey } from './trip.ts';
 
 export function on(p: Prefs, id: string): boolean {
   return Features.on(p, 'cab') && Features.on(p, id);
@@ -96,8 +98,10 @@ export function hm(ms: number): string {
   return m < 60 ? f('%1$s min', m) : f('%1$s h %2$s min', Math.floor(m / 60), m % 60);
 }
 
-export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const two = (n: number) => String(n).padStart(2, '0');
+
+/** The month names come from src/logic/dates.ts now; the cab screens still read them from here. */
+export { MONTHS };
 
 /** "14 Oct  09:30", as the log's rows. */
 export function when(t: number, gap = '  '): string {
@@ -115,9 +119,9 @@ export function longDate(t: number): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}, ${two(d.getHours())}:${two(d.getMinutes())}`;
 }
 
+/** "2026-10-15", the same key the trip history and the backups use. */
 export function isoDay(t: number): string {
-  const d = new Date(t);
-  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
+  return dayKey(t);
 }
 
 // ================================================================== fare meter (pure part)
@@ -491,7 +495,8 @@ export function toggleDuty(p: Prefs, now: number): string | null {
   const d = num(p, 'cabDutyAt', 0);
   if (d >= dayStart(now)) {
     p.put('cabDutyAt', '0');
-    // stays ended for today unless started again from here
+    // when duty ended, for the backup to carry; nothing reads it, so the next fix above 10 km/h
+    // starts duty again, exactly as Cab.java does
     p.put('cabDutyEnded', String(now));
     return f('Duty ended after %1$s', hm(now - d));
   }

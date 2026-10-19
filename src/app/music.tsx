@@ -6,9 +6,9 @@
  * video window and drag to seek. The sound ones act on this player only: the system volume,
  * other apps and the equalizer need native code.
  */
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
-import { router } from 'expo-router';
 
 import { Button, Choice, Field, Heading, Row, Screen } from '../components/ui';
 import * as Features from '../logic/features';

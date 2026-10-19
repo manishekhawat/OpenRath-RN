@@ -5,6 +5,7 @@
  * small saloon. Drives are kept in the 'drives' pref as JSON arrays, as in the Android version.
  */
 import * as Car from './car.ts';
+import { DAYS, MONTHS } from './dates.ts';
 import { clock } from './errands.ts';
 import { fmt, log, price, stats } from './fuel.ts';
 import { f, t as tr } from './i18n.ts';
@@ -211,18 +212,15 @@ export function save(p: Prefs, t: Trip | null): void {
   p.put(KEY, JSON.stringify(a.slice(Math.max(0, a.length - KEEP))));
 }
 
-const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
 /** "Thu 15 Oct, 8:30 AM" (the Java "EEE d MMM, h:mm a"). */
 export function when(t: number): string {
   const d = new Date(t);
-  return `${DOW[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]}, ${clock(t)}`;
+  return `${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}, ${clock(t)}`;
 }
 
 /** "Thu" (the Java "EEE"). */
 export function weekday(t: number): string {
-  return DOW[new Date(t).getDay()];
+  return DAYS[new Date(t).getDay()];
 }
 
 export interface Summary {

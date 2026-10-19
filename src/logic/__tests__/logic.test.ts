@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import * as air from '../air.ts';
-import * as care from '../care.ts';
 import * as car from '../car.ts';
+import * as care from '../care.ts';
 import * as errands from '../errands.ts';
 import * as features from '../features.ts';
 import * as fuel from '../fuel.ts';
@@ -218,6 +218,10 @@ test('service reminders', () => {
   assert.equal(care.alert(p, 30100, today), 'OIL CHANGE OVERDUE');
   assert.equal(care.bookingDue(p, 29700), 0);
   assert.equal(care.describe(p, 1, 29700, today), 'every 10000 km; last one not set');
+  // the odometer entered once is read back as it was, and the GPS keeps counting from there
+  care.setOdo(p, 30000, 1200);
+  assert.equal(care.odo(p, 1200), 30000);
+  assert.equal(care.odo(p, 1250), 30050);
 });
 
 test('air quality', () => {

@@ -7,9 +7,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import * as Features from '../features.ts';
 import * as player from '../player.ts';
 import { memoryPrefs } from '../prefs.ts';
-import * as Features from '../features.ts';
 import * as soundboard from '../soundboard.ts';
 import * as videos from '../videos.ts';
 

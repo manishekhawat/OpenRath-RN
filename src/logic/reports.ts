@@ -9,6 +9,7 @@
  */
 import * as Features from './features.ts';
 import type { Prefs } from './prefs.ts';
+import { dayKey } from './trip.ts';
 
 let store: Prefs | null = null;
 let prefs: Prefs | null = null;
@@ -54,11 +55,6 @@ export function format(c: Record<string, number>): string {
     .join('');
 }
 
-const day = (ms: number) => {
-  const d = new Date(ms);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
 /** The report as plain text, for Share. `unit` is the maker, model and Android version. */
 export function text(version: string, unit: string, now = Date.now()): string {
   const s = store;
@@ -67,7 +63,7 @@ export function text(version: string, unit: string, now = Date.now()): string {
     `OpenRath ${version} usage report\n` +
     `Unit: ${unit}\n` +
     `Report id: ${s?.str('id', '-') || '-'}\n` +
-    `Counted since: ${s ? day(Number.isFinite(since) ? since : now) : '-'}\n\n`;
+    `Counted since: ${s ? dayKey(Number.isFinite(since) ? since : now) : '-'}\n\n`;
   b += format(counts());
   const c = crashes();
   b += `\nCrash reports on the unit: ${c.length}\n`;
@@ -107,7 +103,7 @@ export function crashes(): { name: string; body: string }[] {
     .map(([k, v]) => {
       const d = new Date(parseInt(k.substring(6), 10));
       const hm = `${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`;
-      return { name: `crash-${day(d.getTime())}-${hm}.txt`, body: v };
+      return { name: `crash-${dayKey(d.getTime())}-${hm}.txt`, body: v };
     });
 }
 

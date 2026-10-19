@@ -5,8 +5,8 @@
  * first ("share" also shows its code at once).
  */
 import * as IntentLauncher from 'expo-intent-launcher';
-import { useEffect, useState, type ReactNode } from 'react';
 import { useLocalSearchParams } from 'expo-router';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Alert, Platform, Text, View } from 'react-native';
 
 import { QrSheet } from '../components/Qr';

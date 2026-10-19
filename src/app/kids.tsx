@@ -8,8 +8,8 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, type StylePro
 
 import { Screen } from '../components/ui';
 import * as Features from '../logic/features';
-import { f, t } from '../logic/i18n';
 import { dist } from '../logic/geo';
+import { f, t } from '../logic/i18n';
 import * as Kids from '../logic/kids';
 import { useDrive } from '../state/drive';
 import { usePrefs } from '../state/prefs';

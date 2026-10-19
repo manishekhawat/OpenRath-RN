@@ -7,7 +7,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { Redirect, router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CalendarBox } from '../components/CalendarBox';
@@ -22,13 +22,14 @@ import { Road } from '../components/Road';
 import { RoadAhead } from '../components/RoadAhead';
 import { SoundboardBox } from '../components/SoundboardBox';
 import { TapBox } from '../components/Tap';
+import { PickList, toast } from '../components/ui';
 import { VideoBox } from '../components/VideoBox';
 import { WeatherBox } from '../components/WeatherBox';
-import { PickList, toast } from '../components/ui';
 import * as Cab from '../logic/cab';
 import * as CabEarnings from '../logic/cabEarnings';
 import * as Car from '../logic/car';
 import * as Care from '../logic/care';
+import { DAYS_FULL, MONTHS_FULL } from '../logic/dates';
 import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
 import * as Fuel from '../logic/fuel';
@@ -40,7 +41,7 @@ import * as Trip from '../logic/trip';
 import * as Units from '../logic/units';
 import * as Weekly from '../logic/weekly';
 import { useParkedSnap } from '../state/camera';
-import { say, useDrive } from '../state/drive';
+import { say, speedNow, useDriveSpeed, useDriveTrip } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 import { useWeather } from '../state/weather';
@@ -54,9 +55,6 @@ function useClock() {
   }, []);
   return now;
 }
-
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 /** Three figures in a row under a box's title (Cards.FiguresCard). */
 function Figures({ figs }: { figs: [string, string][] }) {
@@ -82,10 +80,33 @@ function ago(at: number, now: number): string {
   return f('%1$s days ago', Math.floor(m / 1440));
 }
 
+/** The speed as it reads now, "--" without a fix (1.39: the number eases between fixes). */
+function SpeedText({ mph, style }: { mph: boolean; style: StyleProp<TextStyle> }) {
+  const { speedShown } = useDriveSpeed();
+  return <Text style={style}>{speedShown < 0 ? '--' : String(Units.speed(speedShown, mph))}</Text>;
+}
+
+/** This drive's summary, which the engine fills in after 5 seconds at a standstill. */
+function StopSummary({ mph, color }: { mph: boolean; color: string }) {
+  const { stopped } = useDriveSpeed();
+  if (!stopped) return null;
+  return (
+    <Text style={[styles.small, { color, textAlign: 'center' }]} numberOfLines={1}>
+      {Trip.stopText(stopped.km, stopped.sec, stopped.topKmh, mph)}
+    </Text>
+  );
+}
+
+/** The moving road under the car: it follows the speed, so it keeps that to itself. */
+function MovingRoad({ width, fill, line }: { width: number; fill: string; line: string }) {
+  const { speedShown } = useDriveSpeed();
+  return <Road width={width} height={90} kmh={Math.max(0, speedShown)} fill={fill} line={line} />;
+}
+
 export default function Home() {
   const { prefs, version } = usePrefs();
   const look = useLook();
-  const drive = useDrive();
+  const drive = useDriveTrip();
   const { trip } = drive;
   const now = useClock();
   const weather = useWeather(trip.lat, trip.lon);
@@ -96,15 +117,30 @@ export default function Home() {
   // the parking photo when the car parks
   useParkedSnap();
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 'version' is the store counter the memo depends on; Store.prefs keeps one identity
   const fuelStats = useMemo(() => Fuel.stats(Fuel.log(prefs)), [prefs, version]);
+  // today's rides, the box's foot line and the month's tolls each parse a kept log, so they are
+  // worked out again only when a setting changes, the clock ticks or the odometer moves on
+  const cabSum = useMemo(
+    () => (Features.on(prefs, 'cab') ? Cab.sum(Cab.log(prefs), Cab.dayStart(now.getTime()), now.getTime() + 1) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 'version' is the store counter the memo depends on; Store.prefs keeps one identity
+    [prefs, version, now],
+  );
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 'version' is the store counter the memo depends on; Store.prefs keeps one identity
+  const cabFoot = useMemo(() => CabEarnings.boxFoot(prefs, now.getTime(), trip.odoKm), [prefs, version, now, trip.odoKm]);
+  const dayKey = Trip.dayKey(now.getTime());
+  const tolls = useMemo(
+    // only the month matters here, so this is read again when the day moves on
+    () => Care.tollsThisMonth(prefs, now),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [prefs, version, dayKey],
+  );
   const odoKm = Care.odo(prefs, trip.odoKm);
   const tripCost = Fuel.cost(prefs, trip.todayKm, Car.kmpl(Car.fuel(prefs)));
   const careAlert = Features.on(prefs, 'care') ? Care.alert(prefs, odoKm, now) : '';
   const dark = trip.lat !== 0 && Errands.dark(trip.lat, trip.lon, now.getTime());
   const driving = trip.kmh > 20;
-  // 1.39: the number eases between fixes and shows "--" without one
   const mph = Units.mph(prefs);
-  const speedText = drive.speedShown < 0 ? '--' : String(Units.speed(drive.speedShown, mph));
 
   // the start-up summary, once a day, when the weather is in
   useEffect(() => {
@@ -126,6 +162,9 @@ export default function Home() {
     );
     say(text);
     Alert.alert(t(Errands.greeting(new Date())), text.substring(text.indexOf('.') + 1).trim());
+  // the summary is written once a day (summaryDay) and waits for the weather, so it does not
+  // follow every odometer tick or air-quality update
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weather.wx, prefs, careAlert, fuelStats]);
 
   // the automatic daily backup (Backup.daily)
@@ -171,8 +210,7 @@ export default function Home() {
   const [saver, setSaver] = useState(false);
   useEffect(() => {
     const id = setInterval(() => {
-      const d = driveRef.current;
-      const parked = Date.now() - d.fixAt > 10000 || d.trip.kmh < 5;
+      const parked = Date.now() - speedNow().fixAt > 10000 || driveRef.current.trip.kmh < 5;
       if (Features.on(prefs, 'saver') && parked && Date.now() - touchAt.current > num(prefs, 'saverMin', 5) * 60000) setSaver(true);
     }, 20000);
     return () => clearInterval(id);
@@ -181,7 +219,7 @@ export default function Home() {
   // the weekly report, on the first parked start of a new week
   useEffect(() => {
     const t = setTimeout(() => {
-      if (Car.ready(prefs) && trip.kmh <= 3 && Weekly.due(prefs)) router.push('/report');
+      if (Car.ready(prefs) && driveRef.current.trip.kmh <= 3 && Weekly.due(prefs)) router.push('/report');
     }, 3000);
     return () => clearTimeout(t);
     // once per dashboard visit
@@ -222,9 +260,9 @@ export default function Home() {
     };
     return (
       <Pressable style={[styles.fill, styles.saver]} onPress={wake}>
-        <Text style={styles.saverTime}>{`${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')}`}</Text>
+        <Text style={styles.saverTime}>{Errands.clock(now.getTime(), { bare: true })}</Text>
         <Text style={styles.saverDate}>
-          {t(DAYS[now.getDay()])}  {now.getDate()} {t(MONTHS[now.getMonth()])}
+          {t(DAYS_FULL[now.getDay()])}  {now.getDate()} {t(MONTHS_FULL[now.getMonth()])}
         </Text>
         {weather.wx ? (
           <Text style={[styles.saverNow, { color: look.accent }]}>{`${Units.temp(prefs, weather.wx.tempC)}  ${t(weather.wx.text)}`}</Text>
@@ -237,8 +275,8 @@ export default function Home() {
     // after sunset while driving: big red speed, nothing else; a tap leaves it until the next drive
     return (
       <Pressable style={[styles.fill, styles.night]} onPress={() => setNightOff(true)} onLongPress={() => router.push('/map')}>
-        <Text style={styles.nightTime}>{`${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')}`}</Text>
-        <Text style={styles.nightSpeed}>{speedText}</Text>
+        <Text style={styles.nightTime}>{Errands.clock(now.getTime(), { bare: true })}</Text>
+        <SpeedText mph={mph} style={styles.nightSpeed} />
         <Text style={styles.nightUnit}>{Units.speedLabel(prefs).toUpperCase()}</Text>
         <Text style={styles.nightHint}>{t('Tap here to leave night-drive mode')}</Text>
       </Pressable>
@@ -247,14 +285,11 @@ export default function Home() {
 
   if (layout) return <LayoutView layout={layout} />;
 
-  const time = `${now.getHours() % 12 || 12}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const time = Errands.clock(now.getTime(), { bare: true });
   const ampm = now.getHours() < 12 ? 'AM' : 'PM';
   const carName = Car.name(prefs);
   // 1.42: no greeting line until the owner types their name
   const owner = Layouts.owner(prefs);
-  // the engine fills this in after 5 seconds at a standstill, when stopSummary is on
-  const stopped = drive.stopped;
-
   const carBox = (
     <TapBox style={landscape ? { flex: 1.4 } : { height: 300 }} onPress={() => router.push('/map')} onLongPress={() => router.push('/settings')}>
       {owner ? (
@@ -269,7 +304,7 @@ export default function Home() {
         {carName || t('MY CAR')}
       </Text>
       <View style={styles.speedRow}>
-        <Text style={[styles.speed, { color: drive.over ? '#E5484D' : look.text }]}>{speedText}</Text>
+        <SpeedText mph={mph} style={[styles.speed, { color: drive.over ? '#E5484D' : look.text }]} />
         <Text style={[styles.unit, { color: look.textDim }]}>{Units.speedLabel(prefs)}</Text>
         {drive.limit > 0 ? (
           <View style={styles.limit}>
@@ -279,14 +314,10 @@ export default function Home() {
       </View>
       <View style={styles.roadWrap}>
         {look.road && Features.on(prefs, 'road') ? (
-          <Road width={landscape ? width * 0.36 : width - 56} height={90} kmh={Math.max(0, drive.speedShown)} fill={look.roadFill} line={look.roadLine} />
+          <MovingRoad width={landscape ? width * 0.36 : width - 56} fill={look.roadFill} line={look.roadLine} />
         ) : null}
       </View>
-      {stopped ? (
-        <Text style={[styles.small, { color: look.textDim, textAlign: 'center' }]} numberOfLines={1}>
-          {Trip.stopText(stopped.km, stopped.sec, stopped.topKmh, mph)}
-        </Text>
-      ) : null}
+      <StopSummary mph={mph} color={look.textDim} />
       <View style={styles.carFoot}>
         <Text style={[styles.small, { color: careAlert ? look.accent : look.textDim }]} numberOfLines={1}>
           {t(careAlert) || (drive.gps === 'denied' ? t('LOCATION OFF: ALLOW IT IN SETTINGS') : drive.gps ? t('WAITING FOR GPS') : '')}
@@ -304,7 +335,7 @@ export default function Home() {
         {time} <Text style={[styles.ampm, { color: look.textDim }]}>{ampm}</Text>
       </Text>
       <Text style={{ color: look.textDim }}>
-        {t(DAYS[now.getDay()])}, {now.getDate()} {t(MONTHS[now.getMonth()])}
+        {t(DAYS_FULL[now.getDay()])}, {now.getDate()} {t(MONTHS_FULL[now.getMonth()])}
       </Text>
     </TapBox>
   );
@@ -336,7 +367,6 @@ export default function Home() {
   // the dashcam records through this box, so it stays mounted while either camera feature is on
   const camBox = Features.on(prefs, 'dashcam') || Features.on(prefs, 'parkPhoto') ? <DashcamView style={styles.flexBox} /> : null;
 
-  const cabSum = Features.on(prefs, 'cab') ? Cab.sum(Cab.log(prefs), Cab.dayStart(now.getTime()), now.getTime() + 1) : null;
   const cabShare = Cab.targetShare(prefs, now.getTime());
   const cabBox = cabSum ? (
     <TapBox title="CAB  ·  TODAY" style={styles.flexBox} onPress={() => router.push('/cab')}>
@@ -353,7 +383,7 @@ export default function Home() {
         </View>
       ) : null}
       <Text style={[styles.small, { color: look.textDim, textAlign: 'center' }]} numberOfLines={1}>
-        {CabEarnings.boxFoot(prefs, now.getTime(), trip.odoKm)}
+        {cabFoot}
       </Text>
     </TapBox>
   ) : null;
@@ -372,7 +402,7 @@ export default function Home() {
           ? t('Tap to add your first fill-up')
           : fuelStats.lastKmpl <= 0
             ? t('Mileage shows after two full-tank fill-ups')
-            : f('%1$s fill-ups  ·  last %2$s', fuelStats.fills, ago(fuelStats.lastAt, now.getTime())) + Care.tollsThisMonth(prefs, now)}
+            : f('%1$s fill-ups  ·  last %2$s', fuelStats.fills, ago(fuelStats.lastAt, now.getTime())) + tolls}
       </Text>
     </TapBox>
   );
