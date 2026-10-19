@@ -15,8 +15,8 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import * as Linking from 'expo-linking';
 import { router, type Href } from 'expo-router';
 import { useRef, useState } from 'react';
-import Svg, { Path, Rect } from 'react-native-svg';
 import { Alert, PanResponder, Platform, Pressable, StyleSheet, ToastAndroid, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import Svg, { Path, Rect } from 'react-native-svg';
 
 import * as Air from '../logic/air';
 import * as CarAnswer from '../logic/caranswer';
@@ -27,8 +27,8 @@ import * as Voice from '../logic/voice';
 import * as Cam from '../state/camera';
 import { say } from '../state/drive';
 import * as Engine from '../state/engine';
-import * as Music from '../state/player';
 import { useLook } from '../state/look';
+import * as Music from '../state/player';
 import { usePrefs } from '../state/prefs';
 
 export interface VoiceCtx {

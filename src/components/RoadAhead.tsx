@@ -4,6 +4,7 @@
  * drive); otherwise the highway strip, the road-ahead line, the latest road warning, a fresh
  * 0–100 time and the break reminder. Renders nothing when there is nothing to say.
  */
+import { memo } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import * as Fog from '../logic/fog';
@@ -11,7 +12,7 @@ import * as Highway from '../logic/highway';
 import { f, t } from '../logic/i18n';
 import { avgKmh } from '../logic/trip';
 import * as Units from '../logic/units';
-import { useDrive } from '../state/drive';
+import { useDriveSpeed, useDriveTrip } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 import { Box } from './ui';
@@ -22,8 +23,10 @@ const SAID_MS = 60000;
 const ACCEL_MS = 2 * 60000;
 const REST_MS = 5 * 60000;
 
-export function RoadAhead({ style }: { style?: StyleProp<ViewStyle> }) {
-  const { road, trip, hideFog, speedShown } = useDrive();
+export const RoadAhead = memo(function RoadAhead({ style }: { style?: StyleProp<ViewStyle> }) {
+  const { road, trip, hideFog } = useDriveTrip();
+  // the fog screen shows the speed as it reads now, so this box follows it
+  const { speedShown } = useDriveSpeed();
   const { prefs } = usePrefs();
   const look = useLook();
   const now = Date.now();
@@ -73,7 +76,7 @@ export function RoadAhead({ style }: { style?: StyleProp<ViewStyle> }) {
       ))}
     </Box>
   );
-}
+});
 
 const s = StyleSheet.create({
   fogRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

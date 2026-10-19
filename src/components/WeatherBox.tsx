@@ -4,7 +4,7 @@
  * (1.38) also shows the next 24 hours: a temperature curve, the hours marked, and a blue bar where
  * rain is expected (Cards.Hours).
  */
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path, Rect, Text as SvgText } from 'react-native-svg';
 
@@ -19,7 +19,17 @@ import { TapBox } from './Tap';
 
 const RAIN = '#7FB8FF';
 
-export function WeatherBox({ weather, waiting, style, onPress }: { weather: WeatherInfo; waiting: boolean; style?: StyleProp<ViewStyle>; onPress?: () => void }) {
+export const WeatherBox = memo(function WeatherBox({
+  weather,
+  waiting,
+  style,
+  onPress,
+}: {
+  weather: WeatherInfo;
+  waiting: boolean;
+  style?: StyleProp<ViewStyle>;
+  onPress?: () => void;
+}) {
   const { prefs } = usePrefs();
   const look = useLook();
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -55,7 +65,7 @@ export function WeatherBox({ weather, waiting, style, onPress }: { weather: Weat
       </View>
     </TapBox>
   );
-}
+});
 
 /** The next 24 hours: a temperature curve with the hours marked, and a blue bar where rain is expected. */
 function Hours({ temps: c, rain, fahrenheit, line, dim }: { temps: number[]; rain: number[]; fahrenheit: boolean; line: string; dim: string }) {

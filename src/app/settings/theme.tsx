@@ -8,13 +8,13 @@
  */
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Alert, Pressable, Text, useWindowDimensions, View } from 'react-native';
 
 import { mix, ThemePreview } from '../../components/LayoutView';
-import { Button, Heading, Row, Screen } from '../../components/ui';
+import { Button, Heading, ListScreen, Row } from '../../components/ui';
 import * as Features from '../../logic/features';
-import { f, t } from '../../logic/i18n';
+import { f, hindi, t } from '../../logic/i18n';
 import { about, chosen, choose, DEFAULT, type Pack } from '../../logic/theme';
 import * as ThemeAuto from '../../logic/themeauto';
 import { available, importTheme, lookFor, removeTheme, useLook } from '../../state/look';
@@ -24,18 +24,37 @@ function nameOf(packs: Pack[], id: string): string {
   return packs.find((k) => k.id === id)?.name ?? t('none');
 }
 
+/** A preview is roughly forty-five shapes, so it is only drawn again when its theme changes. */
+const Preview = memo(ThemePreview);
+
+/** The space between the tiles, and how many fit across the screen. */
+const GAP = 14;
+
 export default function ThemeScreen() {
   const { prefs, version } = usePrefs();
   const look = useLook();
   const { width } = useWindowDimensions();
-  const [, setRefresh] = useState(0);
+  const [refresh, setRefresh] = useState(0);
   const [pickingNight, setPickingNight] = useState(false);
   const current = chosen(prefs);
-  const packs = available();
-  const tile = Math.max(140, Math.min(360, (width - 32 - 14) / 2));
+  // the same theme objects from one render to the next, so a tap doesn't draw every preview again
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 'refresh' is the counter that bumps when a theme pack is added
+  const packs = useMemo(() => available(), [refresh]);
+  const tile = Math.max(140, Math.min(360, (width - 32 - GAP) / 2));
   const autoOn = Features.on(prefs, 'autoTheme');
   const nightTheme = prefs.str('nightTheme', '');
   void version;
+  // an imported theme's look is read off the storage, so work each one out once; the previews
+  // carry words, which change with the language
+  const inHindi = hindi();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const looks = useMemo(() => new Map(packs.map((p) => [p.id, lookFor(p)] as const)), [packs, inHindi]);
+  const cols = Math.max(1, Math.floor((width - 32 + GAP) / (tile + 16 + GAP)));
+  const rows: Pack[][] = [];
+  packs.forEach((p, i) => {
+    if (i % cols === 0) rows.push([]);
+    rows[rows.length - 1].push(p);
+  });
 
   const pickTheme = async () => {
     const r = await DocumentPicker.getDocumentAsync({ type: ['application/zip', 'application/json', 'application/octet-stream', '*/*'], copyToCacheDirectory: true });
@@ -68,73 +87,82 @@ export default function ThemeScreen() {
     ]);
   };
 
+  const tileFor = (p: Pack) => {
+    const on = p.id === current;
+    const desc = about(p);
+    const name = p.folder == null ? t(p.name) : p.name;
+    return (
+      <Pressable
+        key={p.id}
+        onPress={() => choose(prefs, p.id)}
+        onLongPress={() => remove(p)}
+        style={{
+          width: tile + 16,
+          padding: 8,
+          paddingBottom: 12,
+          borderRadius: 14,
+          backgroundColor: on ? look.panelTop : look.panel,
+          borderWidth: on ? 2.5 : 1.2,
+          borderColor: on ? look.accent : mix(look.edge.substring(0, 7), look.panel.substring(0, 7), 0.6),
+        }}
+      >
+        <Preview pack={p} look={looks.get(p.id) ?? lookFor(p)} width={tile} />
+        <Text style={{ color: look.text, fontSize: 17, fontWeight: '500', paddingHorizontal: 6, paddingTop: 10 }}>
+          {on ? f('%1$s   ✓ in use', name) : name}
+        </Text>
+        <Text numberOfLines={2} style={{ color: look.textDim, fontSize: 13, paddingHorizontal: 6, paddingTop: 4 }}>
+          {desc || ' '}
+        </Text>
+      </Pressable>
+    );
+  };
+
   return (
-    <Screen title="Themes">
-      {look.problem ? <Text style={{ color: '#E5484D', marginBottom: 10 }}>{look.problem}</Text> : null}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
-        {packs.map((p) => {
-          const on = p.id === current;
-          const desc = about(p);
-          const name = p.folder == null ? t(p.name) : p.name;
-          return (
-            <Pressable
-              key={p.id}
-              onPress={() => choose(prefs, p.id)}
-              onLongPress={() => remove(p)}
-              style={{
-                width: tile + 16,
-                padding: 8,
-                paddingBottom: 12,
-                borderRadius: 14,
-                backgroundColor: on ? look.panelTop : look.panel,
-                borderWidth: on ? 2.5 : 1.2,
-                borderColor: on ? look.accent : mix(look.edge.substring(0, 7), look.panel.substring(0, 7), 0.6),
-              }}
-            >
-              <ThemePreview pack={p} look={lookFor(p)} width={tile} />
-              <Text style={{ color: look.text, fontSize: 17, fontWeight: '500', paddingHorizontal: 6, paddingTop: 10 }}>
-                {on ? f('%1$s   ✓ in use', name) : name}
-              </Text>
-              <Text numberOfLines={2} style={{ color: look.textDim, fontSize: 13, paddingHorizontal: 6, paddingTop: 4 }}>
-                {desc || ' '}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <Heading>Theme changes by itself</Heading>
-      <Row name="Theme changes by itself" value="A theme for the night" on={autoOn} onPress={() => Features.set(prefs, 'autoTheme', !autoOn)} />
-      <Row name={f('At night: %1$s', nameOf(packs, nightTheme))} value="Which theme?" chevron onPress={() => setPickingNight(!pickingNight)} />
-      {pickingNight ? (
+    <ListScreen
+      title="Themes"
+      data={rows}
+      keyOf={(r) => r[0].id}
+      row={(r) => <View style={{ flexDirection: 'row', gap: GAP }}>{r.map(tileFor)}</View>}
+      gap={GAP}
+      initialNumToRender={2}
+      windowSize={3}
+      header={look.problem ? <Text style={{ color: '#E5484D', marginBottom: 10 }}>{look.problem}</Text> : null}
+      footer={
         <>
-          <Row
-            name={(nightTheme === '' ? '✓  ' : '     ') + t('None (keep my theme)')}
-            onPress={() => {
-              ThemeAuto.setNight(prefs, '');
-              setPickingNight(false);
-            }}
-          />
-          {packs.map((p) => (
-            <Row
-              key={p.id}
-              name={(nightTheme === p.id ? '✓  ' : '     ') + (p.folder == null ? t(p.name) : p.name)}
-              onPress={() => {
-                ThemeAuto.setNight(prefs, p.id);
-                setPickingNight(false);
-              }}
-            />
-          ))}
-        </>
-      ) : null}
+          <Heading>Theme changes by itself</Heading>
+          <Row name="Theme changes by itself" value="A theme for the night" on={autoOn} onPress={() => Features.set(prefs, 'autoTheme', !autoOn)} />
+          <Row name={f('At night: %1$s', nameOf(packs, nightTheme))} value="Which theme?" chevron onPress={() => setPickingNight(!pickingNight)} />
+          {pickingNight ? (
+            <>
+              <Row
+                name={(nightTheme === '' ? '✓  ' : '     ') + t('None (keep my theme)')}
+                onPress={() => {
+                  ThemeAuto.setNight(prefs, '');
+                  setPickingNight(false);
+                }}
+              />
+              {packs.map((p) => (
+                <Row
+                  key={p.id}
+                  name={(nightTheme === p.id ? '✓  ' : '     ') + (p.folder == null ? t(p.name) : p.name)}
+                  onPress={() => {
+                    ThemeAuto.setNight(prefs, p.id);
+                    setPickingNight(false);
+                  }}
+                />
+              ))}
+            </>
+          ) : null}
 
-      <Heading>Your own themes</Heading>
-      <Text style={{ color: look.textDim, marginBottom: 8 }}>
-        {t(
-          'A theme is a folder with a theme.json and any pictures. Zip the folder to share it. Add one from a .zip or a theme.json file; long-press an added theme to remove it.',
-        )}
-      </Text>
-      <Button label="Add a theme from a file" kind="primary" onPress={pickTheme} />
-    </Screen>
+          <Heading>Your own themes</Heading>
+          <Text style={{ color: look.textDim, marginBottom: 8 }}>
+            {t(
+              'A theme is a folder with a theme.json and any pictures. Zip the folder to share it. Add one from a .zip or a theme.json file; long-press an added theme to remove it.',
+            )}
+          </Text>
+          <Button label="Add a theme from a file" kind="primary" onPress={pickTheme} />
+        </>
+      }
+    />
   );
 }

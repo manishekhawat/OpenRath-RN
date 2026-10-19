@@ -10,7 +10,7 @@ import * as Linking from 'expo-linking';
 import { useState } from 'react';
 import { Alert, Platform, Text } from 'react-native';
 
-import { Button, Field, Heading, Row, Screen } from '../components/ui';
+import { Button, Field, Heading, ListScreen, Row } from '../components/ui';
 import * as ChildLock from '../logic/childlock';
 import * as Features from '../logic/features';
 import { f, t } from '../logic/i18n';
@@ -44,13 +44,19 @@ export default function PlacesScreen() {
   const moving = ChildLock.moving(trip.kmh, trip.prevAt);
   void version;
 
-  const fixed: { name: string; link: string }[] = [];
+  // Home, Office and the parked car first, then the owner's own, which a tap on the ✕ forgets
+  const saved: { name: string; value: string; link: string | null; own: boolean }[] = [];
   for (const n of ['Home', 'Office']) {
     const at = Places.point(prefs.str('place:' + n, ''));
-    if (at) fixed.push({ name: t(n), link: Places.geo(at[0], at[1], n) });
+    if (at) saved.push({ name: t(n), value: t('Open navigation'), link: Places.geo(at[0], at[1], n), own: false });
   }
-  if (trip.park) fixed.push({ name: t('Where the car is parked'), link: Places.geo(trip.park.lat, trip.park.lon, 'Parked car') });
-  const mine = Places.own(prefs.str('places', ''));
+  if (trip.park) {
+    saved.push({ name: t('Where the car is parked'), value: t('Open navigation'), link: Places.geo(trip.park.lat, trip.park.lon, 'Parked car'), own: false });
+  }
+  for (const [pn, at] of Places.own(prefs.str('places', ''))) {
+    const point = Places.point(at);
+    saved.push({ name: pn, value: at, link: point ? Places.geo(point[0], point[1], pn) : null, own: true });
+  }
 
   const forget = (pn: string) =>
     Alert.alert(f('Forgot %1$s', pn), undefined, [
@@ -67,50 +73,53 @@ export default function PlacesScreen() {
   };
 
   return (
-    <Screen title={t('Saved places')}>
-      {!on ? (
-        <Text style={{ color: look.textDim, marginBottom: 8 }}>{t('Turn on "Saved places for any navigation app" in Settings > Road helpers.')}</Text>
-      ) : null}
-      {fixed.map((p) => (
-        <Row key={p.name} name={p.name} value={t('Open navigation')} onPress={() => go(pkg, p.link)} />
-      ))}
-      {mine.map(([pn, at]) => {
-        const point = Places.point(at);
-        return (
-          <Row
-            key={pn}
-            name={pn}
-            value={at}
-            onPress={() => point && go(pkg, Places.geo(point[0], point[1], pn))}
-            right={<Text style={{ color: look.textDim }} onPress={() => forget(pn)}>✕</Text>}
-          />
-        );
-      })}
-      {fixed.length === 0 && mine.length === 0 ? (
-        <Text style={{ color: look.textDim, marginVertical: 8 }}>{t('No places saved yet. Save Home and Office on the map, or save where you are below.')}</Text>
-      ) : null}
-
-      <Heading>{t('Type an address…')}</Heading>
-      {moving ? (
-        <Text style={{ color: look.textDim }}>{t('Typing is blocked while the car is moving')}</Text>
-      ) : (
-        <>
-          <Field label={t('Address or place')} value={address} onChange={setAddress} />
-          <Button
-            label={t('Go')}
-            kind="primary"
-            onPress={() => {
-              if (address.trim() !== '') go(pkg, Places.search(address));
-            }}
-          />
-          <Heading>{t('Save where I am now…')}</Heading>
-          <Field label={t('Name, like Gym')} value={name} onChange={setName} />
-          <Button label={t('Save')} onPress={saveHere} />
-        </>
+    <ListScreen
+      title={t('Saved places')}
+      data={saved}
+      keyOf={(p) => (p.own ? 'own:' : 'fixed:') + p.name}
+      row={(p) => (
+        <Row
+          name={p.name}
+          value={p.value}
+          onPress={() => p.link && go(pkg, p.link)}
+          right={p.own ? <Text style={{ color: look.textDim }} onPress={() => forget(p.name)}>✕</Text> : undefined}
+        />
       )}
-      <Text style={{ color: look.textDim, marginTop: 12 }}>
-        {t('Places are handed to the navigation app chosen in Apps, as a geo: link. Nothing is sent online.')}
-      </Text>
-    </Screen>
+      initialNumToRender={10}
+      header={
+        !on ? (
+          <Text style={{ color: look.textDim, marginBottom: 8 }}>{t('Turn on "Saved places for any navigation app" in Settings > Road helpers.')}</Text>
+        ) : null
+      }
+      footer={
+        <>
+          {saved.length === 0 ? (
+            <Text style={{ color: look.textDim, marginVertical: 8 }}>{t('No places saved yet. Save Home and Office on the map, or save where you are below.')}</Text>
+          ) : null}
+
+          <Heading>{t('Type an address…')}</Heading>
+          {moving ? (
+            <Text style={{ color: look.textDim }}>{t('Typing is blocked while the car is moving')}</Text>
+          ) : (
+            <>
+              <Field label={t('Address or place')} value={address} onChange={setAddress} />
+              <Button
+                label={t('Go')}
+                kind="primary"
+                onPress={() => {
+                  if (address.trim() !== '') go(pkg, Places.search(address));
+                }}
+              />
+              <Heading>{t('Save where I am now…')}</Heading>
+              <Field label={t('Name, like Gym')} value={name} onChange={setName} />
+              <Button label={t('Save')} onPress={saveHere} />
+            </>
+          )}
+          <Text style={{ color: look.textDim, marginTop: 12 }}>
+            {t('Places are handed to the navigation app chosen in Apps, as a geo: link. Nothing is sent online.')}
+          </Text>
+        </>
+      }
+    />
   );
 }

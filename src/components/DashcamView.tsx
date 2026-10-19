@@ -7,30 +7,31 @@
  *
  * expo-camera records only while its view is on screen, so this must stay mounted; it shows
  * nothing when there is nothing to record. Only one view uses the camera: the last one opened.
- * A tap opens the dashcam screen, a long press keeps the clip.
+ * A tap opens the dashcam screen, a long press keeps the clip. Android lets no app hold the camera
+ * behind another one, so recording waits for the app to come back; the fixes keep coming meanwhile.
  */
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import { router } from 'expo-router';
 import { Accelerometer } from 'expo-sensors';
-import { useEffect, useRef, useState } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { memo, useEffect, useRef, useState } from 'react';
+import { AppState, Linking, Platform, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import * as Dashcam from '../logic/dashcam';
 import * as Features from '../logic/features';
 import { t } from '../logic/i18n';
 import * as Snap from '../logic/snap';
 import * as Cam from '../state/camera';
-import { useDrive } from '../state/drive';
+import { useDriveTrip } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 import { Box } from './ui';
 
 const errorText = (e: unknown) => String((e as Error)?.message ?? e);
 
-export function DashcamView({ full = false, style }: { full?: boolean; style?: StyleProp<ViewStyle> }) {
+export const DashcamView = memo(function DashcamView({ full = false, style }: { full?: boolean; style?: StyleProp<ViewStyle> }) {
   const { prefs } = usePrefs();
   const look = useLook();
-  const { trip } = useDrive();
+  const { trip } = useDriveTrip();
   const cam = Cam.useCamera();
   const [perm, askPerm] = useCameraPermissions();
   const [mic] = useMicrophonePermissions();
@@ -66,6 +67,13 @@ export function DashcamView({ full = false, style }: { full?: boolean; style?: S
     setMoving(false);
   }, [cam.parkedAt]);
 
+  // behind another app the camera can't be opened at all, so nothing is wanted until it is back
+  const [active, setActive] = useState(() => AppState.currentState === 'active');
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => setActive(st === 'active'));
+    return () => sub.remove();
+  }, []);
+
   // a camera error: try again a minute later
   const [retrying, setRetrying] = useState(false);
   useEffect(() => {
@@ -75,7 +83,7 @@ export function DashcamView({ full = false, style }: { full?: boolean; style?: S
   }, [retrying]);
 
   const granted = perm?.granted === true;
-  const wantRecord = on && granted && !cam.held && !retrying && (full || moving);
+  const wantRecord = on && granted && !cam.held && !retrying && active && (full || moving);
   const snapping = mine && cam.snap && snapOn && granted;
   const needCamera = mine && (wantRecord || snapping);
   const showCamera = needCamera && (cam.cameraIn == null || cam.cameraIn === id);
@@ -260,7 +268,7 @@ export function DashcamView({ full = false, style }: { full?: boolean; style?: S
       </View>
     </Box>
   );
-}
+});
 
 const styles = StyleSheet.create({
   full: { backgroundColor: '#000000', overflow: 'hidden', aspectRatio: 16 / 9, width: '100%' },

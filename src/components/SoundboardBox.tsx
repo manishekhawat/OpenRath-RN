@@ -5,12 +5,13 @@
  */
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { File, Paths } from 'expo-file-system';
+import { memo } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import * as Features from '../logic/features';
 import { t } from '../logic/i18n';
 import * as Soundboard from '../logic/soundboard';
-import { useDrive } from '../state/drive';
+import { useDriveTrip } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 import { Box, toast } from './ui';
@@ -44,10 +45,10 @@ export function playPad(pad: number, kmh: number): boolean {
   }
 }
 
-export function SoundboardBox({ style }: { style?: StyleProp<ViewStyle> }) {
+export const SoundboardBox = memo(function SoundboardBox({ style }: { style?: StyleProp<ViewStyle> }) {
   const look = useLook();
   const { prefs } = usePrefs();
-  const kmh = useDrive().trip.kmh;
+  const kmh = useDriveTrip().trip.kmh;
   const moving = !Soundboard.canPlay(kmh);
 
   const tap = (pad: number) => {
@@ -84,7 +85,7 @@ export function SoundboardBox({ style }: { style?: StyleProp<ViewStyle> }) {
       </Text>
     </Box>
   );
-}
+});
 
 const styles = StyleSheet.create({
   grid: { gap: 8 },

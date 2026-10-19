@@ -37,17 +37,20 @@ import Svg, {
 } from 'react-native-svg';
 
 import data from '../data/layouts.json';
+import { DAYS, DAYS_FULL, MONTHS } from '../logic/dates';
+import { clock as hhmm } from '../logic/errands';
 import * as Features from '../logic/features';
 import { mapsLink, routeLink } from '../logic/geo';
 import { f, t } from '../logic/i18n';
 import * as Layouts from '../logic/layouts';
 import type { Layout, Part } from '../logic/layouts';
 import * as Motion from '../logic/motion';
+import { arc, faded, fit, mix, roundRect, width, type Weight } from '../logic/paint';
 import type { Prefs } from '../logic/prefs';
-import * as Units from '../logic/units';
 import type { Look, Pack } from '../logic/theme';
+import * as Units from '../logic/units';
 import type { Wx } from '../logic/weather';
-import { useDrive } from '../state/drive';
+import { useDriveTrip } from '../state/drive';
 import { packPicture } from '../state/look';
 import { usePrefs } from '../state/prefs';
 import { useWeather } from '../state/weather';
@@ -106,37 +109,10 @@ export const PREVIEWS: Record<string, number> = {
 
 // ------------------------------------------------------------------ drawing helpers
 
-type Weight = 'light' | 'reg' | 'med' | 'bold';
 const WEIGHT: Record<Weight, '300' | '400' | '500' | '700'> = { light: '300', reg: '400', med: '500', bold: '700' };
-/** Average letter width per point of size, for fitting text (Roboto). */
-const AVG: Record<Weight, number> = { light: 0.5, reg: 0.52, med: 0.54, bold: 0.56 };
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-function charW(c: string, size: number, wt: Weight): number {
-  if (c === ' ') return size * 0.26;
-  if (/[il.,:;'|!]/.test(c)) return size * 0.26;
-  if (/[mwMW]/.test(c)) return size * 0.86;
-  if (/[A-Z]/.test(c)) return size * (AVG[wt] + 0.1);
-  if (/[0-9]/.test(c)) return size * 0.56;
-  return size * AVG[wt];
-}
-
-export function width(s: string, size: number, wt: Weight = 'reg'): number {
-  let w = 0;
-  for (const c of s) w += charW(c, size, wt);
-  return w;
-}
-
-/** The text shortened with "…" to fit maxw at that size. */
-export function fit(s: string | null | undefined, size: number, maxw: number, wt: Weight = 'reg'): string {
-  if (!s) return '';
-  if (width(s, size, wt) <= maxw) return s;
-  let t = s;
-  while (t.length > 0 && width(t + '…', size, wt) > maxw) t = t.substring(0, t.length - 1);
-  return t.trimEnd() + '…';
-}
+/** The text sums and the geometry are in src/logic/paint.ts; the settings screens use mix. */
+export { fit, mix, width };
 
 /** Collects drawn elements with keys, and the places that do something when tapped. */
 class Pen {
@@ -170,29 +146,6 @@ function text(c: Pen, s: string | null | undefined, x: number, y: number, size: 
       {s}
     </SvgText>,
   );
-}
-
-/** A point on a circle at an Android canvas angle (degrees, clockwise from 3 o'clock). */
-function at(cx: number, cy: number, r: number, deg: number): [number, number] {
-  const a = (deg * Math.PI) / 180;
-  return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
-}
-
-/** An arc like Canvas.drawArc: from `start` degrees, `sweep` degrees clockwise. */
-function arc(cx: number, cy: number, r: number, start: number, sweep: number): string {
-  const [x0, y0] = at(cx, cy, r, start);
-  const [x1, y1] = at(cx, cy, r, start + sweep);
-  return `M${x0} ${y0} A${r} ${r} 0 ${sweep > 180 ? 1 : 0} 1 ${x1} ${y1}`;
-}
-
-function roundRect(x: number, y: number, w: number, h: number, r: number): string {
-  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
-  return `M${x + rr} ${y}H${x + w - rr}A${rr} ${rr} 0 0 1 ${x + w} ${y + rr}V${y + h - rr}A${rr} ${rr} 0 0 1 ${x + w - rr} ${y + h}H${x + rr}A${rr} ${rr} 0 0 1 ${x} ${y + h - rr}V${y + rr}A${rr} ${rr} 0 0 1 ${x + rr} ${y}Z`;
-}
-
-/** A colour with its alpha replaced. */
-function faded(col: string, alpha: number): string {
-  return col.substring(0, 7) + Math.round(alpha * 255).toString(16).padStart(2, '0').toUpperCase();
 }
 
 interface Box {
@@ -461,13 +414,12 @@ const nothing = () => ({ title: t('Nothing playing'), sub: t('Tap to choose musi
 const pad = (n: number) => String(n).padStart(2, '0');
 
 function time(l: Live): string {
-  const h = l.now.getHours();
-  return l.h24 ? `${pad(h)}:${pad(l.now.getMinutes())}` : `${h % 12 || 12}:${pad(l.now.getMinutes())}`;
+  return l.h24 ? `${pad(l.now.getHours())}:${pad(l.now.getMinutes())}` : hhmm(l.now.getTime(), { bare: true });
 }
 
 /** Today's name, and "11 Oct", in the owner's language (the numbers as they are). */
 const dMMM = (d: Date) => `${d.getDate()} ${t(MONTHS[d.getMonth()])}`;
-const weekday = (d: Date) => t(WEEKDAYS[d.getDay()]);
+const weekday = (d: Date) => t(DAYS_FULL[d.getDay()]);
 
 function direction(l: Live): string {
   return l.heading < 0 ? '--' : Layouts.compass(l.heading) + '  ' + Math.round(l.heading) + '°';
@@ -492,7 +444,7 @@ function is24h(): boolean {
   }
 }
 
-function live(prefs: Prefs, wx: Wx | null, place: string, trip: ReturnType<typeof useDrive>['trip'], driver: string, tpmsUnit: string, now: Date): Live {
+function live(prefs: Prefs, wx: Wx | null, place: string, trip: ReturnType<typeof useDriveTrip>['trip'], driver: string, tpmsUnit: string, now: Date): Live {
   const fresh = trip.last != null && now.getTime() - trip.last.t < 5000;
   const tc = (c: number) => Units.temp(prefs, c);
   return {
@@ -1148,7 +1100,7 @@ function AppPicker({ title, apps, onPick, onClose }: { title: string; apps: App[
 
 // ------------------------------------------------------------------ the background and the road
 
-function useMoving(trip: ReturnType<typeof useDrive>['trip']): boolean {
+function useMoving(trip: ReturnType<typeof useDriveTrip>['trip']): boolean {
   return trip.kmh > 5 && trip.last != null && Date.now() - trip.last.t < 5000;
 }
 
@@ -1230,8 +1182,8 @@ function useSecond(): Date {
 
 export default function LayoutView({ layout: lay }: { layout: Layout }) {
   const { prefs, version } = usePrefs();
-  const drive = useDrive();
-  const { trip } = drive;
+  // the trip snapshot only: nothing drawn here follows the speed as it eases between fixes
+  const { trip } = useDriveTrip();
   const weather = useWeather(trip.lat, trip.lon);
   const now = useSecond();
   const moving = useMoving(trip);
@@ -1379,13 +1331,6 @@ export default function LayoutView({ layout: lay }: { layout: Layout }) {
       {picking ? <AppPicker title={picking.title} apps={appList(prefs)} onPick={picking.onPick} onClose={() => setPicking(null)} /> : null}
     </Pressable>
   );
-}
-
-/** Ui.mix: t of a, the rest of b. */
-export function mix(a: string, b: string, t: number): string {
-  const ch = (c: string, i: number) => parseInt(c.substring(1 + i * 2, 3 + i * 2), 16);
-  const out = [0, 1, 2].map((i) => Math.round(ch(a, i) * t + ch(b, i) * (1 - t)).toString(16).padStart(2, '0'));
-  return ('#' + out.join('')).toUpperCase();
 }
 
 // ------------------------------------------------------------------ theme previews (ThemeGallery.Preview)

@@ -3,18 +3,18 @@
  * the GPS while moving (the last one kept when stopped), and the GPS altitude.
  */
 import * as Location from 'expo-location';
-import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { memo, useEffect, useRef, useState } from 'react';
+import { AppState, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { t } from '../logic/i18n';
 import * as Status from '../logic/status';
-import { useDrive } from '../state/drive';
+import { useDriveTrip } from '../state/drive';
 import { useLook } from '../state/look';
 import { TapBox } from './Tap';
 
-export function CompassBox({ style, onPress }: { style?: StyleProp<ViewStyle>; onPress?: () => void }) {
+export const CompassBox = memo(function CompassBox({ style, onPress }: { style?: StyleProp<ViewStyle>; onPress?: () => void }) {
   const look = useLook();
-  const { trip } = useDrive();
+  const { trip } = useDriveTrip();
   const kept = useRef(-1);
   const now = trip.heading; // -1 below 5 km/h or without a bearing
   if (now >= 0) kept.current = now;
@@ -33,7 +33,10 @@ export function CompassBox({ style, onPress }: { style?: StyleProp<ViewStyle>; o
       }
     };
     read();
-    const id = setInterval(read, 5000);
+    // nothing to show behind another app, so the reading waits there
+    const id = setInterval(() => {
+      if (AppState.currentState === 'active') read();
+    }, 5000);
     return () => {
       live = false;
       clearInterval(id);
@@ -66,7 +69,7 @@ export function CompassBox({ style, onPress }: { style?: StyleProp<ViewStyle>; o
       </Text>
     </TapBox>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: { flex: 1, flexDirection: 'row', alignItems: 'center' },

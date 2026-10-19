@@ -8,7 +8,7 @@
  */
 import * as IntentLauncher from 'expo-intent-launcher';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from 'react-native';
 
 import { t } from '../logic/i18n';
@@ -35,7 +35,7 @@ export function openProjection(pkg: string): boolean {
   }
 }
 
-export function MusicBox({ style }: { style?: StyleProp<ViewStyle> }) {
+export const MusicBox = memo(function MusicBox({ style }: { style?: StyleProp<ViewStyle> }) {
   const look = useLook();
   const { prefs } = usePrefs();
   const s = P.usePlayer();
@@ -103,7 +103,7 @@ export function MusicBox({ style }: { style?: StyleProp<ViewStyle> }) {
       {Player.seekable(prefs, s.mode, s.duration) ? <SeekBar position={s.position} duration={s.duration} /> : null}
     </Box>
   );
-}
+});
 
 /** A thin bar with the time played and the length; drag along it to move in the song (MediaCard.Progress). */
 function SeekBar({ position, duration }: { position: number; duration: number }) {

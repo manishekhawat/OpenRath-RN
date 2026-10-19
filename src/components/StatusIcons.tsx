@@ -4,18 +4,18 @@
  * but not connected; an icon is left out when the unit has no such thing. Checked every 5 seconds.
  * From Expo's modules: the network in use (not the Wi-Fi strength, the SIM's signal bars or 4G/5G)
  * and the battery. The Bluetooth icon needs Android's Bluetooth adapter, which no Expo module
- * reads, so it is left out until a native module adds it.
+ * reads, so it is left out until a native module adds it. Nothing is read behind another app.
  */
 import * as Battery from 'expo-battery';
 import * as Location from 'expo-location';
 import * as Network from 'expo-network';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { View, type StyleProp, type ViewStyle } from 'react-native';
+import { memo, useEffect, useRef, useState, type ReactNode } from 'react';
+import { AppState, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Circle, G, Path, Rect } from 'react-native-svg';
 
 import { t } from '../logic/i18n';
 import * as Status from '../logic/status';
-import { useDrive } from '../state/drive';
+import { useDriveTrip } from '../state/drive';
 import { useLook } from '../state/look';
 
 interface Read {
@@ -31,9 +31,9 @@ interface Read {
 
 const NONE: Read = { wifi: -1, mobile: -1, gpsOn: false, battery: -1, charging: false };
 
-export function StatusIcons({ across = true, style }: { across?: boolean; style?: StyleProp<ViewStyle> }) {
+export const StatusIcons = memo(function StatusIcons({ across = true, style }: { across?: boolean; style?: StyleProp<ViewStyle> }) {
   const look = useLook();
-  const { trip } = useDrive();
+  const { trip } = useDriveTrip();
   const [r, setR] = useState<Read>(NONE);
   const fixAt = useRef(0);
   fixAt.current = trip.last?.t ?? 0;
@@ -70,7 +70,9 @@ export function StatusIcons({ across = true, style }: { across?: boolean; style?
       }
     };
     read();
-    const id = setInterval(read, 5000);
+    const id = setInterval(() => {
+      if (AppState.currentState === 'active') read();
+    }, 5000);
     return () => {
       live = false;
       clearInterval(id);
@@ -178,4 +180,4 @@ export function StatusIcons({ across = true, style }: { across?: boolean; style?
       ))}
     </View>
   );
-}
+});

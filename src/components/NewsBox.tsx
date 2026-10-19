@@ -3,9 +3,9 @@
  * "Read aloud" button, and a tap on a headline reads just that one. Tapping the box fetches
  * fresh headlines; a long press opens the news page with the topic picker.
  */
-import * as Speech from 'expo-speech';
 import { router } from 'expo-router';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import * as Speech from 'expo-speech';
+import { memo, useEffect, useState, useSyncExternalStore } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import * as Features from '../logic/features';
@@ -15,8 +15,8 @@ import type { Prefs } from '../logic/prefs';
 import { say } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
+import { isSpeaking, onSpeaking, stop as stopSpeech } from '../state/speech';
 import { Box } from './ui';
-import { stop as stopSpeech } from '../state/speech';
 
 /** The shared headlines, refreshed when old (every 30 minutes, retried after 3), re-rendering on change. */
 export function useNews(): typeof News.state {
@@ -36,26 +36,25 @@ export async function readAll(prefs: Prefs) {
   say(News.read(News.state.items, News.topicName(prefs.str('newsTopic', 'top'))));
 }
 
-export function NewsBox({ style, lines = News.COUNT }: { style?: StyleProp<ViewStyle>; lines?: number }) {
+export const NewsBox = memo(function NewsBox({ style, lines = News.COUNT }: { style?: StyleProp<ViewStyle>; lines?: number }) {
   const { prefs } = usePrefs();
   const look = useLook();
   const news = useNews();
-  const [speaking, setSpeaking] = useState(false);
+  const [speaking, setSpeaking] = useState(isSpeaking);
   const [now, setNow] = useState(Date.now());
 
-  // the age in the heading, and the button's Stop / Read aloud
+  // the button's Stop / Read aloud: the car says when it starts and stops talking
+  useEffect(() => onSpeaking(setSpeaking), []);
+
+  // the age in the heading, which is in minutes
   useEffect(() => {
-    const t = setInterval(() => {
-      setNow(Date.now());
-      Speech.isSpeakingAsync().then(setSpeaking, () => {});
-    }, 1000);
+    const t = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(t);
   }, []);
 
   const toggle = async () => {
     if (await Speech.isSpeakingAsync().catch(() => false)) stopSpeech();
     else await readAll(prefs);
-    setTimeout(() => Speech.isSpeakingAsync().then(setSpeaking, () => {}), 600);
   };
 
   const n = Math.max(1, Math.min(News.COUNT, lines));
@@ -86,7 +85,7 @@ export function NewsBox({ style, lines = News.COUNT }: { style?: StyleProp<ViewS
       )}
     </Box>
   );
-}
+});
 
 const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },

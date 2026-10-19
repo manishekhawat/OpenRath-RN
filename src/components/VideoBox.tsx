@@ -4,10 +4,10 @@
  * 2 km/h); while moving it is covered and the sound keeps going. Android listed the videos
  * itself; here the system's file picker chooses one (Videos.ts says why).
  */
-import * as DocumentPicker from 'expo-document-picker';
 import { useEvent } from 'expo';
+import * as DocumentPicker from 'expo-document-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import * as Features from '../logic/features';
@@ -18,7 +18,7 @@ import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 import { Box, toast } from './ui';
 
-export function VideoBox({ style }: { style?: StyleProp<ViewStyle> }) {
+export const VideoBox = memo(function VideoBox({ style }: { style?: StyleProp<ViewStyle> }) {
   const look = useLook();
   const { prefs } = usePrefs();
   const { trip, fixAt } = useDrive();
@@ -93,7 +93,7 @@ export function VideoBox({ style }: { style?: StyleProp<ViewStyle> }) {
       </Pressable>
     </Box>
   );
-}
+});
 
 const styles = StyleSheet.create({
   box: { overflow: 'hidden', minHeight: 134, padding: 0 },

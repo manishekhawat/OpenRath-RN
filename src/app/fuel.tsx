@@ -8,9 +8,10 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, Switch, Text, View } from 'react-native';
 
-import { Button, Field, Heading, Row, Screen } from '../components/ui';
-import * as Care from '../logic/care';
+import { Button, Field, Heading, ListScreen, Row } from '../components/ui';
 import * as Car from '../logic/car';
+import * as Care from '../logic/care';
+import { MONTHS } from '../logic/dates';
 import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
 import * as Fuel from '../logic/fuel';
@@ -20,7 +21,6 @@ import { useDrive } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const date = (t: number) => {
   const d = new Date(t);
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
@@ -30,8 +30,11 @@ export default function FuelLog() {
   const { prefs, version } = usePrefs();
   const look = useLook();
   const { trip } = useDrive();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 'version' is the store counter the memo depends on; Store.prefs keeps one identity
   const list = useMemo(() => Fuel.log(prefs), [prefs, version]);
   const stats = useMemo(() => Fuel.stats(list), [list]);
+  // the newest fill-up first, keeping each one's place in the saved log for deleting
+  const fills = useMemo(() => list.map((e, i) => ({ e, i })).reverse(), [list]);
   const price = Fuel.price(prefs);
   const unit = Car.fuel(prefs) === 'cng' ? 'kg' : 'L';
 
@@ -75,82 +78,87 @@ export default function FuelLog() {
     ]);
 
   return (
-    <Screen title={Car.fuel(prefs) === 'petrol' ? t('Petrol log') : `${Car.word(Car.fuel(prefs)).replace(/^./, (c) => c.toUpperCase())} log`}>
-      <View style={{ flexDirection: 'row', gap: 24, marginBottom: 8 }}>
-        <Stat label={t('Average')} value={stats.avgKmpl > 0 ? `${Fuel.fmt(stats.avgKmpl)} km/${unit.toLowerCase()}` : '–'} />
-        <Stat label={t('Last tank')} value={stats.lastKmpl > 0 ? `${Fuel.fmt(stats.lastKmpl)} km/${unit.toLowerCase()}` : '–'} />
-        <Stat label={t('Cost a km')} value={stats.rupeesPerKm > 0 ? `₹${Fuel.fmt(stats.rupeesPerKm)}` : '–'} />
-      </View>
-      <Text style={{ color: look.textDim }}>{t('Petrol price')}: {Fuel.priceText(prefs)}</Text>
-      <Text style={{ color: look.textDim }}>
-        {f('%1$s fill-ups', stats.fills)}
-        {Care.tollsThisMonth(prefs)}
-      </Text>
-
-      <Heading>{t('Petrol left')}</Heading>
-      <Row
-        name={Car.fuel(prefs) === 'petrol' ? t('Petrol left') : `${Car.word(Car.fuel(prefs)).replace(/^./, (c) => c.toUpperCase())} left`}
-        value={Features.on(prefs, 'fuelPrice') ? FuelPlan.text(prefs, trip.odoKm) : t('off (switch above)')}
-      />
-      <Row name={t('Tank size')} value={unit === 'kg' ? `${FuelPlan.tank(prefs)} kg` : f('%1$s litres', FuelPlan.tank(prefs))} onPress={() => setTankEdit(String(FuelPlan.tank(prefs)))} />
-      {tankEdit !== null ? (
-        <View>
-          <Field label={t(unit === 'kg' ? 'CNG cylinder, kg' : 'Fuel tank, litres')} value={tankEdit} onChange={setTankEdit} numeric />
-          <Button
-            label={t('Save')}
-            kind="primary"
-            onPress={() => {
-              const v = parseFloat(tankEdit);
-              if (!(v > 0)) return Alert.alert(t(unit === 'kg' ? 'CNG cylinder, kg' : 'Fuel tank, litres'));
-              FuelPlan.setTank(prefs, v);
-              setTankEdit(null);
-            }}
-          />
-          <Button label={t('Cancel')} onPress={() => setTankEdit(null)} />
-        </View>
-      ) : null}
-      <Row
-        name={Car.fuel(prefs) === 'petrol' ? t('Warn when the petrol is below') : `Warn when the ${Car.word(Car.fuel(prefs))} is below`}
-        value={f('%1$s km of driving', FuelPlan.warnKm(prefs))}
-        onPress={() => prefs.put('fuelWarnKm', String(FuelPlan.nextWarnKm(FuelPlan.warnKm(prefs))))}
-      />
-      <Row name={t('Tolls')} value={t('Add a toll payment')} onPress={() => router.push('/tolls')} />
-
-      {adding ? (
-        <View style={{ marginTop: 16 }}>
-          <Heading>{t('Add a fill-up')}</Heading>
-          <Field label={t(unit === 'kg' ? 'Kilograms' : 'Litres')} value={litres} onChange={setLitres} numeric />
-          <Field
-            label={price > 0 ? f('Amount paid (₹), or leave empty for ₹%1$s a litre', Fuel.fmt(price)) : t('Amount paid (₹)')}
-            value={rupees}
-            onChange={setRupees}
-            numeric
-          />
-          <Field label={t('Odometer (km)')} value={odo} onChange={setOdo} numeric />
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-            <Text style={{ color: look.text }}>{t('Filled the tank to full')}</Text>
-            <Switch value={full} onValueChange={setFull} />
-          </View>
-          <Button label={t('Save')} kind="primary" onPress={save} />
-          <Button label={t('Cancel')} onPress={() => setAdding(false)} />
-        </View>
-      ) : (
-        <Button label={t('Add a fill-up')} kind="primary" onPress={startAdding} />
+    <ListScreen
+      title={Car.fuel(prefs) === 'petrol' ? t('Petrol log') : `${Car.word(Car.fuel(prefs)).replace(/^./, (c) => c.toUpperCase())} log`}
+      data={fills}
+      keyOf={({ e, i }) => e.t + ':' + i}
+      row={({ e, i }) => (
+        <Row
+          name={`${date(e.t)}   ${Fuel.fmt(e.l)} ${unit}   ₹${Math.round(e.rs)}`}
+          value={`${Math.round(e.odo)} km${e.full === false ? '   ' + t('(part fill)') : ''}${e.city ? '   ' + e.city : ''}`}
+          onPress={() => remove(i)}
+        />
       )}
+      header={
+        <>
+          <View style={{ flexDirection: 'row', gap: 24, marginBottom: 8 }}>
+            <Stat label={t('Average')} value={stats.avgKmpl > 0 ? `${Fuel.fmt(stats.avgKmpl)} km/${unit.toLowerCase()}` : '–'} />
+            <Stat label={t('Last tank')} value={stats.lastKmpl > 0 ? `${Fuel.fmt(stats.lastKmpl)} km/${unit.toLowerCase()}` : '–'} />
+            <Stat label={t('Cost a km')} value={stats.rupeesPerKm > 0 ? `₹${Fuel.fmt(stats.rupeesPerKm)}` : '–'} />
+          </View>
+          <Text style={{ color: look.textDim }}>{t('Petrol price')}: {Fuel.priceText(prefs)}</Text>
+          <Text style={{ color: look.textDim }}>
+            {f('%1$s fill-ups', stats.fills)}
+            {Care.tollsThisMonth(prefs)}
+          </Text>
 
-      <Heading>{list.length === 0 ? t('No fill-ups yet') : t('Fill-ups (tap one to delete it)')}</Heading>
-      {list
-        .map((e, i) => ({ e, i }))
-        .reverse()
-        .map(({ e, i }) => (
+          <Heading>{t('Petrol left')}</Heading>
           <Row
-            key={e.t + ':' + i}
-            name={`${date(e.t)}   ${Fuel.fmt(e.l)} ${unit}   ₹${Math.round(e.rs)}`}
-            value={`${Math.round(e.odo)} km${e.full === false ? '   ' + t('(part fill)') : ''}${e.city ? '   ' + e.city : ''}`}
-            onPress={() => remove(i)}
+            name={Car.fuel(prefs) === 'petrol' ? t('Petrol left') : `${Car.word(Car.fuel(prefs)).replace(/^./, (c) => c.toUpperCase())} left`}
+            value={Features.on(prefs, 'fuelPrice') ? FuelPlan.text(prefs, trip.odoKm) : t('off (switch above)')}
           />
-        ))}
-    </Screen>
+          <Row name={t('Tank size')} value={unit === 'kg' ? `${FuelPlan.tank(prefs)} kg` : f('%1$s litres', FuelPlan.tank(prefs))} onPress={() => setTankEdit(String(FuelPlan.tank(prefs)))} />
+          {tankEdit !== null ? (
+            <View>
+              <Field label={t(unit === 'kg' ? 'CNG cylinder, kg' : 'Fuel tank, litres')} value={tankEdit} onChange={setTankEdit} numeric />
+              <Button
+                label={t('Save')}
+                kind="primary"
+                onPress={() => {
+                  const v = parseFloat(tankEdit);
+                  if (!(v > 0)) return Alert.alert(t(unit === 'kg' ? 'CNG cylinder, kg' : 'Fuel tank, litres'));
+                  FuelPlan.setTank(prefs, v);
+                  setTankEdit(null);
+                }}
+              />
+              <Button label={t('Cancel')} onPress={() => setTankEdit(null)} />
+            </View>
+          ) : null}
+          <Row
+            name={Car.fuel(prefs) === 'petrol' ? t('Warn when the petrol is below') : `Warn when the ${Car.word(Car.fuel(prefs))} is below`}
+            value={f('%1$s km of driving', FuelPlan.warnKm(prefs))}
+            onPress={() => prefs.put('fuelWarnKm', String(FuelPlan.nextWarnKm(FuelPlan.warnKm(prefs))))}
+          />
+          <Row name={t('Tolls')} value={t('Add a toll payment')} onPress={() => router.push('/tolls')} />
+
+          {adding ? (
+            <View style={{ marginTop: 16 }}>
+              <Heading>{t('Add a fill-up')}</Heading>
+              <Field label={t(unit === 'kg' ? 'Kilograms' : 'Litres')} value={litres} onChange={setLitres} numeric />
+              <Field
+                label={price > 0 ? f('Amount paid (₹), or leave empty for ₹%1$s a litre', Fuel.fmt(price)) : t('Amount paid (₹)')}
+                value={rupees}
+                onChange={setRupees}
+                numeric
+              />
+              <Field label={t('Odometer (km)')} value={odo} onChange={setOdo} numeric />
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={{ color: look.text }}>{t('Filled the tank to full')}</Text>
+                <Switch value={full} onValueChange={setFull} />
+              </View>
+              <Button label={t('Save')} kind="primary" onPress={save} />
+              <Button label={t('Cancel')} onPress={() => setAdding(false)} />
+            </View>
+          ) : (
+            <Button label={t('Add a fill-up')} kind="primary" onPress={startAdding} />
+          )}
+
+          <Heading>{list.length === 0 ? t('No fill-ups yet') : t('Fill-ups (tap one to delete it)')}</Heading>
+        </>
+      }
+      initialNumToRender={12}
+      windowSize={7}
+    />
   );
 }
 

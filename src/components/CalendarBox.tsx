@@ -5,8 +5,8 @@
  */
 import * as Calendar from 'expo-calendar';
 import * as IntentLauncher from 'expo-intent-launcher';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Platform, StyleSheet, Text, ToastAndroid, View, type StyleProp, type ViewStyle } from 'react-native';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, AppState, Platform, StyleSheet, Text, ToastAndroid, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import * as Agenda from '../logic/agenda';
 import * as Features from '../logic/features';
@@ -26,7 +26,7 @@ function ms(d: Date | string | undefined): number {
   return d == null ? 0 : new Date(d).getTime();
 }
 
-export function CalendarBox({ style }: { style?: StyleProp<ViewStyle> }) {
+export const CalendarBox = memo(function CalendarBox({ style }: { style?: StyleProp<ViewStyle> }) {
   const { prefs } = usePrefs();
   const look = useLook();
   const on = Features.on(prefs, 'calendar');
@@ -54,7 +54,10 @@ export function CalendarBox({ style }: { style?: StyleProp<ViewStyle> }) {
   useEffect(() => {
     if (!on) return;
     read(true);
-    const id = setInterval(() => read(), 60000);
+    // behind another app there is nothing to show, so the calendar is left alone
+    const id = setInterval(() => {
+      if (AppState.currentState === 'active') read();
+    }, 60000);
     return () => clearInterval(id);
   }, [on, read]);
 
@@ -100,7 +103,7 @@ export function CalendarBox({ style }: { style?: StyleProp<ViewStyle> }) {
       {foot ? <Text style={[styles.foot, { color: look.textDim }]}>{foot}</Text> : null}
     </TapBox>
   );
-}
+});
 
 const styles = StyleSheet.create({
   list: { flex: 1, minHeight: 22 },

@@ -9,9 +9,9 @@
  */
 import * as IntentLauncher from 'expo-intent-launcher';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Image, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-import { Button, Field, Heading, PickList, Screen, toast } from '../components/ui';
+import { Button, Field, Heading, ListScreen, PickList, toast } from '../components/ui';
 import * as Apps from '../logic/apps';
 import * as ChildLock from '../logic/childlock';
 import * as Features from '../logic/features';
@@ -33,6 +33,10 @@ const DEFAULTS: App[] = [
   { label: 'Settings', pkg: 'com.android.settings' },
 ];
 
+/** A tile's side and the space between tiles, as the grid has always had them. */
+const TILE = 120;
+const GAP = 12;
+
 export default function AppsScreen() {
   const { prefs, version } = usePrefs();
   const look = useLook();
@@ -53,8 +57,8 @@ export default function AppsScreen() {
   const [query, setQuery] = useState('');
   const [menu, setMenu] = useState<App | null>(null);
   const [icons, setIcons] = useState<Record<string, string>>({});
-  const grid = useRef<ScrollView | null>(null);
-  const rowY = useRef<Record<string, number>>({});
+  const grid = useRef<FlatList<App[]> | null>(null);
+  const { width } = useWindowDimensions();
 
   // the apps' own icons, when Android hands them over
   useEffect(() => {
@@ -81,11 +85,18 @@ export default function AppsScreen() {
   const pinned = Apps.split(prefs.str('pinnedApps', ''));
   const recent = Apps.split(prefs.str('recentApps', ''));
   const strip = extras ? [...pinned, ...recent.filter((p) => !pinned.includes(p))].map((p) => apps.find((a) => a.pkg === p)).filter((a): a is App => !!a) : [];
+  // as many tiles to a row as fit between the padding, the rest wrapping as the grid used to
+  const cols = Math.max(1, Math.floor((width - 16 - 48 + GAP) / (TILE + GAP)));
+  const rows: App[][] = [];
   const letters: string[] = [];
-  for (const a of sorted) {
+  const letterRow: Record<string, number> = {};
+  sorted.forEach((a, i) => {
+    if (i % cols === 0) rows.push([]);
+    rows[rows.length - 1].push(a);
     const l = Apps.letter(a.label);
     if (letters[letters.length - 1] !== l) letters.push(l);
-  }
+    if (!(l in letterRow)) letterRow[l] = rows.length - 1;
+  });
 
   const open = (a: App) => {
     if (Platform.OS !== 'android') return toast('Opening other apps works on Android only');
@@ -149,9 +160,19 @@ export default function AppsScreen() {
   );
 
   return (
-    <Screen title="All apps" scroll={false}>
-      <ScrollView ref={grid} contentContainerStyle={styles.body}>
-        {extras ? (
+    <ListScreen
+      title="All apps"
+      data={rows}
+      keyOf={(r) => r[0].pkg}
+      row={(r) => <View style={styles.gridRow}>{r.map((a) => tile(a, TILE))}</View>}
+      gap={GAP}
+      rowHeight={TILE - 10}
+      listRef={grid}
+      contentStyle={styles.body}
+      initialNumToRender={6}
+      windowSize={5}
+      header={
+        extras ? (
           <>
             <Field label="Search apps" value={query} onChange={setQuery} placeholder={t('Search apps')} />
             {strip.length > 0 ? (
@@ -160,42 +181,34 @@ export default function AppsScreen() {
               </ScrollView>
             ) : null}
           </>
-        ) : null}
-        <View style={styles.grid}>
-          {sorted.map((a, i) => (
-            <View
-              key={a.pkg}
-              onLayout={(e) => {
-                const l = Apps.letter(a.label);
-                if (!(l in rowY.current) || i === 0) rowY.current[l] = e.nativeEvent.layout.y;
-              }}
-            >
-              {tile(a, 120)}
-            </View>
-          ))}
-        </View>
-        <Text style={{ color: look.textDim, marginTop: 8 }}>
-          {t('Long-press an app to pin it, see its app info, uninstall it, lock it while the car is moving, or remove it from this screen.')}
-        </Text>
-        <Heading>Add an app</Heading>
-        <Field label="Name" value={label} onChange={setLabel} />
-        <Field label="Package name (from the app's Play Store link, id=…)" value={pkg} onChange={setPkg} placeholder="com.example.app" />
-        <Button
-          label="Add"
-          kind="primary"
-          onPress={() => {
-            if (!/^[a-zA-Z][\w]*(\.[a-zA-Z][\w]*)+$/.test(pkg.trim())) return toast('That is not a package name, it looks like com.example.app', true);
-            prefs.put('apps', JSON.stringify([...apps, { label: label.trim() || pkg.trim(), pkg: pkg.trim() }]));
-            setLabel('');
-            setPkg('');
-          }}
-        />
-      </ScrollView>
+        ) : null
+      }
+      footer={
+        <>
+          <Text style={{ color: look.textDim, marginTop: 8 }}>
+            {t('Long-press an app to pin it, see its app info, uninstall it, lock it while the car is moving, or remove it from this screen.')}
+          </Text>
+          <Heading>Add an app</Heading>
+          <Field label="Name" value={label} onChange={setLabel} />
+          <Field label="Package name (from the app's Play Store link, id=…)" value={pkg} onChange={setPkg} placeholder="com.example.app" />
+          <Button
+            label="Add"
+            kind="primary"
+            onPress={() => {
+              if (!/^[a-zA-Z][\w]*(\.[a-zA-Z][\w]*)+$/.test(pkg.trim())) return toast('That is not a package name, it looks like com.example.app', true);
+              prefs.put('apps', JSON.stringify([...apps, { label: label.trim() || pkg.trim(), pkg: pkg.trim() }]));
+              setLabel('');
+              setPkg('');
+            }}
+          />
+        </>
+      }
+    >
       {/* the A to Z column: a tap jumps to the first app filed under that letter */}
       {extras && letters.length > 1 ? (
         <View style={styles.letters}>
           {letters.map((l) => (
-            <Pressable key={l} onPress={() => grid.current?.scrollTo({ y: Math.max(0, rowY.current[l] ?? 0), animated: true })} hitSlop={6}>
+            <Pressable key={l} onPress={() => grid.current?.scrollToIndex({ index: letterRow[l] ?? 0, animated: true })} hitSlop={6}>
               <Text style={[styles.letter, { color: look.textDim }]}>{l}</Text>
             </Pressable>
           ))}
@@ -204,13 +217,13 @@ export default function AppsScreen() {
       {menu ? (
         <PickList title={menu.label} options={items.map((i) => i.label)} onPick={(i) => items[i].run()} onClose={() => setMenu(null)} />
       ) : null}
-    </Screen>
+    </ListScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  body: { padding: 16, paddingBottom: 48, paddingRight: 48 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  body: { paddingRight: 48 },
+  gridRow: { flexDirection: 'row', gap: GAP },
   strip: { gap: 12, paddingBottom: 12 },
   tile: { borderWidth: 1, alignItems: 'center', justifyContent: 'center', padding: 8 },
   icon: { width: 48, height: 48, marginBottom: 6, resizeMode: 'contain' },

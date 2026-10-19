@@ -3,9 +3,10 @@
  * through t(), so screens in Hindi show Hindi (text already translated stays as it is).
  */
 import { router } from 'expo-router';
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode, Ref } from 'react';
 import {
   Alert,
+  FlatList,
   Modal,
   Platform,
   Pressable,
@@ -73,19 +74,89 @@ export function Box({
   );
 }
 
+/** The back arrow and the title at the top of a full-screen page. */
+function Bar({ title }: { title: string }) {
+  const look = useLook();
+  return (
+    <View style={[styles.header, { borderColor: look.edge }]}>
+      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} hitSlop={16} accessibilityLabel={t('Back')}>
+        <Text style={[styles.back, { color: look.text }]}>‹</Text>
+      </Pressable>
+      <Text style={[styles.headerTitle, { color: look.text }]}>{t(title)}</Text>
+    </View>
+  );
+}
+
 /** A full-screen page with a back arrow and a title, like the Android version's settings screens. */
 export function Screen({ title, children, scroll = true }: { title: string; children: ReactNode; scroll?: boolean }) {
   const look = useLook();
   const body = scroll ? <ScrollView contentContainerStyle={styles.screenBody}>{children}</ScrollView> : <View style={{ flex: 1 }}>{children}</View>;
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: look.background }]}>
-      <View style={[styles.header, { borderColor: look.edge }]}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} hitSlop={16} accessibilityLabel={t('Back')}>
-          <Text style={[styles.back, { color: look.text }]}>‹</Text>
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: look.text }]}>{t(title)}</Text>
-      </View>
+      <Bar title={title} />
       {body}
+    </SafeAreaView>
+  );
+}
+
+/**
+ * The same page, for screens whose body is one long list: the fuel log, the app drawer, the saved
+ * places, the headlines and the two galleries. A list keeps only the rows near the screen made,
+ * so a log with a year of fill-ups opens as quickly as an empty one. Whatever the screen draws
+ * above and below the rows goes in `header` and `footer`, and `children` are drawn over the list,
+ * like the app drawer's A to Z column.
+ */
+export function ListScreen<T>({
+  title,
+  data,
+  row,
+  keyOf,
+  header,
+  footer,
+  children,
+  gap = 0,
+  rowHeight,
+  listRef,
+  contentStyle,
+  initialNumToRender = 12,
+  windowSize = 7,
+}: {
+  title: string;
+  data: readonly T[];
+  row: (item: T, index: number) => ReactElement | null;
+  keyOf: (item: T, index: number) => string;
+  header?: ReactNode;
+  footer?: ReactNode;
+  children?: ReactNode;
+  /** the space between rows, for tiles that stand apart rather than settings rows */
+  gap?: number;
+  /** a row's height, when every row is the same height: a jump to a row then lands exactly */
+  rowHeight?: number;
+  listRef?: Ref<FlatList<T>>;
+  contentStyle?: StyleProp<ViewStyle>;
+  /** how many rows are made before the first paint, and how many screenfuls are kept around */
+  initialNumToRender?: number;
+  windowSize?: number;
+}) {
+  const look = useLook();
+  const step = rowHeight == null ? 0 : rowHeight + gap;
+  return (
+    <SafeAreaView style={[styles.screen, { backgroundColor: look.background }]}>
+      <Bar title={title} />
+      <FlatList
+        ref={listRef}
+        data={data}
+        renderItem={({ item, index }) => row(item, index)}
+        keyExtractor={keyOf}
+        ListHeaderComponent={<>{header}</>}
+        ListFooterComponent={<>{footer}</>}
+        ItemSeparatorComponent={gap > 0 ? () => <View style={{ height: gap }} /> : undefined}
+        getItemLayout={step > 0 ? (_d, i) => ({ length: step, offset: step * i, index: i }) : undefined}
+        contentContainerStyle={[styles.screenBody, contentStyle]}
+        initialNumToRender={initialNumToRender}
+        windowSize={windowSize}
+      />
+      {children}
     </SafeAreaView>
   );
 }

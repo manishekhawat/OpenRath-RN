@@ -6,12 +6,12 @@
  * own switch ("Moving road under the car") and the driver part shows the home screen's "Your
  * name", so neither has a row here.
  */
-import { useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Alert, Image, Pressable, Text, useWindowDimensions, View } from 'react-native';
 
 import { LAYOUTS, PREVIEWS, ThemePreview, mix } from '../../components/LayoutView';
-import { Heading, Row, Screen } from '../../components/ui';
-import { f, t } from '../../logic/i18n';
+import { Heading, ListScreen, Row } from '../../components/ui';
+import { f, hindi, t } from '../../logic/i18n';
 import * as Layouts from '../../logic/layouts';
 import { chosen } from '../../logic/theme';
 import { lookFor, pack, useLook } from '../../state/look';
@@ -27,6 +27,12 @@ function choices(): [string, string, string][] {
 
 const check = (on: boolean) => (on ? '✓' : '');
 
+/** The boxes layout's picture is drawn in the current theme; only draw it again when that moves. */
+const Preview = memo(ThemePreview);
+
+/** The space between the tiles. */
+const GAP = 14;
+
 export default function LayoutsScreen() {
   const { prefs } = usePrefs();
   const look = useLook();
@@ -34,138 +40,151 @@ export default function LayoutsScreen() {
   const [ordering, setOrdering] = useState(false);
   const current = Layouts.current(prefs);
   const cur = Layouts.get(LAYOUTS, current);
-  const tile = Math.max(140, Math.min(360, (width - 32 - 14) / 2));
-  const themePack = pack(chosen(prefs));
+  const tile = Math.max(140, Math.min(360, (width - 32 - GAP) / 2));
+  const themeId = chosen(prefs);
+  const inHindi = hindi();
+  // the theme behind the boxes preview, worked out once: the picture is drawn from it
+  const themePack = useMemo(() => pack(themeId), [themeId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const themeLook = useMemo(() => lookFor(themePack), [themePack, inHindi]);
+  const cols = Math.max(1, Math.floor((width - 32 + GAP) / (tile + 16 + GAP)));
+  const rows: [string, string, string][][] = [];
+  choices().forEach((c, i) => {
+    if (i % cols === 0) rows.push([]);
+    rows[rows.length - 1].push(c);
+  });
 
-  const gallery = (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
-      {choices().map(([id, title, desc]) => {
-        const on = id === current || (id === Layouts.BOXES && !cur);
-        return (
-          <Pressable
-            key={id}
-            onPress={() => Layouts.choose(prefs, id)}
-            style={{
-              width: tile + 16,
-              padding: 8,
-              paddingBottom: 12,
-              borderRadius: 14,
-              backgroundColor: on ? look.panelTop : look.panel,
-              borderWidth: on ? 2.5 : 1.2,
-              borderColor: on ? look.accent : mix(look.edge.substring(0, 7), look.panel.substring(0, 7), 0.6),
-            }}
-          >
-            {id === Layouts.BOXES ? (
-              <ThemePreview pack={themePack} look={lookFor(themePack)} width={tile} />
-            ) : (
-              <Image source={PREVIEWS[id]} style={{ width: tile, height: (tile * 225) / 384, borderRadius: 8 }} resizeMode="stretch" />
-            )}
-            <Text style={{ color: look.text, fontSize: 17, fontWeight: '500', paddingHorizontal: 6, paddingTop: 10 }}>
-              {on ? f('%1$s   ✓ in use', t(title)) : t(title)}
-            </Text>
-            <Text style={{ color: look.textDim, fontSize: 13, paddingHorizontal: 6, paddingTop: 4 }}>{t(desc)}</Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-
-  if (!cur) {
+  const tileFor = ([id, title, desc]: [string, string, string]) => {
+    const on = id === current || (id === Layouts.BOXES && !cur);
     return (
-      <Screen title="Screen layout">
-        {gallery}
-      </Screen>
+      <Pressable
+        key={id}
+        onPress={() => Layouts.choose(prefs, id)}
+        style={{
+          width: tile + 16,
+          padding: 8,
+          paddingBottom: 12,
+          borderRadius: 14,
+          backgroundColor: on ? look.panelTop : look.panel,
+          borderWidth: on ? 2.5 : 1.2,
+          borderColor: on ? look.accent : mix(look.edge.substring(0, 7), look.panel.substring(0, 7), 0.6),
+        }}
+      >
+        {id === Layouts.BOXES ? (
+          <Preview pack={themePack} look={themeLook} width={tile} />
+        ) : (
+          <Image source={PREVIEWS[id]} style={{ width: tile, height: (tile * 225) / 384, borderRadius: 8 }} resizeMode="stretch" />
+        )}
+        <Text style={{ color: look.text, fontSize: 17, fontWeight: '500', paddingHorizontal: 6, paddingTop: 10 }}>
+          {on ? f('%1$s   ✓ in use', t(title)) : t(title)}
+        </Text>
+        <Text style={{ color: look.textDim, fontSize: 13, paddingHorizontal: 6, paddingTop: 4 }}>{t(desc)}</Text>
+      </Pressable>
     );
-  }
+  };
 
-  const opts = Layouts.opts(cur);
-  const stats = Layouts.part(cur, 'stats');
-  const showing = stats ? Layouts.statItems(prefs, cur.id, stats) : [];
+  // the chosen layout's own rows, under the gallery
+  const rest = () => {
+    if (!cur) return null;
+    const opts = Layouts.opts(cur);
+    const stats = Layouts.part(cur, 'stats');
+    const showing = stats ? Layouts.statItems(prefs, cur.id, stats) : [];
+    return (
+      <>
+        {opts.length > 0 ? (
+          <>
+            <Heading>{f('Show on %1$s', t(cur.name))}</Heading>
+            {opts.map((o) => {
+              const on = Layouts.shown(prefs, cur.id, o);
+              return (
+                <Row
+                  key={o}
+                  name={Layouts.OPT_NAMES[o] ?? o}
+                  value={on ? 'shown' : 'hidden'}
+                  right={<Text style={{ color: look.accent, fontSize: 18 }}>{check(on)}</Text>}
+                  onPress={() => Layouts.setShown(prefs, cur.id, o, !on)}
+                />
+              );
+            })}
+          </>
+        ) : null}
+
+        {stats ? (
+          <>
+            <Heading>{f('Details on %1$s', t(cur.name))}</Heading>
+            {Layouts.statOrder(prefs, cur.id, stats).map((it) => {
+              const on = showing.includes(it);
+              const at = showing.indexOf(it);
+              return (
+                <Row
+                  key={it}
+                  name={(on ? at + 1 + '.  ' : '') + t(Layouts.statName(it))}
+                  right={<Text style={{ color: look.accent, fontSize: 18 }}>{check(on)}</Text>}
+                  onPress={() => (ordering ? on && Layouts.toTop(prefs, cur.id, stats, it) : Layouts.setStat(prefs, cur.id, stats, it, !on))}
+                />
+              );
+            })}
+            <Row
+              name="Change the order"
+              value={ordering ? 'Tap one to put it first; tap here when done' : 'tap one to put it first'}
+              onPress={() => {
+                if (!ordering && showing.length < 2) return Alert.alert(t('Show two or more details first'));
+                setOrdering(!ordering);
+              }}
+            />
+          </>
+        ) : null}
+
+        <Heading>Layout</Heading>
+        <Row
+          name="Phone mirroring button"
+          value={Layouts.mirrorOn(prefs) ? "on the layout's buttons" : 'off'}
+          split
+          onPress={() => {
+            prefs.put('layMirror', Layouts.mirrorOn(prefs) ? 'off' : 'on');
+            if (Layouts.mirrorOn(prefs)) Alert.alert(t('Phone mirroring'), t('Long-press the new button to choose your mirroring app'));
+          }}
+        />
+        <Row
+          name="Background movement"
+          value={Layouts.animOn(prefs) ? 'gentle, while driving' : 'off'}
+          split
+          onPress={() => prefs.put('layAnim', Layouts.animOn(prefs) ? 'off' : 'on')}
+        />
+        {Layouts.part(cur, 'favourites') ? (
+          <Row
+            name="Clear the favourite apps"
+            value="tap a tile on the layout to choose, long-press to change"
+            onPress={() =>
+              Alert.alert(t('Clear the favourite apps'), undefined, [
+                { text: t('Keep'), style: 'cancel' },
+                {
+                  text: t('Clear'),
+                  style: 'destructive',
+                  onPress: () => {
+                    prefs.put('layApps', '');
+                    Alert.alert(t('Cleared. Tap a tile on the layout to choose its app.'));
+                  },
+                },
+              ])
+            }
+          />
+        ) : null}
+        <Row name="Back to the boxes" value="The classic dashboard" onPress={() => Layouts.choose(prefs, Layouts.BOXES)} />
+      </>
+    );
+  };
 
   return (
-    <Screen title="Screen layout">
-      {gallery}
-
-      {opts.length > 0 ? (
-        <>
-          <Heading>{f('Show on %1$s', t(cur.name))}</Heading>
-          {opts.map((o) => {
-            const on = Layouts.shown(prefs, cur.id, o);
-            return (
-              <Row
-                key={o}
-                name={Layouts.OPT_NAMES[o] ?? o}
-                value={on ? 'shown' : 'hidden'}
-                right={<Text style={{ color: look.accent, fontSize: 18 }}>{check(on)}</Text>}
-                onPress={() => Layouts.setShown(prefs, cur.id, o, !on)}
-              />
-            );
-          })}
-        </>
-      ) : null}
-
-      {stats ? (
-        <>
-          <Heading>{f('Details on %1$s', t(cur.name))}</Heading>
-          {Layouts.statOrder(prefs, cur.id, stats).map((it) => {
-            const on = showing.includes(it);
-            const at = showing.indexOf(it);
-            return (
-              <Row
-                key={it}
-                name={(on ? at + 1 + '.  ' : '') + t(Layouts.statName(it))}
-                right={<Text style={{ color: look.accent, fontSize: 18 }}>{check(on)}</Text>}
-                onPress={() => (ordering ? on && Layouts.toTop(prefs, cur.id, stats, it) : Layouts.setStat(prefs, cur.id, stats, it, !on))}
-              />
-            );
-          })}
-          <Row
-            name="Change the order"
-            value={ordering ? 'Tap one to put it first; tap here when done' : 'tap one to put it first'}
-            onPress={() => {
-              if (!ordering && showing.length < 2) return Alert.alert(t('Show two or more details first'));
-              setOrdering(!ordering);
-            }}
-          />
-        </>
-      ) : null}
-
-      <Heading>Layout</Heading>
-      <Row
-        name="Phone mirroring button"
-        value={Layouts.mirrorOn(prefs) ? "on the layout's buttons" : 'off'}
-        split
-        onPress={() => {
-          prefs.put('layMirror', Layouts.mirrorOn(prefs) ? 'off' : 'on');
-          if (Layouts.mirrorOn(prefs)) Alert.alert(t('Phone mirroring'), t('Long-press the new button to choose your mirroring app'));
-        }}
-      />
-      <Row
-        name="Background movement"
-        value={Layouts.animOn(prefs) ? 'gentle, while driving' : 'off'}
-        split
-        onPress={() => prefs.put('layAnim', Layouts.animOn(prefs) ? 'off' : 'on')}
-      />
-      {Layouts.part(cur, 'favourites') ? (
-        <Row
-          name="Clear the favourite apps"
-          value="tap a tile on the layout to choose, long-press to change"
-          onPress={() =>
-            Alert.alert(t('Clear the favourite apps'), undefined, [
-              { text: t('Keep'), style: 'cancel' },
-              {
-                text: t('Clear'),
-                style: 'destructive',
-                onPress: () => {
-                  prefs.put('layApps', '');
-                  Alert.alert(t('Cleared. Tap a tile on the layout to choose its app.'));
-                },
-              },
-            ])
-          }
-        />
-      ) : null}
-      <Row name="Back to the boxes" value="The classic dashboard" onPress={() => Layouts.choose(prefs, Layouts.BOXES)} />
-    </Screen>
+    <ListScreen
+      title="Screen layout"
+      data={rows}
+      keyOf={(r) => r[0][0]}
+      row={(r) => <View style={{ flexDirection: 'row', gap: GAP }}>{r.map(tileFor)}</View>}
+      gap={GAP}
+      initialNumToRender={2}
+      windowSize={3}
+      footer={rest()}
+    />
   );
 }
