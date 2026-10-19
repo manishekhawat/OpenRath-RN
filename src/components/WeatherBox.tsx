@@ -8,9 +8,8 @@ import { useState } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path, Rect, Text as SvgText } from 'react-native-svg';
 
-import * as Air from '../logic/air';
 import * as Features from '../logic/features';
-import { f, t } from '../logic/i18n';
+import { t } from '../logic/i18n';
 import * as Units from '../logic/units';
 import * as Weather from '../logic/weather';
 import { useLook } from '../state/look';
@@ -37,23 +36,21 @@ export function WeatherBox({ weather, waiting, style, onPress }: { weather: Weat
         {wx ? (
           <>
             <Text style={[styles.big, { color: look.text }]}>{Units.temp(prefs, wx.tempC)}</Text>
-            <Text style={{ color: look.textDim }} numberOfLines={1}>
-              {t(wx.text)} · {Math.round(wx.humidity)}% · {f('wind %1$s km/h', Math.round(wx.wind))}
+            <Text style={{ color: look.text, fontWeight: '500' }} numberOfLines={1}>
+              {t(wx.text)}
             </Text>
+            {weather.aqi > 0 ? (
+              <Text style={[styles.small, { color: weather.aqi > 200 ? '#FFB02E' : look.textDim }]}>{'AQI ' + weather.aqi}</Text>
+            ) : null}
             {rain ? (
               <Text style={[styles.small, { color: wx.savedNote && !wx.rain ? look.textDim : RAIN }]} numberOfLines={1}>
                 {rain}
               </Text>
             ) : null}
-            {weather.aqi > 0 ? (
-              <Text style={[styles.small, { color: weather.aqi > 200 ? '#FFB02E' : look.textDim }]}>
-                {f('Air: %1$s (AQI %2$s)', t(Air.band(weather.aqi)), weather.aqi)}
-              </Text>
-            ) : null}
             {curve ? <Hours temps={wx.hours} rain={wx.hoursRain} fahrenheit={Units.fahrenheit(prefs)} line={look.text} dim={look.textDim} /> : null}
           </>
         ) : (
-          <Text style={{ color: look.textDim }}>{waiting ? t('Waiting for the location') : t('Loading the weather')}</Text>
+          <Text style={[styles.big, { color: look.textDim }]}>{waiting ? t('No GPS position yet') : '--'}</Text>
         )}
       </View>
     </TapBox>

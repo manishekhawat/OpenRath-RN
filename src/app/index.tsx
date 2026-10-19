@@ -56,6 +56,30 @@ function useClock() {
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+/** Three figures in a row under a box's title (Cards.FiguresCard). */
+function Figures({ figs }: { figs: [string, string][] }) {
+  const look = useLook();
+  return (
+    <View style={styles.figures}>
+      {figs.map(([label, value]) => (
+        <View key={label} style={styles.figure}>
+          <Text style={[styles.figValue, { color: look.text }]}>{value}</Text>
+          <Text style={[styles.figLabel, { color: look.textDim }]}>{t(label)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** "just now", "5 min ago", "3 h ago" (Cards.TripCard.ago). */
+function ago(at: number, now: number): string {
+  const m = Math.floor((now - at) / 60000);
+  if (m < 1) return t('just now');
+  if (m < 60) return f('%1$s min ago', m);
+  if (m < 48 * 60) return f('%1$s h ago', Math.floor(m / 60));
+  return f('%1$s days ago', Math.floor(m / 1440));
+}
+
 export default function Home() {
   const { prefs, version } = usePrefs();
   const look = useLook();
@@ -119,13 +143,14 @@ export default function Home() {
     const mine = prefs.str('myService', '').split('|');
     const have = mine.length === 2 && mine[1] !== '';
     const k = Care.kmLeft(prefs, i, odoKm);
-    const when = k < 0 ? f('is overdue by %1$s km', -k) : f('is due in %1$s km', k);
+    const what = t(Care.NAMES[i]);
+    const when = k < 0 ? f('%1$s is overdue by %2$s km.', what, -k) : f('%1$s is due in %2$s km.', what, k);
     Alert.alert(
       t('Book the service?'),
-      `${t(Care.NAMES[i])} ${when}.` +
+      when +
         (have
-          ? ' ' + f('Call %1$s to book a slot?', mine[0])
-          : ' ' + t("Find your service centre on the map and tap Mine next to it, so next time it's one tap to call.")),
+          ? f(' Call %1$s to book a slot?', mine[0])
+          : t(" Find your service centre on the map and tap Mine next to it, so next time it's one tap to call.")),
       [
         { text: t('Later'), style: 'cancel' },
         {
@@ -266,21 +291,22 @@ export default function Home() {
     <WeatherBox weather={weather} waiting={trip.lat === 0} style={styles.flexBox} />
   ) : null;
 
+  const min = Math.floor(trip.todaySec / 60);
+  const avg = Trip.avgKmh(trip.todayKm, trip.todaySec);
   const tripBox = (
-    <TapBox title="TRIP COMPUTER" style={styles.flexBox} onPress={() => setMenu('trip')}>
-      <Text style={[styles.big, { color: look.text }]}>
-        {trip.todayKm.toFixed(1)} <Text style={[styles.unit, { color: look.textDim }]}>{t('km today')}</Text>
-      </Text>
-      <Text style={{ color: look.textDim }}>
-        {Trip.duration(trip.todaySec)} · {f('avg %1$s %2$s', Units.speed(Trip.avgKmh(trip.todayKm, trip.todaySec), mph), Units.speedLabel(prefs))}
-        {Features.on(prefs, 'score') ? ` · ${f('score %1$s', Trip.score(trip))}` : ''}
-      </Text>
-      {Features.on(prefs, 'fuelPrice') && tripCost > 0 ? (
-        <Text style={[styles.small, { color: look.textDim }]}>{f('About ₹%1$s of %2$s today', Math.round(tripCost), t(Car.word(Car.fuel(prefs))))}</Text>
-      ) : null}
-      <Text style={[styles.small, { color: look.textDim }]}>
-        {f('This drive %1$s km', trip.driveKm.toFixed(1))}
-        {trip.park && Features.on(prefs, 'parking') ? ' · ' + f('parked %1$s', Errands.clock(trip.park.at)) : ''}
+    <TapBox title="TODAY" style={styles.flexBox} onPress={() => setMenu('trip')}>
+      <Figures
+        figs={[
+          ['KM', trip.todayKm < 100 ? Fuel.fmt(trip.todayKm) : String(Math.round(trip.todayKm))],
+          ['DRIVE TIME', min < 60 ? `${min}m` : `${Math.floor(min / 60)}h ${min % 60}m`],
+          ['AVG KM/H', avg <= 0 ? '--' : String(Math.round(avg))],
+        ]}
+      />
+      <Text style={[styles.small, { color: look.textDim, textAlign: 'center' }]} numberOfLines={1}>
+        {f('This drive %1$s km', Fuel.fmt(trip.driveKm)) +
+          (Features.on(prefs, 'fuelPrice') && tripCost >= 1 ? '  ·  ' + f('₹%1$s petrol today', Math.round(tripCost)) : '') +
+          (Features.on(prefs, 'score') ? '  ·  ' + f('score %1$s', Trip.score(trip)) : '') +
+          (trip.park && Features.on(prefs, 'parking') ? '  ·  ' + f('parked %1$s', ago(trip.park.at, now.getTime())) : '')}
       </Text>
     </TapBox>
   );
@@ -292,18 +318,13 @@ export default function Home() {
   const cabShare = Cab.targetShare(prefs, now.getTime());
   const cabBox = cabSum ? (
     <TapBox title="CAB  ·  TODAY" style={styles.flexBox} onPress={() => router.push('/cab')}>
-      <View style={styles.figures}>
-        {([
+      <Figures
+        figs={[
           ['EARNED', Cab.rs(cabSum.in)],
           ['RIDES', String(cabSum.rides)],
           ['NET', Cab.rs(Cab.net(cabSum))],
-        ] as const).map(([label, value]) => (
-          <View key={label} style={styles.figure}>
-            <Text style={[styles.figValue, { color: look.text }]}>{value}</Text>
-            <Text style={[styles.figLabel, { color: look.textDim }]}>{t(label)}</Text>
-          </View>
-        ))}
-      </View>
+        ]}
+      />
       {cabShare >= 0 ? (
         <View style={[styles.bar, { backgroundColor: look.edge }]}>
           <View style={{ width: `${Math.round(cabShare * 100)}%`, height: '100%', backgroundColor: look.accent, borderRadius: 3 }} />
@@ -315,23 +336,22 @@ export default function Home() {
     </TapBox>
   ) : null;
 
-  const fuelWord = Car.word(Car.fuel(prefs));
   const fuelBox = (
-    <TapBox title={`${t(fuelWord).toUpperCase()} ${t('LOG')}`} style={styles.flexBox} onPress={() => router.push('/fuel')}>
-      {fuelStats.avgKmpl > 0 ? (
-        <>
-          <Text style={[styles.big, { color: look.text }]}>
-            {Fuel.fmt(fuelStats.avgKmpl)} <Text style={[styles.unit, { color: look.textDim }]}>{t('km/l average')}</Text>
-          </Text>
-          <Text style={{ color: look.textDim }}>
-            {f('Last tank %1$s km/l', Fuel.fmt(fuelStats.lastKmpl))} · {f('₹%1$s a km', Fuel.fmt(fuelStats.rupeesPerKm))}
-          </Text>
-        </>
-      ) : (
-        <Text style={{ color: look.textDim }}>
-          {fuelStats.fills === 0 ? t('Tap to add your first fill-up') : t('Mileage shows after two full tanks')}
-        </Text>
-      )}
+    <TapBox title="FUEL" style={styles.flexBox} onPress={() => router.push('/fuel')}>
+      <Figures
+        figs={[
+          ['LAST TANK KM/L', fuelStats.lastKmpl > 0 ? Fuel.fmt(fuelStats.lastKmpl) : '--'],
+          ['AVERAGE KM/L', fuelStats.avgKmpl > 0 ? Fuel.fmt(fuelStats.avgKmpl) : '--'],
+          ['₹ / KM', fuelStats.rupeesPerKm > 0 ? Fuel.fmt(fuelStats.rupeesPerKm) : '--'],
+        ]}
+      />
+      <Text style={[styles.small, { color: look.textDim, textAlign: 'center' }]} numberOfLines={1}>
+        {fuelStats.fills === 0
+          ? t('Tap to add your first fill-up')
+          : fuelStats.lastKmpl <= 0
+            ? t('Mileage shows after two full-tank fill-ups')
+            : f('%1$s fill-ups  ·  last %2$s', fuelStats.fills, ago(fuelStats.lastAt, now.getTime())) + Care.tollsThisMonth(prefs, now)}
+      </Text>
     </TapBox>
   );
 
@@ -405,7 +425,12 @@ export default function Home() {
       {/* 1.42: the mic floats on the home screen unless it belongs to the map only (Features.micPlace) */}
       {Features.on(prefs, 'voice') && Features.micPlace(prefs) !== 'map' ? <MicButton style={styles.mic} aqi={weather.aqi} /> : null}
       {menu === 'trip' ? (
-        <PickList title="Trip computer" options={tripMenu} onPick={tripPick} onClose={() => setMenu(null)} />
+        <PickList
+          title={f('Today %1$s km  ·  GPS odometer %2$s km', Fuel.fmt(trip.todayKm), Math.round(odoKm))}
+          options={tripMenu}
+          onPick={tripPick}
+          onClose={() => setMenu(null)}
+        />
       ) : null}
     </SafeAreaView>
   );
