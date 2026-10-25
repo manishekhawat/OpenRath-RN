@@ -166,6 +166,8 @@ test('holidays', () => {
   assert.ok(next[0].startsWith('Dussehra'));
   assert.equal(next[1], 'Diwali, Sun 8 Nov');
   assert.equal(holidays.of(2026).length, 12);
+  // 1.44: India's list says nothing about the traffic anywhere else
+  assert.deepEqual(holidays.upcoming(new Date(2026, 9, 13, 9), 3, false), []);
 });
 
 test('errands', () => {

@@ -1,9 +1,11 @@
 /**
  * Holidays when the highways out of town fill up (port of Holidays.java): India's national and
  * main festival holidays, for Settings and the start-up summary. Moving festivals are listed to
- * 2027. (The holiday traffic warning on the dashboard was removed in 1.35.)
+ * 2027. (The holiday traffic warning on the dashboard was removed in 1.35.) Since 1.44 the list is
+ * empty outside India, where it says nothing about the traffic.
  */
 import { DAYS, MONTHS } from './dates.ts';
+import * as Money from './money.ts';
 
 /** [yyyy-mm-dd, name, days of heavy traffic before it] */
 const MOVING: [string, string, number][] = [
@@ -38,8 +40,9 @@ export function of(year: number): Day[] {
   return out;
 }
 
-/** The next holidays from today, for Settings: "Diwali, Sun 8 Nov". */
-export function upcoming(today: Date, n: number): string[] {
+/** The next holidays from today, for Settings: "Diwali, Sun 8 Nov"; nothing outside India. */
+export function upcoming(today: Date, n: number, india = Money.india()): string[] {
+  if (!india) return [];
   const t = day(today.getFullYear(), today.getMonth() + 1, today.getDate());
   return [...of(t.getFullYear()), ...of(t.getFullYear() + 1)]
     .sort((a, b) => a.date.getTime() - b.date.getTime())
