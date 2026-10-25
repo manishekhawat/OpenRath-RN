@@ -41,7 +41,7 @@ export default function PlacesScreen() {
   const [address, setAddress] = useState('');
   const on = Features.on(prefs, 'places');
   const pkg = prefs.str(Places.NAV_KEY, '');
-  const moving = ChildLock.moving(trip.kmh, trip.prevAt);
+  const moving = ChildLock.movingShown(trip.kmh, trip.prevAt);
   void version;
 
   // Home, Office and the parked car first, then the owner's own, which a tap on the ✕ forgets

@@ -105,6 +105,9 @@ function MovingRoad({ width, fill, line }: { width: number; fill: string; line: 
   return <Road width={width} height={90} kmh={Math.max(0, speedShown)} fill={fill} line={line} />;
 }
 
+/** How long night-drive mode has to be held to leave it (NightDrive.HOLD_MS). */
+const NIGHT_HOLD_MS = 600;
+
 export default function Home() {
   const { prefs, version } = usePrefs();
   const look = useLook();
@@ -285,13 +288,18 @@ export default function Home() {
   }
 
   if (Features.on(prefs, 'nightDrive') && dark && driving && !nightOff) {
-    // after sunset while driving: big red speed, nothing else; a tap leaves it until the next drive
+    // after sunset while driving: big red speed, nothing else. Since 1.44 it takes a hold to leave,
+    // not a tap, so a knee or a passenger's sleeve doesn't put the bright dashboard back
     return (
-      <Pressable style={[styles.fill, styles.night]} onPress={() => setNightOff(true)} onLongPress={() => router.push('/map')}>
+      <Pressable
+        style={[styles.fill, styles.night]}
+        delayLongPress={NIGHT_HOLD_MS}
+        onLongPress={() => setNightOff(true)}
+      >
         <Text style={styles.nightTime}>{Errands.clock(now.getTime(), { bare: true })}</Text>
         <SpeedText mph={mph} style={styles.nightSpeed} />
         <Text style={styles.nightUnit}>{Units.speedLabel(prefs).toUpperCase()}</Text>
-        <Text style={styles.nightHint}>{t('Tap here to leave night-drive mode')}</Text>
+        <Text style={styles.nightHint}>{t('Hold here to leave night-drive mode')}</Text>
       </Pressable>
     );
   }

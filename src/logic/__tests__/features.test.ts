@@ -16,7 +16,7 @@ test('levels: the counts and what each level takes in', () => {
     else if (x.level === Features.CUSTOM) c++;
     else d++;
   }
-  assert.equal(s, 16, 'simple count');
+  assert.equal(s, 19, 'simple count');
   assert.equal(c, 8, 'custom count');
   assert.equal(d, 2, 'dev count');
   assert.ok(f > s && f > c, 'full has the most');
@@ -107,21 +107,32 @@ test('the mic’s place, from the two old switches', () => {
   assert.ok(!Features.on(q, 'floatMic'), 'no floating mic without voice commands');
 });
 
-test('the 1.42 and 1.43 switches exist, and this edition says which it does', () => {
+test('the switches up to 1.44 exist, and this edition says which it does', () => {
   for (const id of [
     'smoothSpeed', 'places', 'appDrawer', 'dockStatus', 'hourlyWeather', 'calendar', 'artColour', 'seek', 'stopSummary',
     'setup', 'intro', 'autoTheme', 'tapFeedback', 'achievements', 'projection', 'soundboard', 'video', 'faultWords',
     'askCar', 'ledStrip', 'wake', 'updates', 'reports', 'longKeys',
+    // 1.44
+    'navTurns', 'overStrip', 'parkedSettings', 'callScreen', 'musicApp', 'projectionAuto', 'androidAuto',
+    'androidAutoWireless', 'sourceVolume',
   ]) {
     assert.ok(Features.get(id) != null, `feature ${id} exists`);
   }
-  assert.equal(Features.ALL.length, 90);
-  for (const id of ['intro', 'setup', 'reports', 'places', 'achievements', 'wake', 'video', 'soundboard']) {
+  // the same switches the Android version has, no more and no fewer
+  assert.equal(Features.ALL.length, 99);
+  for (const id of ['intro', 'setup', 'reports', 'places', 'achievements', 'wake', 'video', 'soundboard', 'parkedSettings', 'musicApp', 'sourceVolume']) {
     assert.ok(Features.PORTED.has(id), `${id} is ported`);
   }
-  for (const id of ['obd', 'tpms', 'keys', 'longKeys', 'eq', 'widgets', 'updates', 'maker', 'ledStrip']) {
+  for (const id of [
+    'obd', 'tpms', 'keys', 'longKeys', 'eq', 'widgets', 'updates', 'maker', 'ledStrip',
+    // 1.44's own native-only ones: the phone, the overlays and Android Auto
+    'navTurns', 'overStrip', 'callScreen', 'projectionAuto', 'androidAuto', 'androidAutoWireless',
+  ]) {
     assert.ok(!Features.PORTED.has(id), `${id} needs native Android code`);
   }
+  // the three new switches this port does carry are part of a level, as they are on Android
+  assert.equal((Features.get('parkedSettings') as Features.Feature).level, Features.SIMPLE);
+  assert.equal((Features.get('musicApp') as Features.Feature).level, Features.SIMPLE);
   for (const f of Features.ALL) assert.equal(f.ported, Features.PORTED.has(f.id), `${f.id}'s ported flag`);
   // the old ids and the removed features never reach PORTED
   for (const [part] of Features.PARTS) assert.ok(!Features.PORTED.has(part), `${part} is not a switch of its own`);

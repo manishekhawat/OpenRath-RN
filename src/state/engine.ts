@@ -19,6 +19,7 @@ import { Alert, AppState, Platform, ToastAndroid } from 'react-native';
 
 import * as Bg from '../logic/background';
 import * as Cab from '../logic/cab';
+import * as ChildLock from '../logic/childlock';
 import * as Diag from '../logic/diag';
 import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
@@ -371,6 +372,8 @@ function feedOne(l: LocationObject) {
   );
   const s = r.state;
   const out: Partial<Snapshot> = { trip: s, fixAt: Date.now() };
+  // 1.44: what the child and valet locks go by, which holds for ten minutes if the GPS drops out
+  ChildLock.movingNow(s.kmh, out.fixAt as number);
   // current already, so an update published on the way (a failed limit lookup) carries this trip
   snap = { ...snap, trip: s };
   if (alerts) speedAlerts(s, out);

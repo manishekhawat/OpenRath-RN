@@ -36,7 +36,7 @@ export const LEVEL_ABOUT = [
 /** Off whatever the level until the owner turns them on: they need hardware, or change the home screen. */
 const ASK_FIRST = new Set(['cab', 'obd', 'dashcam', 'tpms', 'reports']);
 
-const SIMPLE_IDS = ['arrows', 'weather', 'news', 'ticker', 'nightDrive', 'speedAlerts', 'parking', 'reverse', 'lightsReminder', 'duck', 'keys', 'longKeys', 'resume', 'offlineMap', 'backup', 'reports'];
+const SIMPLE_IDS = ['arrows', 'navTurns', 'parkedSettings', 'weather', 'news', 'ticker', 'nightDrive', 'speedAlerts', 'parking', 'reverse', 'lightsReminder', 'duck', 'keys', 'longKeys', 'resume', 'offlineMap', 'backup', 'reports', 'musicApp'];
 const CUSTOM_IDS = ['pages', 'widgets', 'saver', 'perf', 'bootArt', 'soundProfiles', 'speedVolume', 'eq', 'profiles'];
 const DEV_IDS = ['maker', 'perf'];
 
@@ -105,6 +105,9 @@ export const ALL: Feature[] = [
   F("gpx", "Record routes (GPX export)", "Driving", true, "Kept 60 days on the unit only"),
   F("tolls", "Tolls", "Driving", true, "Toll plazas and costs on a planned route, and a countdown with a FASTag lane reminder"),
   F("reverse", "Reverse guide lines", "Driving", true, "Shown when reverse gear is engaged"),
+  F("navTurns", "Next turn from your navigation app", "Driving", true, "The next turn from Google Maps, Waze and others, in a card on the dashboard"),
+  F("overStrip", "Mini strip over other apps", "Driving", false, "The next turn and what's playing, along the bottom of other apps"),
+  F("parkedSettings", "Settings only when stopped", "Driving", true, "Settings and their keyboard open when the car is stopped; a passenger can still open them"),
   F("fuelPrice", "Fuel and mileage", "Driving", true, "Trip cost from your city's petrol price, which drives used extra fuel, how far the tank goes, and a leak or theft check"),
   F("restStop", "Break reminder and rest stops", "Driving", true, "After 2 hours at the wheel, dhabas and pumps ahead"),
   F("dashcam", "Dashcam", "Driving", false, "Records a USB camera in 1-minute clips; a jolt keeps the clip"),
@@ -117,8 +120,13 @@ export const ALL: Feature[] = [
   F("bumps", "Road learning", "Driving", true, "Learns speed-breakers and how long you wait at signals and tolls, and tells you next time"),
   F("duck", "Music dips for voice prompts", "Driving", true, "Music lowers while the car speaks a turn or a warning"),
   F("hotspot", "Guest Wi-Fi", "Phone", true, "A QR code passengers scan to join the unit's hotspot"),
+  F("callScreen", "Call screen over other apps", "Phone", true, "Who is calling, with big Answer and End buttons, on top of whatever app is open"),
   F("maker", "Stereo maker's services", "Radio and music", true, "Topway, FYT, MTCD/Joying and szchoiceway units: FM in the radio box, Bluetooth calls, reverse gear and lights through the maker's own services. Off, or on other stereos: plain Android only (the radio app's controls, the system phone)"),
   F("projection", "Phone projection app", "Radio and music", true, "A button in the music box opens your wireless CarPlay or Android Auto app (ZLink, AutoKit and others)"),
+  F("projectionAuto", "Open the projection app when the phone connects", "Radio and music", false, "Your CarPlay or Android Auto app opens by itself when a phone connects by Bluetooth"),
+  F("androidAuto", "Android Auto built in", "Radio and music", false, "Plug in your phone with its cable and Android Auto shows on this screen"),
+  F("androidAutoWireless", "Wireless Android Auto", "Radio and music", false, "A paired phone starts Android Auto by itself over Bluetooth and Wi-Fi, without the cable"),
+  F("musicApp", "Radio and music screen", "Radio and music", true, "A tap on the music or radio box opens a full screen for FM, online radio, your music files and music apps"),
   F("radioText", "Big frequency from any radio app", "Radio and music", true, "Shows \"FM 98.3\" and the station name from the radio app's text"),
   F("soundboard", "Soundboard", "Radio and music", false, "A box of fun sounds (horn, fart, applause and more) that plays only when the car is stopped"),
   F("video", "Video window", "Radio and music", false, "Plays a video from the unit or a USB stick in a box; the picture shows only when the car is stopped"),
@@ -144,6 +152,7 @@ export const ALL: Feature[] = [
   F("wake", "Recover after deep sleep", "Sound", true, "When the stereo wakes from sleep with the ignition, the GPS, music link and map start again"),
   F("resume", "Resume after switch-on", "Sound", true, "Plays what was on, at the same volume"),
   F("speedVolume", "Volume rises with speed", "Sound", false, "Louder on the highway, back down in town"),
+  F("sourceVolume", "Volume for each music app", "Sound", false, "Each music app, FM and online radio come back at the volume they last played at"),
   F("eq", "Equalizer", "Sound", false, "Bass, treble and presets for the app's own sound"),
   F("quiet", "Quiet hours", "Sound", false, "Late at night: music turned down, no alert beeps"),
   // data
@@ -184,12 +193,13 @@ for (const id of DEV_IDS) (get(id) as Feature).level = DEV;
 
 /**
  * What this version does: the switches ported from 1.30 (old ids follow their new switch; the
- * features 1.35 removed are gone), and the 1.42 ones added since.
+ * features 1.35 removed are gone), and the ones added since in 1.42 and 1.44.
  */
 const PORTED_130 = ["accel", "backup", "bootArt", "bumps", "cab", "cabApps", "cabCng", "cabEarnings", "cabMeter", "cabNotes", "cabPapers", "cabPhrases", "cabQuiet", "cabSos", "cabSpots", "cabTarget", "care", "childLock", "coach", "dashcam", "duck", "fog", "fuelCheck", "fuelPlan", "fuelPrice", "gpx", "highway", "hotspot", "kids", "lightsReminder", "monsoon", "news", "nightDrive", "parkLink", "parkPhoto", "parkTimer", "parkedMusic", "parking", "profiles", "quiet", "rain", "restStop", "resume", "road", "saver", "score", "serviceBooking", "serviceFinder", "soundProfiles", "speedAlerts", "speedVolume", "split", "startSummary", "tollAhead", "tolls", "tripShare", "view360", "voice", "waits", "wallet", "weather", "weekly", "zones", "aqi"];
+const PORTED_144 = ["parkedSettings", "musicApp", "sourceVolume"];
 const PORTED_142 = ["smoothSpeed", "stopSummary", "achievements", "places", "hourlyWeather", "calendar", "dockStatus", "tapFeedback", "soundboard", "video", "projection", "askCar", "faultWords", "wake", "setup", "intro", "autoTheme", "appDrawer", "reports", "seek"];
 
-export const PORTED = new Set([...PORTED_130, ...PORTED_142].map(parent).filter((id) => get(id) != null));
+export const PORTED = new Set([...PORTED_130, ...PORTED_142, ...PORTED_144].map(parent).filter((id) => get(id) != null));
 for (const f of ALL) f.ported = PORTED.has(f.id);
 
 export function levelOf(name: string): number {
