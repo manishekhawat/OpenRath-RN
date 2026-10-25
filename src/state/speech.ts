@@ -12,10 +12,14 @@ import { Alert, Platform, ToastAndroid } from 'react-native';
 
 import * as Diag from '../logic/diag';
 import { t } from '../logic/i18n';
+import * as Sound from '../logic/sound';
 import { Speaking } from '../logic/sound';
 
 /** Said on screen when the stereo has no working voice (Speak.NO_VOICE, 1.32). */
 export const NO_VOICE = 'The stereo has no spoken voice yet. Settings > Map and navigation > Spoken voice gets one in two taps.';
+/** Said on screen when the unit has a voice, but none that reads English (Speak.NO_DATA, 1.44). */
+export const NO_ENGLISH =
+  "The voice engine has no English voice installed. Settings > Map and navigation > Spoken voice > Android's voice settings downloads one, or get eSpeak NG.";
 export const GOOGLE_TTS = 'com.google.android.tts';
 
 const speaking = new Speaking();
@@ -69,18 +73,28 @@ function tell(text: string) {
 
 let voices: boolean | null = null;
 let voicesAt = 0;
+/** The language the voices on this unit can read; "" until they have been listed (1.44). */
+let lang = '';
 
 /** Whether the unit has a text-to-speech voice; looked at again after a minute, as one may have been installed. */
 export async function hasVoice(): Promise<boolean> {
   if (voices != null && (voices || Date.now() - voicesAt < 60000)) return voices;
   try {
-    voices = (await Speech.getAvailableVoicesAsync()).length > 0;
+    const have = await Speech.getAvailableVoicesAsync();
+    voices = have.length > 0;
+    // 1.44: Indian English, then any English, then the unit's own, and last a Hindi voice
+    lang = Sound.voiceLanguage(have.map((v) => v.language ?? ''));
   } catch (e) {
     Diag.note('voice list', e);
     voices = true; // can't tell: try speaking
   }
   voicesAt = Date.now();
   return voices;
+}
+
+/** The language the car speaks in, for the tests and Diagnostics. */
+export function voiceLanguage(): string {
+  return lang;
 }
 
 /**
@@ -117,6 +131,8 @@ export function say(text: string, options: Speech.SpeechOptions = {}) {
     return;
   }
   if (voices == null) hasVoice();
+  // a unit with only a Hindi voice still reads English words: say what is missing, then speak
+  if (lang !== '' && !Sound.englishVoice(lang)) tell(NO_ENGLISH);
   let started = false;
   let ended = false;
   const begin = () => {
@@ -130,7 +146,7 @@ export function say(text: string, options: Speech.SpeechOptions = {}) {
     if (speaking.end()) changed();
   };
   Speech.speak(text, {
-    language: 'en-IN',
+    language: lang === '' ? 'en-IN' : lang,
     ...options,
     onStart: () => {
       begin();

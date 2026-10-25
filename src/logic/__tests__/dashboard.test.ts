@@ -70,6 +70,29 @@ test('all-apps screen: the order and hidden apps (1.44)', () => {
   assert.equal(names(Apps.shown(apps, pkg, label, '  ', ['com.radio'], false, uses)), 'Maps,Zoo', 'spaces are not a search');
 });
 
+test('1.44: where the status icons sit, and the clock box\'s line', () => {
+  assert.equal(Status.place(true, false, true), 'clock', 'the clock box keeps them, like a phone');
+  assert.equal(Status.place(true, false, false), 'dock', 'a picture layout: the buttons bar');
+  assert.equal(Status.place(true, true, true), '', "Android's own status bar already shows them");
+  assert.equal(Status.place(false, false, true), '', 'switched off');
+
+  const noon = Date.UTC(2026, 9, 25, 12) - 5.5 * 3600000; // Sunday 25 Oct 2026, noon in India
+  const h = 3600000;
+  const ev = (title: string, start: number, end: number, allDay = false) => ({ title, start, end, allDay });
+  const ist = 'Asia/Kolkata';
+  assert.equal(Status.nextLine([ev('Dentist', noon + h, noon + 2 * h)], noon, '23°', 'Clear', ist), '13:00  Dentist');
+  assert.equal(Status.nextLine([ev('Dentist', noon - h, noon + h)], noon, '23°', 'Clear', ist), 'now  Dentist', 'one on now');
+  assert.equal(Status.nextLine([ev('Gone', noon - 2 * h, noon - h)], noon, '23°', 'Clear', ist), '23° Clear', 'one that is over');
+  assert.equal(
+    Status.nextLine([ev('Tomorrow', noon + 24 * h, noon + 25 * h)], noon, '23°', 'Clear', ist),
+    '23° Clear',
+    "tomorrow's belongs in the calendar box",
+  );
+  assert.equal(Status.nextLine(null, noon, '23°', 'Clear', ist), '23° Clear', 'the calendar box off');
+  assert.equal(Status.nextLine(null, noon, '23°', 'Weather', ist), '23°', 'nothing to say about the sky');
+  assert.equal(Status.nextLine(null, noon, '--', 'Clear', ist), '', 'no reading yet');
+});
+
 test('status icons', () => {
   assert.equal(Status.gps(3, true), Status.ON);
   assert.equal(Status.gps(60, true), Status.SEARCHING);
@@ -81,6 +104,25 @@ test('status icons', () => {
   assert.equal(Status.label(13), '4G');
   assert.equal(Status.label(20), '5G');
   assert.equal(Status.label(0), '');
+});
+
+test('1.44: the last day driven, for a day with nothing yet', () => {
+  const hist = {
+    '2026-10-20': [12.4, 1800],
+    '2026-10-22': [0.05, 60], // a drift of a few metres is not a drive
+    '2026-10-23': [31, 3600],
+    '2026-10-25': [0, 0],
+  };
+  assert.equal(Trip.lastDay(hist, '2026-10-25'), '2026-10-23');
+  assert.equal(Trip.lastDay(hist, '2026-10-21'), '2026-10-20', 'only days before today');
+  assert.equal(Trip.lastDay({}, '2026-10-25'), null);
+  assert.equal(Trip.lastDay({ '2026-10-24': [0.02, 10] }, '2026-10-25'), null, 'nothing driven on any of them');
+
+  assert.equal(Trip.daysBetween('2026-10-24', '2026-10-25'), 1);
+  assert.equal(Trip.daysBetween('2026-10-25', '2026-10-25'), 0);
+  assert.equal(Trip.daysBetween('2026-09-28', '2026-10-25'), 27, 'across a month');
+  assert.equal(Trip.daysBetween('2027-02-27', '2027-03-02'), 3);
+  assert.equal(Trip.daysBetween('what', '2026-10-25'), -1);
 });
 
 test('drive summary when stopped', () => {

@@ -1,8 +1,11 @@
 /**
  * Small helpers for the dashboard, with no Expo types so they are tested: the dock's status icons
- * (StatusIcons.java, 1.38) and the compass box's points (Cards.CompassCard, 1.36). The car box's
- * drive summary when stopped is Trip.stopText.
+ * (StatusIcons.java, 1.38), where they sit and the clock box's line under the date (1.44), and the
+ * compass box's points (Cards.CompassCard, 1.36). The car box's drive summary when stopped is
+ * Trip.stopText.
  */
+import * as Agenda from './agenda.ts';
+import { t } from './i18n.ts';
 
 // ---------------------------------------------------------------- status icons
 
@@ -68,4 +71,38 @@ export function wifiBars(rssi: number): number {
 export function point(deg: number): string {
   const p = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   return p[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
+}
+
+// ------------------------------------------- where the icons sit, and the clock's line (1.44)
+
+/**
+ * Where the Wi-Fi, mobile data, GPS and battery icons go (HomeActivity.statusPlace): along the top
+ * of the clock box when the page has one, else in the buttons bar; nowhere when they are switched
+ * off, or Android's own status bar already shows them.
+ */
+export function place(on: boolean, systemBar: boolean, clockOnPage: boolean): '' | 'clock' | 'dock' {
+  if (!on || systemBar) return '';
+  return clockOnPage ? 'clock' : 'dock';
+}
+
+/**
+ * The line under the date in the clock box (ClockCard.nextLine): the next event still to come
+ * today, else the weather now, else nothing. `events` is null when the calendar box is off.
+ */
+export function nextLine(
+  events: readonly Agenda.Event[] | null,
+  now: number,
+  temp: string,
+  sky: string,
+  tz?: string,
+): string {
+  for (const e of events ?? []) {
+    if (e.end <= now) continue;
+    const [day, time] = Agenda.when(e.start, e.end, e.allDay, now, tz);
+    // only today's: tomorrow's is in the calendar box, not under the clock
+    if (day !== 'Today') break;
+    return (time === '' ? '' : t(time) + '  ') + e.title;
+  }
+  if (temp === '' || temp.startsWith('--')) return '';
+  return temp + (sky === '' || sky === 'Weather' ? '' : ' ' + t(sky));
 }

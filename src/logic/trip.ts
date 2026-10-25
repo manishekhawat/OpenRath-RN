@@ -32,6 +32,8 @@ export interface TripState {
   odoKm: number;
   kmh: number;
   heading: number;
+  /** the last heading while driving, kept over a restart for the compass box (Drive.headingKept, 1.44) */
+  headingKept: number;
   /** metres above sea level from the last fix that gave one, -1 until then (Drive.altNow) */
   altM: number;
   lat: number;
@@ -69,6 +71,7 @@ export function initial(now: number, saved?: Partial<TripState>): TripState {
     odoKm: 0,
     kmh: 0,
     heading: -1,
+    headingKept: -1,
     altM: -1,
     lat: 0,
     lon: 0,
@@ -131,6 +134,8 @@ export function feed(s0: TripState, f: Fix, opts: { over: boolean; scoring: bool
   s.lat = f.lat;
   s.lon = f.lon;
   s.heading = f.heading != null && kmh > 5 ? f.heading : -1;
+  // 1.44: the compass box shows this while parked, and it is kept over a restart
+  if (s.heading >= 0) s.headingKept = s.heading;
   // the altitude is kept from the last fix that had one, so a parked car still shows where it is
   if (f.alt != null && Number.isFinite(f.alt)) s.altM = f.alt;
 
@@ -193,8 +198,36 @@ export function feed(s0: TripState, f: Fix, opts: { over: boolean; scoring: bool
 
 /** What gets saved between runs (the working values start fresh). */
 export function persisted(s: TripState): Partial<TripState> {
-  const { day, todayKm, todaySec, odoKm, todayBrakes, todayAccels, todaySpeedSec, park, lat, lon } = s;
-  return { day, todayKm, todaySec, odoKm, todayBrakes, todayAccels, todaySpeedSec, park, lat, lon };
+  const { day, todayKm, todaySec, odoKm, todayBrakes, todayAccels, todaySpeedSec, park, lat, lon, headingKept, altM } = s;
+  // 1.44: the heading and altitude too, so the compass box has them again after a restart
+  return { day, todayKm, todaySec, odoKm, todayBrakes, todayAccels, todaySpeedSec, park, lat, lon, headingKept, altM };
+}
+
+// ------------------------------------------- the last drive, for a day with none yet (1.44)
+
+/** Whole days from one "2026-10-12" date to a later one; -1 when either isn't a date. */
+export function daysBetween(from: string, to: string): number {
+  const ms = (d: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+    return m ? Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : NaN;
+  };
+  const a = ms(from);
+  const b = ms(to);
+  if (Number.isNaN(a) || Number.isNaN(b)) return -1;
+  return Math.round((b - a) / 86400000);
+}
+
+/**
+ * The latest day before `today` with some driving on it (100 m or more), or null: what the trip
+ * box shows when today has nothing yet (Drive.lastDay).
+ */
+export function lastDay(hist: History, today: string): string | null {
+  let best: string | null = null;
+  for (const [day, row] of Object.entries(hist)) {
+    if (day >= today || !row || (row[0] ?? 0) < 0.1) continue;
+    if (best === null || day > best) best = day;
+  }
+  return best;
 }
 
 export function avgKmh(km: number, sec: number): number {

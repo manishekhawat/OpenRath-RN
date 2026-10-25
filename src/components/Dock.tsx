@@ -21,7 +21,8 @@ const BUTTONS: [string, Href][] = [
   ['Care', '/care'],
 ];
 
-export function Dock() {
+/** `status`: false when the clock box shows the icons instead (1.44, HomeActivity.statusPlace). */
+export function Dock({ status = true }: { status?: boolean } = {}) {
   const { prefs } = usePrefs();
   const look = useLook();
   const tap = useTap();
@@ -32,7 +33,7 @@ export function Dock() {
           <Text style={[styles.text, { color: look.icons }]}>{t(label)}</Text>
         </Pressable>
       ))}
-      {Features.on(prefs, 'dockStatus') ? <StatusIcons style={styles.status} /> : null}
+      {status && Features.on(prefs, 'dockStatus') ? <StatusIcons style={styles.status} /> : null}
       <Pressable onPress={tap(() => router.push('/settings'))} style={styles.item} hitSlop={8} accessibilityLabel={t('Settings')}>
         <Text style={[styles.text, { color: look.icons }]}>{t('Settings')}</Text>
       </Pressable>

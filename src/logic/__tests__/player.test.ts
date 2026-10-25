@@ -199,3 +199,16 @@ test('resume after switch-on', () => {
   Features.set(p, 'resume', false);
   assert.ok(!player.due(p, true), 'switched off');
 });
+
+test('1.44: which voice reads the car\'s sentences', () => {
+  assert.equal(sound.voiceLanguage(['en-IN', 'hi-IN', 'en-US']), 'en-in', 'Indian English first');
+  assert.equal(sound.voiceLanguage(['hi-IN', 'en-US']), 'en-us', 'then any English');
+  assert.equal(sound.voiceLanguage(['hi-IN', 'en-GB', 'en-US']), 'en-gb');
+  assert.equal(sound.voiceLanguage(['hi_IN']), 'hi-in', 'a Hindi voice still reads English words');
+  assert.equal(sound.voiceLanguage(['mr-IN', 'hi-IN'], 'mr-IN'), 'mr-in', "the unit's own before Hindi");
+  assert.equal(sound.voiceLanguage(['ta-IN']), '', 'no English, no Hindi, not the unit\'s: let the engine decide');
+  assert.equal(sound.voiceLanguage([]), '', 'nothing listed');
+  assert.ok(sound.englishVoice('en-in'));
+  assert.ok(sound.englishVoice(''), 'nothing known is spoken as English');
+  assert.ok(!sound.englishVoice('hi-in'));
+});

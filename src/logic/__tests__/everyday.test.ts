@@ -67,6 +67,15 @@ test('news', () => {
   assert.equal(news.url('SPORTS'), 'https://news.google.com/rss/headlines/section/topic/SPORTS?hl=en-IN&gl=IN&ceid=IN:en');
   assert.equal(news.topicName('NATION'), 'India');
   assert.equal(news.topicName('nonsense'), 'Top stories');
+
+  // 1.44: up to eight are kept for a tall box, and the first five are read aloud
+  assert.equal(news.KEEP, 8);
+  const eight = news.parse(XML, news.KEEP);
+  assert.equal(eight.length, 6, 'as many as the feed had, the empty one skipped');
+  const many = Array.from({ length: 8 }, (_x, i) => ({ title: 'H' + (i + 1), source: '' }));
+  const said = news.read(many, 'Top stories');
+  assert.ok(said.includes('Five. H5.'));
+  assert.ok(!said.includes('H6'), 'the box shows eight, the voice reads five');
 });
 
 test('news: source from the title, cleaning, age', () => {
@@ -101,7 +110,7 @@ test('news refresh: cache, every 30 minutes, retry after 3', async () => {
   // loads the kept ones, then fetches as they are old
   await news.refresh(p, false, 1000 + news.FRESH_MS + 1, get);
   assert.equal(calls, 1);
-  assert.equal(news.state.items.length, 5);
+  assert.equal(news.state.items.length, 6, 'all the feed had, up to the eight kept since 1.44');
   assert.equal(p.str('newsAt', ''), String(1000 + news.FRESH_MS + 1));
   assert.ok(p.str('newsCache', '').startsWith('Monsoon to reach Kerala early, says IMD\tThe Hindu\n'));
   // fresh: no fetch
@@ -112,7 +121,7 @@ test('news refresh: cache, every 30 minutes, retry after 3', async () => {
   const t = 1000 + 2 * news.FRESH_MS + 2;
   await news.refresh(p, false, t, get);
   assert.equal(calls, 2);
-  assert.equal(news.state.items.length, 5);
+  assert.equal(news.state.items.length, 6, 'the headlines it had are kept');
   await news.refresh(p, false, t + news.RETRY_MS - 1, get);
   assert.equal(calls, 2);
   await news.refresh(p, false, t + news.RETRY_MS + 1, get);

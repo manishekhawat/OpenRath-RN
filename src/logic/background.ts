@@ -85,6 +85,11 @@ export const STILL_M = 25;
  * slow down at a level crossing or a long red light.
  */
 export const PARKED_MS = 5 * 60000;
+/**
+ * With the screen off (the stereo asleep with the ignition, 1.44), standing still slows the fixes
+ * after 30 seconds: nobody is watching the speed, and the next drive turns it back up.
+ */
+export const PARKED_DARK_MS = 30000;
 export const FIX_MS = 1000;
 export const SLOW_FIX_MS = 15000;
 
@@ -102,9 +107,9 @@ export function stillFrom(from: number, slow: boolean, kmh: number, movedM: numb
  * the app goes away, so without this the GPS would stay at one fix a second until the unit is
  * rebooted; stopping it altogether instead would miss the next drive until a screen came back.
  */
-export function parkedGps(slow: boolean, kmh: number, movedM: number, from: number, now: number): boolean {
+export function parkedGps(slow: boolean, kmh: number, movedM: number, from: number, now: number, dark = false): boolean {
   if (kmh >= STILL_KMH || (slow && movedM > STILL_M)) return false;
-  return from >= 0 && now - from >= PARKED_MS;
+  return from >= 0 && now - from >= (dark ? PARKED_DARK_MS : PARKED_MS);
 }
 
 /** Milliseconds between fixes to ask for. */

@@ -1,7 +1,9 @@
 /**
- * The news box on the dashboard (NewsCard in the Android version): the top five headlines, a big
+ * The news box on the dashboard (NewsCard in the Android version): the top headlines, a big
  * "Read aloud" button, and a tap on a headline reads just that one. Tapping the box fetches
- * fresh headlines; a long press opens the news page with the topic picker.
+ * fresh headlines; a long press opens the news page with the topic picker. Since 1.44 each
+ * headline sits in its own soft panel, with a numbered badge and the paper's name under it, and a
+ * tall box holds up to eight.
  */
 import { router } from 'expo-router';
 import * as Speech from 'expo-speech';
@@ -36,7 +38,7 @@ export async function readAll(prefs: Prefs) {
   say(News.read(News.state.items, News.topicName(prefs.str('newsTopic', 'top'))));
 }
 
-export const NewsBox = memo(function NewsBox({ style, lines = News.COUNT }: { style?: StyleProp<ViewStyle>; lines?: number }) {
+export const NewsBox = memo(function NewsBox({ style, lines = News.KEEP }: { style?: StyleProp<ViewStyle>; lines?: number }) {
   const { prefs } = usePrefs();
   const look = useLook();
   const news = useNews();
@@ -57,7 +59,7 @@ export const NewsBox = memo(function NewsBox({ style, lines = News.COUNT }: { st
     else await readAll(prefs);
   };
 
-  const n = Math.max(1, Math.min(News.COUNT, lines));
+  const n = Math.max(1, Math.min(News.KEEP, lines));
   const on = Features.on(prefs, 'news');
   return (
     <Box style={style} onPress={() => News.refresh(prefs, true)} onLongPress={() => router.push('/news')}>
@@ -76,10 +78,24 @@ export const NewsBox = memo(function NewsBox({ style, lines = News.COUNT }: { st
         </Text>
       ) : (
         news.items.slice(0, n).map((it, i) => (
-          <Pressable key={i} onPress={() => say(News.readOne(it))}>
-            <Text style={[styles.line, { color: look.text }]} numberOfLines={1}>
-              {i + 1}.  {it.title}
-            </Text>
+          <Pressable
+            key={i}
+            onPress={() => say(News.readOne(it))}
+            style={[styles.item, { backgroundColor: look.panelTop, borderColor: look.edge, borderRadius: Math.min(look.radius, 14) }]}
+          >
+            <View style={[styles.badge, { backgroundColor: look.accent }]}>
+              <Text style={[styles.badgeText, { color: look.panel }]}>{i + 1}</Text>
+            </View>
+            <View style={styles.itemText}>
+              <Text style={[styles.line, { color: look.text }]} numberOfLines={2}>
+                {it.title}
+              </Text>
+              {it.source !== '' ? (
+                <Text style={[styles.source, { color: look.textDim }]} numberOfLines={1}>
+                  {it.source}
+                </Text>
+              ) : null}
+            </View>
           </Pressable>
         ))
       )}
@@ -92,5 +108,10 @@ const styles = StyleSheet.create({
   head: { fontSize: 12.5, fontWeight: '500', flex: 1, marginRight: 8 },
   read: { borderWidth: 1.5, borderRadius: 999, paddingHorizontal: 22, paddingVertical: 9 },
   readText: { fontSize: 17, fontWeight: '500' },
-  line: { fontSize: 16, marginTop: 8 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, padding: 8, marginTop: 8 },
+  itemText: { flex: 1 },
+  badge: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { fontSize: 14, fontWeight: '700' },
+  line: { fontSize: 16 },
+  source: { fontSize: 12.5, marginTop: 2 },
 });

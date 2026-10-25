@@ -205,6 +205,35 @@ export class Parked {
   }
 }
 
+// --------------------------------------------- which voice reads the car's sentences (1.44)
+
+/**
+ * The language to speak in, from the voices the unit has (Speak.language): Indian English, then
+ * any English, then the unit's own language, and last a Hindi voice, which still reads English
+ * words and is better than silence. "" when nothing is known about the voices, where the caller
+ * asks for Indian English and lets the engine decide.
+ */
+export function voiceLanguage(have: readonly string[], unit = ''): string {
+  const list = have.map((l) => l.toLowerCase().replace('_', '-')).filter((l) => l !== '');
+  if (list.length === 0) return '';
+  const first = (want: string) => list.find((l) => l === want || l.startsWith(want + '-'));
+  return (
+    first('en-in') ??
+    first('en-gb') ??
+    first('en-us') ??
+    list.find((l) => l === 'en' || l.startsWith('en-')) ??
+    (unit === '' ? undefined : first(unit.toLowerCase().replace('_', '-'))) ??
+    first('hi-in') ??
+    list.find((l) => l === 'hi' || l.startsWith('hi-')) ??
+    ''
+  );
+}
+
+/** Whether that language reads English words as English (anything else is the Hindi fallback). */
+export function englishVoice(lang: string): boolean {
+  return lang === '' || lang.toLowerCase().startsWith('en');
+}
+
 // ------------------------------------------------------------------ duck
 
 /**

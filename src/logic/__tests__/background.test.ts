@@ -89,5 +89,10 @@ test('the fixes slow down once the car has stood still long enough', () => {
   assert.equal(bg.parkedGps(true, 0, bg.STILL_M + 5, t0, t0 + bg.PARKED_MS), false, 'a fix that moved speeds it up');
   assert.equal(bg.parkedGps(true, bg.STILL_KMH, 0, t0, t0 + bg.PARKED_MS), false, 'so does the speed');
   assert.equal(bg.parkedGps(true, 0, 5, t0, t0 + bg.PARKED_MS), true, 'GPS drift of a few metres does not');
+  // 1.44: with the screen off it slows after 30 seconds instead
+  assert.equal(bg.parkedGps(false, 0, 0, t0, t0 + bg.PARKED_DARK_MS, true), true);
+  assert.equal(bg.parkedGps(false, 0, 0, t0, t0 + bg.PARKED_DARK_MS - 1000, true), false);
+  assert.equal(bg.parkedGps(false, 0, 0, t0, t0 + bg.PARKED_DARK_MS), false, 'with the screen on it waits five minutes');
+  assert.equal(bg.parkedGps(true, bg.STILL_KMH, 0, t0, t0 + bg.PARKED_DARK_MS, true), false, 'driving away speeds it up again');
   assert.equal(bg.stillFrom(-1, false, 40, 0, t0), -1, 'a moving car has no standing-still moment');
 });

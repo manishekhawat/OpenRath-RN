@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CalendarBox } from '../components/CalendarBox';
+import { CalendarBox, lastSeen } from '../components/CalendarBox';
 import { CompassBox } from '../components/CompassBox';
 import { DashcamView } from '../components/DashcamView';
 import { Dock } from '../components/Dock';
@@ -22,6 +22,7 @@ import { NewsBox } from '../components/NewsBox';
 import { Road } from '../components/Road';
 import { RoadAhead } from '../components/RoadAhead';
 import { SoundboardBox } from '../components/SoundboardBox';
+import { StatusIcons } from '../components/StatusIcons';
 import { TapBox } from '../components/Tap';
 import { PickList, toast } from '../components/ui';
 import { VideoBox } from '../components/VideoBox';
@@ -39,11 +40,12 @@ import { f, t } from '../logic/i18n';
 import * as Layouts from '../logic/layouts';
 import { num } from '../logic/prefs';
 import * as Setup from '../logic/setup';
+import * as Status from '../logic/status';
 import * as Trip from '../logic/trip';
 import * as Units from '../logic/units';
 import * as Weekly from '../logic/weekly';
 import { useParkedSnap } from '../state/camera';
-import { say, speedNow, useDriveSpeed, useDriveTrip } from '../state/drive';
+import { history as driveHistory, say, speedNow, useDriveSpeed, useDriveTrip } from '../state/drive';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 import { useWeather } from '../state/weather';
@@ -254,6 +256,24 @@ export default function Home() {
 
   // night-drive mode comes back on the next drive after it is tapped away
   const [nightOff, setNightOff] = useState(false);
+
+  // 1.44: nothing driven today, so the box shows the last day that was driven instead
+  const [last, setLast] = useState<{ day: string; km: number; sec: number } | null>(null);
+  const noneToday = trip.todayKm < 0.1;
+  useEffect(() => {
+    // only looked up when there is nothing today; the box asks for it again on the next day with none
+    if (!noneToday) return;
+    let live = true;
+    driveHistory().then((hist) => {
+      const day = Trip.lastDay(hist, Trip.dayKey(Date.now()));
+      const row = day === null ? undefined : hist[day];
+      if (live) setLast(day !== null && row ? { day, km: row[0] ?? 0, sec: row[1] ?? 0 } : null);
+    }, () => {});
+    return () => {
+      live = false;
+    };
+  }, [noneToday]);
+
   useEffect(() => {
     if (!driving) setNightOff(false);
   }, [driving]);
@@ -350,14 +370,31 @@ export default function Home() {
     </TapBox>
   );
 
+  /**
+   * 1.44: the status icons sit along the top of the clock box, where a phone keeps them, and the
+   * line under the date is the next event today, else the weather now.
+   */
+  const statusAt = Status.place(Features.on(prefs, 'dockStatus'), false, true);
+  const nextLine = Status.nextLine(
+    Features.on(prefs, 'calendar') ? lastSeen() : null,
+    now.getTime(),
+    weather.wx ? Units.temp(prefs, weather.wx.tempC) : '',
+    weather.wx ? weather.wx.text : '',
+  );
   const clockBox = (
     <TapBox style={styles.flexBox}>
+      {statusAt === 'clock' ? <StatusIcons style={styles.clockStatus} /> : null}
       <Text style={[styles.time, { color: look.text }]}>
         {time} <Text style={[styles.ampm, { color: look.textDim }]}>{ampm}</Text>
       </Text>
       <Text style={{ color: look.textDim }}>
         {t(DAYS_FULL[now.getDay()])}, {now.getDate()} {t(MONTHS_FULL[now.getMonth()])}
       </Text>
+      {nextLine !== '' ? (
+        <Text style={[styles.small, { color: look.textDim, marginTop: 4 }]} numberOfLines={1}>
+          {nextLine}
+        </Text>
+      ) : null}
     </TapBox>
   );
 
@@ -365,13 +402,21 @@ export default function Home() {
     <WeatherBox weather={weather} waiting={trip.lat === 0} altM={trip.altM} heading={trip.heading} style={styles.flexBox} />
   ) : null;
 
-  const min = Math.floor(trip.todaySec / 60);
-  const avg = Trip.avgKmh(trip.todayKm, trip.todaySec);
+  const showLast = noneToday && last !== null;
+  const km = showLast ? last.km : trip.todayKm;
+  const sec = showLast ? last.sec : trip.todaySec;
+  const min = Math.floor(sec / 60);
+  const avg = Trip.avgKmh(km, sec);
+  const daysAgo = showLast ? Trip.daysBetween(last.day, Trip.dayKey(now.getTime())) : 0;
   const tripBox = (
-    <TapBox title="TODAY" style={styles.flexBox} onPress={() => setMenu('trip')}>
+    <TapBox
+      title={showLast ? f('LAST DRIVE, %1$s', daysAgo <= 1 ? t('YESTERDAY') : f('%1$s DAYS AGO', daysAgo)) : 'TODAY'}
+      style={styles.flexBox}
+      onPress={() => setMenu('trip')}
+    >
       <Figures
         figs={[
-          ['KM', trip.todayKm < 100 ? Fuel.fmt(trip.todayKm) : String(Math.round(trip.todayKm))],
+          ['KM', km < 100 ? Fuel.fmt(km) : String(Math.round(km))],
           ['DRIVE TIME', min < 60 ? `${min}m` : `${Math.floor(min / 60)}h ${min % 60}m`],
           ['AVG KM/H', avg <= 0 ? '--' : String(Math.round(avg))],
         ]}
@@ -487,7 +532,7 @@ export default function Home() {
   const content = (
     <SafeAreaView style={styles.fill} onTouchStart={() => (touchAt.current = Date.now())}>
       {body}
-      <Dock />
+      <Dock status={statusAt === 'dock'} />
       {/* 1.42: the mic floats where it was dragged, unless it belongs to the map only (Features.micPlace) */}
       {Features.on(prefs, 'voice') && Features.micPlace(prefs) !== 'map' ? <FloatingMic aqi={weather.aqi} /> : null}
       {menu === 'trip' ? (
@@ -545,6 +590,7 @@ const styles = StyleSheet.create({
   carFoot: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, marginTop: 6 },
   small: { fontSize: 12, letterSpacing: 0.5 },
   time: { fontSize: 54, fontWeight: '300' },
+  clockStatus: { position: 'absolute', top: 6, right: 10 },
   ampm: { fontSize: 18 },
   big: { fontSize: 34, fontWeight: '300' },
   figures: { flex: 1, flexDirection: 'row', alignItems: 'center' },

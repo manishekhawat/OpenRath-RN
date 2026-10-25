@@ -3,15 +3,17 @@ import { f, t } from './i18n.ts';
 import { num, type Prefs } from './prefs.ts';
 
 /**
- * The top five headlines for the news box, from Google News (RSS, no account or key) (port of
- * News.java). Refreshed every 30 minutes while there is internet; the last five are kept in
- * 'newsCache' so the box still shows them offline. read() turns them into one passage for the
- * car's voice.
+ * The top headlines for the news box, from Google News (RSS, no account or key) (port of
+ * News.java): since 1.44 up to eight are kept, so a tall box is full, and the first five are read
+ * aloud. Refreshed every 30 minutes while there is internet; the last ones are kept in 'newsCache'
+ * so the box still shows them offline. read() turns them into one passage for the car's voice.
  */
 
 export const TOPICS = ['top', 'NATION', 'WORLD', 'BUSINESS', 'SPORTS', 'TECHNOLOGY', 'ENTERTAINMENT'];
 export const TOPIC_NAMES = ['Top stories', 'India', 'World', 'Business', 'Sports', 'Technology', 'Entertainment'];
+/** Headlines read aloud, and how many the box keeps (1.44). */
 export const COUNT = 5;
+export const KEEP = 8;
 export const FRESH_MS = 30 * 60 * 1000;
 export const RETRY_MS = 3 * 60 * 1000;
 
@@ -84,11 +86,11 @@ export function parse(xml: string | null | undefined, max: number): Item[] {
 
 const NUMBERS = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight'];
 
-/** What the voice says: "Here are the top headlines. One. … Two. …". */
+/** What the voice says: "Here are the top headlines. One. … Two. …" (the first COUNT). */
 export function read(list: Item[] | null | undefined, name: string): string {
   if (!list || list.length === 0) return "There's no news to read yet.";
   let b = 'Here are the ' + (name === 'Top stories' ? 'top' : name) + ' headlines. ';
-  for (let i = 0; i < list.length && i < NUMBERS.length; i++) {
+  for (let i = 0; i < list.length && i < NUMBERS.length && i < COUNT; i++) {
     const it = list[i];
     b += NUMBERS[i] + '. ' + it.title;
     if (!it.title.endsWith('.') && !it.title.endsWith('?') && !it.title.endsWith('!')) b += '.';
@@ -191,7 +193,7 @@ export async function refresh(p: Prefs, force: boolean, now = Date.now(), fetchT
   state.busy = true;
   const topic = p.str('newsTopic', 'top');
   try {
-    const l = parse(await fetchText(url(topic)), COUNT);
+    const l = parse(await fetchText(url(topic)), KEEP);
     if (l.length > 0) {
       state.items = l;
       state.at = now;

@@ -53,7 +53,8 @@ TaskManager.defineTask<{ locations: Location.LocationObject[] }>(TASK, async ({ 
     const movedM = was ? Geo.dist(was.coords.latitude, was.coords.longitude, newest.coords.latitude, newest.coords.longitude) : 0;
     was = newest;
     still = Bg.stillFrom(still, slow, kmh, movedM, now);
-    const want = Bg.parkedGps(slow, kmh, movedM, still, now);
+    // 1.44: with the screen off, standing still slows the fixes after 30 seconds instead of five minutes
+    const want = Bg.parkedGps(slow, kmh, movedM, still, now, AppState.currentState !== 'active');
     if (want !== slow) {
       slow = want;
       await startTask();

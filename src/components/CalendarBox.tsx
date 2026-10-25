@@ -26,6 +26,17 @@ function ms(d: Date | string | undefined): number {
   return d == null ? 0 : new Date(d).getTime();
 }
 
+/**
+ * What the box last read, for the clock box's line under the date (CalendarCard.seen); null until
+ * the calendar has been read once.
+ */
+let seen: Agenda.Event[] | null = null;
+
+/** The events the calendar box last read, or null. */
+export function lastSeen(): Agenda.Event[] | null {
+  return seen;
+}
+
 export const CalendarBox = memo(function CalendarBox({ style }: { style?: StyleProp<ViewStyle> }) {
   const { prefs } = usePrefs();
   const look = useLook();
@@ -45,8 +56,11 @@ export const CalendarBox = memo(function CalendarBox({ style }: { style?: StyleP
       const now = Date.now();
       const cals = await Calendar.getCalendars();
       const raw = await Calendar.listEvents(cals, new Date(now - 24 * 3600000), new Date(now + Agenda.DAYS * 24 * 3600000));
-      setEvents(Agenda.upcoming(raw.map((e) => ({ title: e.title, start: ms(e.startDate), end: ms(e.endDate), allDay: !!e.allDay })), Date.now()));
+      const list = Agenda.upcoming(raw.map((e) => ({ title: e.title, start: ms(e.startDate), end: ms(e.endDate), allDay: !!e.allDay })), Date.now());
+      seen = list;
+      setEvents(list);
     } catch {
+      seen = [];
       setEvents([]);
     }
   }, []);
