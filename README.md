@@ -3,7 +3,7 @@
 <p align="center"><img src="docs/opening-logo.gif" alt="The OpenRath wheel rolling in when the app opens" width="512"></p>
 
 A free, open source home screen for Android car stereos, rebuilt in React Native with Expo. It is
-the React Native edition of OpenRath 1.43: setup screens on first open, a dashboard with your car
+the React Native edition of OpenRath 1.44: setup screens on first open, a dashboard with your car
 and its live speed on a moving road (or one of thirteen picture layouts), the clock, hourly
 weather, the calendar, news and a compass, a map with turn-by-turn guidance and saved places, a
 360° view of your car, voice commands and spoken answers from the car, a trip computer with a
@@ -13,12 +13,13 @@ a documents wallet, its own music, radio and video player, a dashcam, cab driver
 profiles, backups and a boot animation maker. All of it is in Hindi as well as English, and how
 much it shows is one setting: Simple, Full or Custom.
 
-1.43 is the safer and lighter round: the map only loads its own page and asks before calling a
-number from it, backups never carry the valet PIN or the hotspot password, five wrong valet PINs
-lock entry for a minute, speed limits and cameras come from roads already fetched (and a square's
-cameras are kept for a week), the GPS slows down after five minutes parked, and Settings > Help >
-Diagnostics lists the errors OpenRath caught and carried on from, with addresses and places
-removed.
+1.44 is the on-the-road round: the Glass look is the default, with frosted panels over a soft,
+colourful background that darkens at night; the map is drawn in the style of Google Maps and its
+streets darken after sunset; the weather box adds the altitude, the way the car points, the air
+quality and the next two days; Settings opens only when the car is stopped, the child and valet
+locks hold through a tunnel, and leaving night-drive mode needs a hold; the app list offers A to Z
+or the apps you open most, and can hide the ones you never use; prices show in your own currency;
+and the hidden shortcuts are listed in Settings > Help, one tip a day on the dashboard.
 
 *Rath* (रथ) is Sanskrit for chariot.
 

@@ -1,7 +1,7 @@
 # Releasing
 
 A release is a tag, an APK signed with the project's own key, and a GitHub release holding both.
-GitHub does the building: the `release` workflow runs when a tag like `v1.43.0` is pushed. Doing
+GitHub does the building: the `release` workflow runs when a tag like `v1.44.0` is pushed. Doing
 it the first time means making a signing key and giving GitHub a copy of it, which is steps 2 and
 3 below. After that a release is one `git push`.
 
@@ -82,8 +82,8 @@ Paste what is in `keystore.b64` into the secret, then delete `keystore.b64`.
 
 ```sh
 git checkout main && git pull
-git tag -a v1.43.0 -m "OpenRath (React Native) 1.43.0"
-git push origin v1.43.0
+git tag -a v1.44.0 -m "OpenRath (React Native) 1.44.0"
+git push origin v1.44.0
 ```
 
 The tag must be `v` plus the exact version in `package.json`; the workflow stops if it is not.
@@ -156,7 +156,7 @@ It should say `OK` for the APK. Then check who signed it, with `apksigner` from 
 build-tools:
 
 ```sh
-apksigner verify --print-certs openrath-rn-v1.43.0.apk
+apksigner verify --print-certs openrath-rn-v1.44.0.apk
 ```
 
 The `Signer #1 certificate SHA-256 digest` line must match the certificate this project signs

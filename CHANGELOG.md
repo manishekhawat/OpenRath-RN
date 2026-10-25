@@ -6,6 +6,33 @@ What changed in the React Native edition. The features themselves are designed i
 OpenRath release added; this file says what the port did with it. [PORTING.md](PORTING.md) lists
 what still needs native Android code.
 
+## 1.44
+
+The on-the-road round, matching OpenRath 1.44.
+
+- The Glass look, and it is the default: frosted panels with a light edge and big round corners
+  over a soft, colourful background — Aurora, Sunset, Ocean, or the theme's own picture — darker at
+  night, with your theme's accent colour kept. Settings > Look > Themes > Glass look turns it off.
+- The map is drawn in the style of Google Maps, its street colours darken after sunset, and a
+  second route server answers when the first is busy.
+- The weather box shows the altitude, the way the car points, the air quality and the next two
+  days, and lays out as a wide strip where there is room.
+- Safer while driving: Settings opens only when the car is stopped (with "I'm a passenger"), the
+  child and valet locks hold for ten minutes when the GPS drops out in a tunnel, and leaving
+  night-drive mode needs a hold.
+- The app list offers A to Z or the apps you open most, and apps you hide stay out of it until you
+  search for them.
+- Prices show in your currency, chosen in Settings > Dashboard, and the India-only parts (FASTag,
+  India's holidays, the UPI split) follow it.
+- The hidden shortcuts — what holding a box or a button does — are listed in Settings > Help, with
+  one tip a day on the dashboard while the car is parked.
+- Hindi now has 2,484 pairs, from the 1.44 string files.
+
+Android Auto (wired and wireless), the next-turn card and the strip over other apps, the call
+screen, contacts, the stereo's volume buttons, headlights on Topway stereos, a widget in every box
+and the extra engine readings stay in the Android version: they need native code, and
+[PORTING.md](PORTING.md) says what each would take.
+
 ## 1.43
 
 The safer and lighter round, matching OpenRath 1.43.

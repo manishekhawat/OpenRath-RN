@@ -1,13 +1,27 @@
-# Porting OpenRath 1.43 to React Native
+# Porting OpenRath 1.44 to React Native
 
-OpenRath 1.43 is a native Android launcher: about 35,000 lines of Java in 135 classes, talking
+OpenRath 1.44 is a native Android launcher: about 46,000 lines of Java in 167 classes, talking
 straight to Android services and to stereo makers' firmware (Topway, FYT, MTC and szchoiceway
-units, the FM chip driver, accessibility and notification services). This folder is the React
-Native (Expo SDK 57, TypeScript) version. Everything that can be done in TypeScript with Expo's
-modules is ported — 71 of the Android version's 90 feature switches — and what is left needs
-native Android code, and is listed at the end with what it would take.
+units, the FM chip driver, accessibility and notification services, and since 1.44 its own
+Android Auto stack). This folder is the React Native (Expo SDK 57, TypeScript) version. Everything
+that can be done in TypeScript with Expo's modules is ported — 74 of the Android version's 99
+feature switches — and what is left needs native Android code, and is listed at the end with what
+it would take.
 
 ## What changed from the 1.30 port
+
+- **On the road** (1.44): the Glass look is the default — frosted panels with a light edge and big
+  round corners over a soft, colourful background (Aurora, Sunset, Ocean, or the theme's own
+  picture), darker at night, with the theme's accent colour kept; the map page is the one the
+  Android version draws, in the style of Google Maps, with street colours that darken after
+  sunset and a second route server when the first is busy; the weather box adds the altitude, the
+  way the car points, the air quality and the next two days, as a wide strip where there is room;
+  Settings opens only when the car is stopped (with "I'm a passenger"), the child and valet locks
+  hold for ten minutes when the GPS drops out in a tunnel, and leaving night-drive mode needs a
+  hold; the app list offers A to Z or the apps opened most and can hide apps a search still finds;
+  prices show in the owner's currency, chosen in Settings > Dashboard, with the India-only parts
+  (FASTag, India's holidays, UPI) following it; and the hidden shortcuts are listed in
+  Settings > Help, one tip a day on the dashboard while parked.
 
 - **Safer and lighter** (1.43): the map page is the only page the map's WebView loads, and a tap on
   a phone number there asks before it dials; backups leave out the valet PIN, the hotspot password
@@ -20,7 +34,7 @@ native Android code, and is listed at the end with what it would take.
   from, with web addresses and coordinates taken out, as the crash notes now are.
 
 - **The whole app in Hindi** (1.34): `src/logic/i18n.ts` is the `Hindi` class, and
-  `src/data/hi.json` its 2,239 English-to-Hindi pairs, built from the Android project's
+  `src/data/hi.json` its 2,484 English-to-Hindi pairs, built from the Android project's
   `res/values` and `res/values-hi` string files by `scripts/hindi.py`. Every string on screen goes
   through `t()` or `f()`. Spoken prompts stay in English, as in the Android version.
 - **How much OpenRath shows** (1.36): Simple, Full or Custom, asked during setup and in Settings;
@@ -52,7 +66,7 @@ native Android code, and is listed at the end with what it would take.
 | `HomeActivity`, `Dashboard`, `CarCard`, `MapCard`, `MediaCard`, `PhoneCard`, `HomeDock`, `Extras` (screensaver) | `src/app/index.tsx`, `src/components/{Dock,StatusIcons,CalendarBox,CompassBox,WeatherBox,MusicBox,VideoBox,SoundboardBox,NewsBox}.tsx` | Car box with the drive summary, clock, hourly weather, calendar, compass, road ahead, trip, fuel or cab box, news, dock with the status icons and the floating mic. Night-drive mode, start-up summary, weekly report, clock screensaver. |
 | `Hindi`, `res/values-hi` | `src/logic/i18n.ts`, `src/data/hi.json`, `scripts/hindi.py` | `t()` and `f()`; `%1$s` and `%d` filled the Android way. |
 | `Prefs`, `Managed` | `src/logic/prefs.ts`, `src/state/prefs.tsx` | Same string keys, kept in AsyncStorage. Fleet settings are native. |
-| `Features`, `SettingsView`, `SettingsRows`, `HomeSettings` | `src/logic/{features,settings}.ts`, `src/app/settings/*` | All 89 switches, the four levels, the sections of 1.37 with the state on the right, and "Recently used". |
+| `Features`, `SettingsView`, `SettingsRows`, `HomeSettings` | `src/logic/{features,settings}.ts`, `src/app/settings/*` | All 99 switches, the four levels, the sections of 1.37 with the state on the right, and "Recently used". |
 | `Setup`, `Intro`, `Compat` | `src/logic/{setup,intro}.ts`, `src/app/setup.tsx`, `src/components/Intro.tsx` | Seven steps, remembered in `setupStep`; the wheel animation before the dashboard. |
 | `Units`, `Motion`, `Tap` | `src/logic/{units,motion,tap}.ts`, `src/components/Tap.tsx` | mph and °F, Standard/Reduced/Off, the tick and buzz on every box. |
 | `Car`, `Car3D`, `View360` | `src/logic/{car,car3d}.ts`, `src/app/{setup,view360}.tsx` | The 3D car is drawn with react-native-svg. |
@@ -67,11 +81,13 @@ native Android code, and is listed at the end with what it would take.
 | `Drive` as a foreground service, `Wake` | `src/state/{engine,background,store}.ts`, `src/logic/wake.ts`, `index.js` | The per-fix work runs outside React; a background location task feeds it behind other apps, and after deep sleep the GPS, music and map start again. Setting: Road helpers > Count trips behind other apps (`bgTrips`). |
 | `Dashcam`, `Snap` | `src/logic/{dashcam,snap}.ts`, `src/state/camera.ts`, `src/components/DashcamView.tsx`, `src/app/{dashcam,parkphoto}.tsx` | expo-camera; a jolt (accelerometer or harsh braking) keeps the clip. |
 | `Player`, `Resume`, `ParkedMusic`, `Duck`, `Sound`, `Quiet`, `Speak`, `Soundboard`, `Videos`, `Projection` | `src/logic/{player,sound,soundboard,videos}.ts`, `src/state/{player.tsx,speech.ts}`, `src/app/{music,video}.tsx`, `src/components/{MusicBox,VideoBox,SoundboardBox}.tsx` | expo-audio with background playback and seeking, expo-video for the video box; songs from the media library or picked files, stations from Radio Browser, the soundboard's sounds generated in TypeScript. |
+| `Glass`, `Ui`, `Pics` | `src/logic/{glass,theme}.ts`, `src/components/GlassBack.tsx`, `src/state/look.ts` | The Glass look as a transform on `Look`, and the background drawn once with react-native-svg. |
+| `Money`, `Hints` | `src/logic/{money,hints}.ts` | The owner's country and currency, read in `t()` and `f()`; one tip a day and the list in Settings > Help. |
 | `Valet`, `ChildLock` | `src/logic/{valet,childlock}.ts`, Settings and the app drawer | Five wrong PINs lock entry for a minute (1.43). |
 | `OverpassGate`, `Diag`, `Crash` | `src/logic/{overpass,diag}.ts`, `src/state/crash.ts`, `src/app/settings/diagnostics.tsx` | One gate for every Overpass question, speed cameras kept by square, and the errors carried on from, in Settings > Help > Diagnostics. |
 | Map card + `assets/map/map.html`, `OfflineNav`, `Tiles` | `src/app/map.tsx`, `src/map/mapHtml.ts` | The original map page in a WebView, with the 1.38 crash guard; offline guidance hands over to the chosen offline map app. |
-| `AppsActivity`, `AppPicker`, `Apps` | `src/logic/apps.ts`, `src/app/apps.tsx` | The 1.38 screen: search, pinned and recent, A to Z; opens apps by package name. |
-| `tests/Tests.java` | `src/logic/__tests__/*.test.ts` | 197 checks; run with `npm test`. |
+| `AppsActivity`, `AppPicker`, `Apps` | `src/logic/apps.ts`, `src/app/apps.tsx` | The 1.38 screen: search, pinned and recent, A to Z; 1.44's order (A to Z or most opened) and hidden apps; opens apps by package name. |
+| `tests/Tests.java` | `src/logic/__tests__/*.test.ts` | 215 checks; run with `npm test`. |
 
 ## Done differently, because Expo can't do it from TypeScript
 
@@ -94,7 +110,13 @@ native Android code, and is listed at the end with what it would take.
 - **Parked music** only reminds after 30 minutes parked, as the Android version does without OBD.
 - **The car's spoken answers** cover the trip computer ("how far today"); the engine, fuel, fault
   and battery answers say the adapter isn't connected, because OBD is native.
-- **The night theme** changes after sunset only; "with the headlights" needs the unit's lights.
+- **The night theme** changes after sunset only; "with the headlights" needs the unit's lights, and
+  so does the 1.44 screen brightness that follows them.
+- **The Glass background** is darkened, not blurred: a blur over a live screen needs
+  `expo-blur` on top of every page, which costs too much on slow stereos, so the background is
+  drawn once as soft colour blobs behind a dark veil. "My picture" uses the theme's own background
+  picture, because there is no wallpaper to read without native code.
+- **The map's street colours** follow sunset, like the theme, not the unit's headlights.
 - **The number plate** on the 3D car uses an affine transform, not Android's perspective mapping.
 - **QR codes** keep the screen awake but don't raise the brightness.
 - **The boot animation** uses a built-in stroke font instead of Inter, and the brand badge is the
@@ -102,9 +124,23 @@ native Android code, and is listed at the end with what it would take.
 
 ## Still needs native Android code
 
-Each of these needs Kotlin or Java in an Expo module or a config plugin. They are the 19 feature
+Each of these needs Kotlin or Java in an Expo module or a config plugin. They are the 25 feature
 switches `src/logic/features.ts` marks as not ported, and the services behind them.
 
+- Android Auto, wired and wireless (`androidAuto`, `androidAutoWireless`, and the thirteen `Aa*`
+  classes behind them): the phone's projection protocol over USB and Wi-Fi, with its own TLS,
+  video decoding and audio streams.
+- The next-turn card and the strip over other apps (`navTurns`, `overStrip`, `NavCard`,
+  `NavTurn`, `OverStrip`): a NotificationListenerService to read the navigation app's turn, and an
+  overlay to draw it over other apps.
+- The call screen, contacts and the phone link (`callScreen`, `CallScreen`, `Contacts`,
+  `PhoneLink`, `Calls`): the telephony and contacts APIs, and an overlay over any app.
+- Headlights on Topway stereos and the brightness that follows them (`Lights`): the firmware's own
+  light readings.
+- The stereo's volume buttons on the music screen, and a music app's own volume
+  (`Volume`, parts of `MusicScreen`): AudioManager.
+- The extra engine readings of 1.44 (air flow, petrol an hour, manifold pressure, throttle, fuel
+  trims, codes seen once): more OBD-II PIDs, so the same Bluetooth adapter work as below.
 - Being the Home app beyond the HOME intent filter (single task, clear task on launch): a small config plugin.
 - Listing installed apps (`Apps`, `AppsActivity`, `ChildLock` sending the screen home, finding the 360 camera, projection, offline map and ride apps): PackageManager.
 - What's playing, the notification ticker and the big radio frequency (`MediaListener`, `Ticker`, `RadioText`, `readAloud`): NotificationListenerService and a media session.
@@ -117,7 +153,7 @@ switches `src/logic/features.ts` marks as not ported, and the services behind th
 - Turn-indicator arrows and the 360 camera turning with the indicators (`arrows`, `cam360Turn`): the unit's turn signals.
 - Stereo makers' services: Topway (`TopwayUnit`, `Tw`, `Xt`, `Calls`, `Lights`), FYT, MTC and szchoiceway units (`FytUnit`, `MtcUnit`, `SzUnit`, `Unit`), plus `Fm`, `Tuner`, `Scan`, `StockRadio`, `Probe`, `Peek`, `Stereo`, `Hub`'s unit start/stop, Reset GPS and `com.android.fmradio.FmNative`. These call firmware classes by reflection and only make sense as a native module loaded on those units.
 - Floating mic over other apps (`Floaters`, `OverMic`): SYSTEM_ALERT_WINDOW overlay. The mic floats over OpenRath's own screens here.
-- Home-screen widgets and extra dashboard pages (`widgets`, `pages`, resizing and moving the boxes): AppWidgetHost and the Android layout work behind them.
+- Home-screen widgets and extra dashboard pages (`widgets`, `pages`, resizing and moving the boxes, and 1.44's widget in every box instead of two): AppWidgetHost and the Android layout work behind them.
 - Managed settings for fleets (`Managed`): Android's app restrictions.
 - App updates from GitHub (`Updates`): installing a package needs the install permission.
 - The performance box (`perf`): free memory and the reason the app last closed.

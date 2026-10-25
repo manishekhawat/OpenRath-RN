@@ -16,7 +16,7 @@ import { useDrive } from '../../state/drive';
 import { useLook } from '../../state/look';
 import { usePrefs } from '../../state/prefs';
 
-const VERSION = Constants.expoConfig?.version ?? '1.43';
+const VERSION = Constants.expoConfig?.version ?? '1.44';
 
 export default function DiagnosticsScreen() {
   const { prefs } = usePrefs();
