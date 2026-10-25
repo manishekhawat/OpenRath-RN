@@ -80,8 +80,12 @@ export default function AppsScreen() {
     };
   }, [apps]);
 
-  const shown = extras ? apps.filter((a) => Apps.matches(a.label, a.pkg, query)) : apps;
-  const sorted = extras ? [...shown].sort((a, b) => a.label.localeCompare(b.label)) : shown;
+  // 1.44: A to Z or the apps opened most, and apps hidden from the list (a search still finds them)
+  const hidden = Apps.split(prefs.str('hiddenApps', ''));
+  const uses = Apps.counts(prefs.str('appUses', ''));
+  const mostUsed = Apps.order(prefs, extras) === 'used';
+  const az = extras ? [...apps].sort((a, b) => a.label.localeCompare(b.label)) : apps;
+  const sorted = extras ? Apps.shown(az, (a) => a.pkg, (a) => a.label, query, hidden, mostUsed, uses) : az;
   const pinned = Apps.split(prefs.str('pinnedApps', ''));
   const recent = Apps.split(prefs.str('recentApps', ''));
   const strip = extras ? [...pinned, ...recent.filter((p) => !pinned.includes(p))].map((p) => apps.find((a) => a.pkg === p)).filter((a): a is App => !!a) : [];
@@ -101,7 +105,10 @@ export default function AppsScreen() {
   const open = (a: App) => {
     if (Platform.OS !== 'android') return toast('Opening other apps works on Android only');
     if (ChildLock.blocked(prefs, a.pkg, trip.kmh, drive.fixAt)) return toast(ChildLock.SORRY);
-    if (extras) prefs.put('recentApps', Apps.join(Apps.push(recent, a.pkg, Apps.RECENT)));
+    if (extras) {
+      prefs.put('recentApps', Apps.join(Apps.push(recent, a.pkg, Apps.RECENT)));
+      prefs.put('appUses', Apps.bump(prefs.str('appUses', ''), a.pkg));
+    }
     try {
       IntentLauncher.openApplication(a.pkg);
     } catch {
@@ -121,6 +128,15 @@ export default function AppsScreen() {
               pinned.includes(menu.pkg)
                 ? { label: 'Unpin', run: () => prefs.put('pinnedApps', Apps.join(Apps.remove(pinned, menu.pkg))) }
                 : { label: 'Pin to the top', run: () => prefs.put('pinnedApps', Apps.join(Apps.push(Apps.remove(pinned, menu.pkg), menu.pkg, Apps.PINS))) },
+              hidden.includes(menu.pkg)
+                ? { label: 'Show in the list', run: () => prefs.put('hiddenApps', Apps.join(Apps.remove(hidden, menu.pkg))) }
+                : {
+                    label: 'Hide from the list',
+                    run: () => {
+                      prefs.put('hiddenApps', Apps.join(Apps.push(hidden, menu.pkg, Apps.HIDDEN)));
+                      toast('Hidden. Search for it to find it again.');
+                    },
+                  },
             ]
           : []),
         { label: 'App info', run: () => start(IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS, 'package:' + menu.pkg) },
@@ -174,7 +190,18 @@ export default function AppsScreen() {
       header={
         extras ? (
           <>
-            <Field label="Search apps" value={query} onChange={setQuery} placeholder={t('Search apps')} />
+            <View style={styles.top}>
+              <View style={styles.search}>
+                <Field label="Search apps" value={query} onChange={setQuery} placeholder={t('Search apps')} />
+              </View>
+              {/* 1.44: a tap swaps A to Z for the apps opened most */}
+              <Pressable
+                onPress={() => prefs.put('appOrder', mostUsed ? 'az' : 'used')}
+                style={[styles.order, { backgroundColor: look.panel, borderColor: look.edge, borderRadius: look.radius }]}
+              >
+                <Text style={{ color: look.text, fontSize: 16 }}>{t(mostUsed ? 'Most used' : 'A to Z')}</Text>
+              </Pressable>
+            </View>
             {strip.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip}>
                 {strip.map((a) => tile(a, 96))}
@@ -186,7 +213,9 @@ export default function AppsScreen() {
       footer={
         <>
           <Text style={{ color: look.textDim, marginTop: 8 }}>
-            {t('Long-press an app to pin it, see its app info, uninstall it, lock it while the car is moving, or remove it from this screen.')}
+            {t(
+              'Long-press an app to pin it, hide it, see its app info, uninstall it, lock it while the car is moving, or remove it from this screen.',
+            )}
           </Text>
           <Heading>Add an app</Heading>
           <Field label="Name" value={label} onChange={setLabel} />
@@ -205,7 +234,7 @@ export default function AppsScreen() {
       }
     >
       {/* the A to Z column: a tap jumps to the first app filed under that letter */}
-      {extras && letters.length > 1 ? (
+      {extras && !mostUsed && letters.length > 1 ? (
         <View style={styles.letters}>
           {letters.map((l) => (
             <Pressable key={l} onPress={() => grid.current?.scrollToIndex({ index: letterRow[l] ?? 0, animated: true })} hitSlop={6}>
@@ -223,6 +252,9 @@ export default function AppsScreen() {
 
 const styles = StyleSheet.create({
   body: { paddingRight: 48 },
+  top: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  search: { flex: 1 },
+  order: { borderWidth: 1, minHeight: 44, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   gridRow: { flexDirection: 'row', gap: GAP },
   strip: { gap: 12, paddingBottom: 12 },
   tile: { borderWidth: 1, alignItems: 'center', justifyContent: 'center', padding: 8 },

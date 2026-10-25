@@ -34,6 +34,42 @@ test('all-apps screen helpers', () => {
   assert.equal(Apps.split('').length, 0);
 });
 
+test('all-apps screen: the order and hidden apps (1.44)', () => {
+  const p = memoryPrefs();
+  assert.equal(Apps.order(p, true), 'az', 'A to Z until it is changed');
+  assert.equal(Apps.order(memoryPrefs({ appOrder: 'used' }), true), 'used');
+  assert.equal(Apps.order(memoryPrefs({ appOrder: 'used' }), false), 'az', 'only the better screen offers it');
+  assert.equal(Apps.order(memoryPrefs({ appOrder: 'what' }), true), 'az', 'anything else is A to Z');
+
+  assert.equal(Apps.bump('', 'a'), 'a=1');
+  assert.equal(Apps.bump('a=1', 'a'), 'a=2');
+  assert.equal(Apps.bump('a=2', 'b'), 'a=2,b=1', 'the most opened first');
+  const many = Array.from({ length: Apps.USES + 5 }, (_x, i) => `p${i}=${i + 1}`).join(',');
+  assert.equal(Apps.bump(many, 'p0').split(',').length, Apps.USES, 'only the most opened are kept');
+  const c = Apps.counts('a=3,b=oops,c=1,,=2,d');
+  assert.equal(c.get('a'), 3);
+  assert.equal(c.get('c'), 1);
+  assert.ok(!c.has('b'), 'a damaged entry is left out');
+  assert.equal(c.size, 2);
+
+  const apps = [
+    { pkg: 'com.maps', label: 'Maps' },
+    { pkg: 'com.radio', label: 'Radio' },
+    { pkg: 'com.zoo', label: 'Zoo' },
+  ];
+  const pkg = (a: { pkg: string }) => a.pkg;
+  const label = (a: { label: string }) => a.label;
+  const uses = Apps.counts('com.zoo=9,com.maps=4');
+  const names = (list: { label: string }[]) => list.map((a) => a.label).join(',');
+
+  assert.equal(names(Apps.shown(apps, pkg, label, '', [], false, uses)), 'Maps,Radio,Zoo', 'the order they came in');
+  assert.equal(names(Apps.shown(apps, pkg, label, '', [], true, uses)), 'Zoo,Maps,Radio', 'the most opened first');
+  assert.equal(names(Apps.shown(apps, pkg, label, 'ra', [], false, uses)), 'Radio', 'what was typed');
+  assert.equal(names(Apps.shown(apps, pkg, label, '', ['com.radio'], false, uses)), 'Maps,Zoo', 'a hidden app is left out');
+  assert.equal(names(Apps.shown(apps, pkg, label, 'rad', ['com.radio'], false, uses)), 'Radio', 'but a search still finds it');
+  assert.equal(names(Apps.shown(apps, pkg, label, '  ', ['com.radio'], false, uses)), 'Maps,Zoo', 'spaces are not a search');
+});
+
 test('status icons', () => {
   assert.equal(Status.gps(3, true), Status.ON);
   assert.equal(Status.gps(60, true), Status.SEARCHING);
