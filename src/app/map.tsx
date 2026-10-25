@@ -40,7 +40,7 @@ import { num } from '../logic/prefs';
 import * as Wake from '../logic/wake';
 import { MAP_HTML } from '../map/mapHtml';
 import { say, useDrive } from '../state/drive';
-import { useLook } from '../state/look';
+import { useLook, useNight } from '../state/look';
 import { usePrefs } from '../state/prefs';
 
 /** The page's `OpenRath` object: calls become messages; answers come from window.__OR. */
@@ -181,6 +181,13 @@ export default function MapScreen() {
     if (ready.current) web.current?.injectJavaScript(cfgJs + 'true;');
      
   }, [cfgJs]);
+
+  // 1.44: the page's own day and night colours, from sunset at the car's position
+  const night = useNight();
+  const styleJs = `setStyle(${JSON.stringify(night ? 'night' : 'day')});`;
+  useEffect(() => {
+    if (ready.current) web.current?.injectJavaScript(styleJs + 'true;');
+  }, [styleJs]);
 
   // after deep sleep the page's tiles and position are stale: load it again (Wake.java, 1.39)
   useEffect(
@@ -346,7 +353,7 @@ export default function MapScreen() {
           onLoadEnd={() => {
             ready.current = true;
             sent.current = { lat: 0, lon: 0, park: 0 };
-            web.current?.injectJavaScript(cfgJs + 'true;');
+            web.current?.injectJavaScript(cfgJs + styleJs + 'true;');
             push();
             handOver();
           }}

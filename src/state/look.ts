@@ -168,6 +168,15 @@ function subscribeAuto(fn: () => void): () => void {
   };
 }
 
+/**
+ * Night at the car's position, for the screens that follow it on their own: the map page's day and
+ * night colours (1.44). The Android version can also read the headlights; this port has only
+ * sunset to go by.
+ */
+export function useNight(): boolean {
+  return useSyncExternalStore(subscribeAuto, isNight);
+}
+
 export function useLook(): Look {
   const { prefs, version } = usePrefs();
   autoPrefs = prefs;
