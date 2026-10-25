@@ -307,7 +307,7 @@ export function trim<T>(all: readonly T[], moving: boolean, max = MOVING_ROWS): 
 // ------------------------------------------------------------------ phone projection (1.36)
 
 /** Words in the package name or label of projection apps (Projection.WORDS). */
-export const PROJECTION_WORDS = ['zlink', 'autokit', 'carplay', 'carbit', 'phonelink', 'phone link', 'easyconn', 'androidauto', 'android auto', 'auto link', 'autolink', 'carlink'];
+export const PROJECTION_WORDS = ['zlink', 'autokit', 'carplay', 'carbit', 'phonelink', 'phone link', 'easyconn', 'androidauto', 'android auto', 'auto link', 'autolink', 'carlink', 'headunit'];
 
 /** True when this package name or label looks like a wireless CarPlay / Android Auto app. */
 export function looksLikeProjection(pkg: string | null, label: string | null): boolean {

@@ -21,6 +21,11 @@ export const NO_VOICE = 'The stereo has no spoken voice yet. Settings > Map and 
 export const NO_ENGLISH =
   "The voice engine has no English voice installed. Settings > Map and navigation > Spoken voice > Android's voice settings downloads one, or get eSpeak NG.";
 export const GOOGLE_TTS = 'com.google.android.tts';
+/** eSpeak NG isn't on the Play Store, so its own F-Droid page is where the APK is (1.44). */
+export const ESPEAK = 'com.reecedunn.espeak';
+export const ESPEAK_PAGE = 'https://f-droid.org/packages/' + ESPEAK + '/';
+/** Android's "install the voice's data" screen, which downloads the English voice. */
+const TTS_DATA = 'android.speech.tts.engine.INSTALL_TTS_DATA';
 
 const speaking = new Speaking();
 const listeners = new Set<(on: boolean) => void>();
@@ -99,9 +104,10 @@ export function voiceLanguage(): string {
 
 /**
  * Get a voice (Speak.getVoice): Google's Speech Services from the Play Store when the unit has no
- * voice at all (Android doesn't let an app install another one by itself), else Android's
- * text-to-speech settings to pick it and download the Hindi and English voices. Expo can't list
- * the installed engines, so "no voices" stands for "no Google engine".
+ * voice at all (Android doesn't let an app install another one by itself); a voice that doesn't
+ * read English goes straight to Google's own voice download, because some stereos' Android voice
+ * settings screen crashes (1.44); otherwise that settings screen, to pick the voice. Expo can't
+ * list the installed engines, so "no voices" stands for "no Google engine".
  */
 export async function getVoice() {
   voices = null;
@@ -111,6 +117,11 @@ export async function getVoice() {
       await Linking.openURL('market://details?id=' + GOOGLE_TTS).catch(() =>
         Linking.openURL('https://play.google.com/store/apps/details?id=' + GOOGLE_TTS),
       );
+    } else if (Platform.OS === 'android' && !Sound.englishVoice(lang)) {
+      // the English voice itself, from the engine that would download it
+      await IntentLauncher.startActivityAsync(TTS_DATA, { packageName: GOOGLE_TTS }).catch(() =>
+        IntentLauncher.startActivityAsync(TTS_DATA),
+      );
     } else if (Platform.OS === 'android') {
       await IntentLauncher.startActivityAsync('com.android.settings.TTS_SETTINGS');
     }
@@ -119,6 +130,15 @@ export async function getVoice() {
     if (Platform.OS === 'android') IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.SETTINGS).catch(() => {});
   }
   voices = null;
+}
+
+/** eSpeak NG's F-Droid page: a small voice for stereos the Play Store can't reach (1.44). */
+export async function getEspeak() {
+  try {
+    await Linking.openURL(ESPEAK_PAGE);
+  } catch (e) {
+    Diag.note('espeak page', e);
+  }
 }
 
 /** Say something; the app's music dips until it is done. Options as expo-speech's speak(). */

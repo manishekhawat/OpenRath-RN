@@ -34,7 +34,10 @@ export function modules(text: string): boolean[][] {
   const version = (q.getModuleCount() - 17) / 4;
   for (const level of LEVELS.slice(1)) {
     try {
-      q = make(text, version, level);
+      const up = make(text, version, level);
+      // the library grows the code rather than refusing, so a bigger one means it didn't fit
+      if (up.getModuleCount() !== q.getModuleCount()) break;
+      q = up;
     } catch {
       break; // doesn't fit at this size
     }

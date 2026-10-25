@@ -64,6 +64,8 @@ test('the phone-projection app', () => {
   assert.ok(player.looksLikeProjection('cn.manstep.phonemirrorBox', 'CarPlay'), 'projection carplay');
   assert.ok(!player.looksLikeProjection('com.google.android.projection.gearhead', 'Android Auto'), 'projection not gearhead');
   assert.ok(!player.looksLikeProjection('com.google.android.apps.maps', 'Maps'), 'projection not maps');
+  // 1.44: Headunit Revived, which gives Android Auto to a stereo that has none
+  assert.ok(player.looksLikeProjection('com.andrerinas.headunitrevived', 'Headunit Revived'));
   // the button shows only with the feature on and an app chosen
   const p = memoryPrefs({ 'app:projection': 'com.zjinnova.zlink' });
   assert.equal(player.projectionApp(p), 'com.zjinnova.zlink');

@@ -8,7 +8,7 @@ import { test } from 'node:test';
 
 import * as chores from '../chores.ts';
 import * as errands from '../errands.ts';
-import { mapsLink } from '../geo.ts';
+import { mapsLink, walkLink } from '../geo.ts';
 import * as kids from '../kids.ts';
 import * as news from '../news.ts';
 import { memoryPrefs } from '../prefs.ts';
@@ -19,10 +19,16 @@ import * as wallet from '../wallet.ts';
 const DAY = 86400000;
 
 test('qr', () => {
-  const m = qr.modules(mapsLink(28.6139, 77.209));
-  assert.equal(m.length, 29, 'parking code stays version 3');
+  const m = qr.modules(walkLink(28.6139, 77.209));
+  assert.ok(m.length <= 37, 'the parking code stays small enough to scan (version 5 or less)');
   assert.equal(m[0][0], true, 'finder corner dark');
   assert.ok(qr.modules(mapsLink(28.6, 77.2)).length >= 21);
+  // 1.44: the links the Maps app itself opens
+  assert.equal(mapsLink(28.48068, 76.96826), 'https://www.google.com/maps/search/?api=1&query=28.48068,76.96826');
+  assert.equal(
+    walkLink(28.48068, 76.96826),
+    'https://www.google.com/maps/dir/?api=1&destination=28.48068,76.96826&travelmode=walking',
+  );
   // finder pattern: a light ring inside the dark corner square
   assert.equal(m[1][1], false);
   assert.equal(m[3][3], true);
@@ -31,10 +37,10 @@ test('qr', () => {
   // UTF-8 text encodes
   assert.ok(qr.modules(errands.wifiQr('कार', 'pass')).length >= 21);
   const p = qr.path(m);
-  assert.equal(p.size, 29 + 2 * qr.BORDER);
+  assert.equal(p.size, m.length + 2 * qr.BORDER);
   assert.ok(p.d.startsWith(`M${qr.BORDER} ${qr.BORDER}h7`), 'top row of the finder in one run');
-  assert.equal(qr.scale(m, 370), 10);
-  assert.equal(qr.scale(m, 10), 1);
+  assert.equal(qr.scale(m, 10 * p.size), 10, 'every module a whole number of pixels');
+  assert.equal(qr.scale(m, 10), 1, 'never smaller than one pixel a module');
 });
 
 const XML =

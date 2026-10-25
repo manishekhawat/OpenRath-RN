@@ -45,7 +45,7 @@ import * as Cam from '../../state/camera';
 import { useDrive } from '../../state/drive';
 import { themeName, useLook } from '../../state/look';
 import { usePrefs } from '../../state/prefs';
-import { getVoice } from '../../state/speech';
+import { getEspeak, getVoice } from '../../state/speech';
 
 const VERSION = Constants.expoConfig?.version ?? '1.44';
 
@@ -288,6 +288,10 @@ export default function Settings() {
   // Expo can't list the installed voices, so the row always offers to pick one or get Google's
   add('Map and navigation', 'Spoken voice', "tap to pick a voice, or get Google's, which speaks Hindi", () => {
     getVoice();
+  });
+  // 1.44: a small voice for stereos the Play Store can't reach; it isn't on the Play Store itself
+  add('Map and navigation', 'Get eSpeak NG (opens its F-Droid page)', 'a small spoken voice that works offline', () => {
+    getEspeak();
   });
 
   // ---- Driving

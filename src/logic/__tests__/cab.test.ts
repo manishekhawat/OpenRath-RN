@@ -181,7 +181,7 @@ test('cab: CNG and SOS', () => {
   p.put('cabVehicle', 'DL 1R AB 1234');
   const t = new Date(2026, 9, 14, 21, 5).getTime();
   assert.equal(sos.sosText(p, 28.6139, 77.209, t),
-    'SOS from Ravi (DL 1R AB 1234): I need help. I am here: https://maps.google.com/?q=28.61390,77.20900 at 21:05, 14 Oct.');
+    'SOS from Ravi (DL 1R AB 1234): I need help. I am here: https://www.google.com/maps/search/?api=1&query=28.61390,77.20900 at 21:05, 14 Oct.');
   assert.ok(sos.sosText(p, 0, 0, t).includes('Location not known yet.'));
   assert.ok(sos.sosSms(p, 'x').startsWith('sms:+919876543210,9123456789?body=x'));
   assert.equal(sos.sosQr(p, 'help'), 'SMSTO:+919876543210:help');

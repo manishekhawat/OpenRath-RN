@@ -32,9 +32,17 @@ export function ahead(lat: number, lon: number, heading: number, pLat: number, p
   return diff < 50;
 }
 
-/** A Google Maps link to a point, which opens on any phone. */
+/**
+ * A Google Maps link to a point, which opens on any phone; since 1.44 the search link, which the
+ * Maps app itself opens instead of the browser.
+ */
 export function mapsLink(lat: number, lon: number): string {
-  return `https://maps.google.com/?q=${lat.toFixed(5)},${lon.toFixed(5)}`;
+  return `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(5)},${lon.toFixed(5)}`;
+}
+
+/** Walking directions from wherever the phone is to a point: for walking back to the parked car (1.44). */
+export function walkLink(lat: number, lon: number): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(5)},${lon.toFixed(5)}&travelmode=walking`;
 }
 
 /** Google Maps directions from one spot to another. */

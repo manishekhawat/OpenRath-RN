@@ -34,7 +34,7 @@ import { Button } from '../components/ui';
 import * as Car from '../logic/car';
 import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
-import { mapsLink } from '../logic/geo';
+import { walkLink } from '../logic/geo';
 import { f, t } from '../logic/i18n';
 import { num } from '../logic/prefs';
 import * as Wake from '../logic/wake';
@@ -373,7 +373,7 @@ export default function MapScreen() {
       <QrSheet
         visible={parkQr && !!trip.park}
         title="Where the car is parked"
-        text={trip.park ? mapsLink(trip.park.lat, trip.park.lon) : ''}
+        text={trip.park ? walkLink(trip.park.lat, trip.park.lon) : ''}
         caption="Scan with your phone to open the spot in Google Maps and walk back to the car."
         onClose={() => setParkQr(false)}
       />
