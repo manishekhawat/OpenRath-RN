@@ -26,6 +26,23 @@ export function volume(base: number, steps: number, ducked: boolean): number {
   return ducked ? v * DUCK : v;
 }
 
+// ------------------------------------------------- the volume each source last played at (1.44)
+
+/** Where a source's own volume is kept ('vol:web', 'vol:files'). */
+export function volumeKey(src: string): string {
+  return 'vol:' + src;
+}
+
+/**
+ * The volume to set when the source becomes `src` (it was `last` a moment ago, at volume `now`),
+ * or -1 to leave it alone: only on a change of source, and only to a volume that source has
+ * played at before (Resume.volumeFor).
+ */
+export function volumeFor(src: string, last: string, now: number, saved: number): number {
+  if (src === last || saved < 0 || saved === now) return -1;
+  return saved;
+}
+
 // ------------------------------------------------------------------ louder with speed
 
 export const PER_NAMES = ['off', 'gently (a step every 30 km/h)', 'medium (every 20 km/h)', 'strongly (every 15 km/h)'];

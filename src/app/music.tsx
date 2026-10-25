@@ -10,13 +10,16 @@ import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 
+import { SeekBar } from '../components/MusicBox';
 import { Button, Choice, Field, Heading, Row, Screen } from '../components/ui';
+import * as ChildLock from '../logic/childlock';
 import * as Features from '../logic/features';
 import { f, t } from '../logic/i18n';
 import * as Player from '../logic/player';
 import { FILES, WEB, type Mode } from '../logic/player';
 import { num, type Prefs } from '../logic/prefs';
 import * as Sound from '../logic/sound';
+import { useDriveSpeed } from '../state/drive';
 import { useLook } from '../state/look';
 import * as P from '../state/player';
 import { usePrefs } from '../state/prefs';
@@ -31,6 +34,9 @@ export default function MusicScreen() {
   const [tab, setTab] = useState<Mode>(s.mode ?? FILES);
   const [find, setFind] = useState('');
   const [adding, setAdding] = useState(false);
+  // 1.44: while the car moves, lists stop at twelve rows and the search box goes, as Android Auto does
+  const speed = useDriveSpeed();
+  const moving = ChildLock.movingShown(Math.max(0, speed.speedShown), speed.fixAt);
 
   useEffect(() => {
     P.ensureList(tab);
@@ -40,8 +46,10 @@ export default function MusicScreen() {
   const mine = s.mode === tab;
   const all = tab === WEB ? s.stations : s.songs;
   const at = tab === WEB ? s.station : s.song;
-  const q = find.trim().toLowerCase();
-  const shown = all.map((x, i) => ({ x, i })).filter(({ x }) => q === '' || (x.name + ' ' + x.sub).toLowerCase().includes(q));
+  const q = moving ? '' : find.trim().toLowerCase();
+  const found = all.map((x, i) => ({ x, i })).filter(({ x }) => q === '' || (x.name + ' ' + x.sub).toLowerCase().includes(q));
+  const shown = Player.trim(found, moving);
+  const room = moving ? Player.MOVING_ROWS : SHOW;
 
   const add = async () => {
     setAdding(true);
@@ -79,9 +87,13 @@ export default function MusicScreen() {
         {t(s.status !== '' && (s.busy || !s.playing) ? s.status : s.busy ? 'Connecting…' : tr ? tr.sub : 'Pick a station or a song below')}
       </Text>
       {s.mode === FILES && s.duration > 0 ? (
-        <Text style={{ color: look.textDim, marginTop: 4 }}>
-          {Player.clock(s.position)} / {Player.clock(s.duration)}
-        </Text>
+        <>
+          <Text style={{ color: look.textDim, marginTop: 4 }}>
+            {Player.clock(s.position)} / {Player.clock(s.duration)}
+          </Text>
+          {/* 1.44: the screen has the bar too, not only the box, and a drag along it moves in the song */}
+          <SeekBar position={s.position} duration={s.duration} />
+        </>
       ) : null}
       {/* the app's own player can always move in a song; the box's drag bar follows the 'seek' switch */}
       {s.mode === FILES && s.duration > 0 ? (
@@ -132,7 +144,11 @@ export default function MusicScreen() {
           setFind('');
         }}
       />
-      {all.length > SHOW ? <Field label={tab === WEB ? 'Find a station' : 'Find a song'} value={find} onChange={setFind} /> : null}
+      {moving ? (
+        <Text style={{ color: look.textDim, marginVertical: 8 }}>{t('Search when the car is stopped')}</Text>
+      ) : all.length > SHOW ? (
+        <Field label={tab === WEB ? 'Find a station' : 'Find a song'} value={find} onChange={setFind} />
+      ) : null}
       {all.length === 0 ? (
         <Text style={{ color: look.textDim, marginVertical: 8 }}>
           {t(s.loadingList === tab
@@ -144,7 +160,7 @@ export default function MusicScreen() {
               : 'No music found. Allow access to music, or add files below.')}
         </Text>
       ) : (
-        shown.slice(0, SHOW).map(({ x, i }) => (
+        shown.slice(0, room).map(({ x, i }) => (
           <Row
             key={tab + i}
             name={(mine && i === at && s.playing ? '▶︎  ' : '') + x.name}
@@ -153,9 +169,13 @@ export default function MusicScreen() {
           />
         ))
       )}
-      {shown.length > SHOW ? (
+      {moving && found.length > shown.length ? (
         <Text style={{ color: look.textDim, marginTop: 8 }}>
-          {f('%1$s more: type part of a name to find them.', shown.length - SHOW)}
+          {f('%1$s more when the car is stopped', found.length - shown.length)}
+        </Text>
+      ) : shown.length > room ? (
+        <Text style={{ color: look.textDim, marginTop: 8 }}>
+          {f('%1$s more: type part of a name to find them.', shown.length - room)}
         </Text>
       ) : null}
       {tab === WEB ? (
@@ -178,6 +198,12 @@ export default function MusicScreen() {
         value="Plays what was on when the app starts, at the same volume"
         right={tick('resume')}
         onPress={() => flip('resume')}
+      />
+      <Row
+        name="Volume for each music app"
+        value="Online radio and your music files come back at the volume they last played at"
+        right={tick('sourceVolume')}
+        onPress={() => flip('sourceVolume')}
       />
       <Row
         name="Louder with speed"

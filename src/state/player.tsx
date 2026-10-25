@@ -144,7 +144,33 @@ function applyVolume() {
 /** Set the owner's level, 0–100. */
 export function setVolume(pct: number) {
   prefs?.put('playerVol', String(Math.round(Math.max(0, Math.min(100, pct)))));
+  keepSourceVolume();
   applyVolume();
+}
+
+/**
+ * 1.44: each source comes back at the volume it last played at. The owner's level is written down
+ * under the source playing now, and read back when the source changes (Resume.sourceVolume). The
+ * Android version does this to the stereo's own volume; here it is this player's level, because
+ * the system volume needs native code.
+ */
+function keepSourceVolume() {
+  const p = prefs;
+  if (!p || state.mode === null || !Features.on(p, 'sourceVolume')) return;
+  p.put('volSrc', state.mode);
+  p.put(Sound.volumeKey(state.mode), String(baseVolume()));
+}
+
+/** The new source's own volume, when it has played at one before. */
+function takeSourceVolume(mode: Mode) {
+  const p = prefs;
+  if (!p || !Features.on(p, 'sourceVolume')) return;
+  const want = Sound.volumeFor(mode, p.str('volSrc', ''), baseVolume(), num(p, Sound.volumeKey(mode), -1));
+  p.put('volSrc', mode);
+  if (want >= 0) {
+    p.put('playerVol', String(want));
+    applyVolume();
+  }
 }
 
 /** Louder (+) or softer (-) by `pct` points: the voice commands' volume up and down. */
@@ -304,6 +330,7 @@ function turn(on: boolean) {
 function switchTo(mode: Mode | undefined) {
   if (mode && mode !== state.mode) {
     release();
+    takeSourceVolume(mode);
     state.mode = mode;
     state.playing = false;
     state.status = '';

@@ -294,6 +294,16 @@ export function artColour(px: ArrayLike<number> | null): number {
   return (0xff000000 | (r << 16) | (g << 8) | b) >>> 0;
 }
 
+// ------------------------------------------------- shorter lists while the car moves (1.44)
+
+/** Rows a list shows while the car moves, as Android Auto does (Browse.MOVING_ROWS). */
+export const MOVING_ROWS = 12;
+
+/** At most `max` rows while moving, all of them when stopped (Browse.trim). */
+export function trim<T>(all: readonly T[], moving: boolean, max = MOVING_ROWS): T[] {
+  return moving && all.length > max ? all.slice(0, max) : [...all];
+}
+
 // ------------------------------------------------------------------ phone projection (1.36)
 
 /** Words in the package name or label of projection apps (Projection.WORDS). */

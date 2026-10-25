@@ -10,6 +10,7 @@ import { test } from 'node:test';
 import * as Features from '../features.ts';
 import * as player from '../player.ts';
 import { memoryPrefs } from '../prefs.ts';
+import * as sound from '../sound.ts';
 import * as soundboard from '../soundboard.ts';
 import * as videos from '../videos.ts';
 
@@ -100,4 +101,20 @@ test('drag to seek', () => {
   assert.ok(!player.seekable(p, player.FILES, 0), 'length not known yet');
   Features.set(p, 'seek', false);
   assert.ok(!player.seekable(p, player.FILES, 180), 'switched off');
+});
+
+test('1.44: shorter lists while moving, and a volume for each source', () => {
+  const rows = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n'];
+  assert.equal(player.MOVING_ROWS, 12);
+  assert.equal(player.trim(rows, false).length, rows.length, 'all of them when stopped');
+  assert.equal(player.trim(rows, true).length, 12, "twelve while moving, like Android Auto's");
+  assert.deepEqual(player.trim(['a', 'b'], true), ['a', 'b'], 'a short list is left alone');
+  assert.deepEqual(player.trim(rows, true, 2), ['a', 'b']);
+
+  // the volume a source last played at, on a change of source only (Resume.volumeFor)
+  assert.equal(sound.volumeKey('web'), 'vol:web');
+  assert.equal(sound.volumeFor('web', 'files', 60, 80), 80, 'back to what online radio played at');
+  assert.equal(sound.volumeFor('web', 'web', 60, 80), -1, 'the same source is left alone');
+  assert.equal(sound.volumeFor('web', 'files', 60, -1), -1, 'a source that has never played');
+  assert.equal(sound.volumeFor('web', 'files', 80, 80), -1, 'already at that volume');
 });

@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import { memo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from 'react-native';
 
+import * as Features from '../logic/features';
 import { t } from '../logic/i18n';
 import * as Player from '../logic/player';
 import { WEB, FILES } from '../logic/player';
@@ -56,6 +57,19 @@ export const MusicBox = memo(function MusicBox({ style }: { style?: StyleProp<Vi
   }
 
   const projection = mode === FILES ? Player.projectionApp(prefs) : '';
+  // 1.44: the radio and music screen has its own switch; with it off, a tap opens the chosen music app
+  const openPlayer = () => {
+    const pkg = prefs.str('app:media:music', '').trim();
+    if (!Features.on(prefs, 'musicApp') && pkg !== '' && Platform.OS === 'android') {
+      try {
+        IntentLauncher.openApplication(pkg);
+        return;
+      } catch {
+        // not installed: the player below is better than nothing
+      }
+    }
+    router.push('/music');
+  };
 
   const button = (label: string, onPress: () => void, name: string, main = false) => (
     <Pressable
@@ -70,7 +84,7 @@ export const MusicBox = memo(function MusicBox({ style }: { style?: StyleProp<Vi
   );
 
   return (
-    <Box style={style} onPress={() => router.push('/music')}>
+    <Box style={style} onPress={openPlayer}>
       <View style={styles.top}>
         {/* the heading is the source switch, as in the Android version */}
         <Pressable onPress={() => P.setMode(mode === WEB ? FILES : WEB)} hitSlop={8} style={styles.headTap}>
@@ -106,7 +120,7 @@ export const MusicBox = memo(function MusicBox({ style }: { style?: StyleProp<Vi
 });
 
 /** A thin bar with the time played and the length; drag along it to move in the song (MediaCard.Progress). */
-function SeekBar({ position, duration }: { position: number; duration: number }) {
+export function SeekBar({ position, duration }: { position: number; duration: number }) {
   const look = useLook();
   const [width, setWidth] = useState(0);
   const [drag, setDrag] = useState(-1);
