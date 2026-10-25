@@ -4,15 +4,19 @@
  * in under it with a line in the theme's colour, then it all fades to the dashboard. Two seconds,
  * half that at Reduced movement (and no rolling), left out at Off. A tap skips it, and it only plays
  * when the app starts, not on every return to the home screen.
+ *
+ * With the Glass look on (1.44) the wheel and the name sit on a frosted card over the blurred
+ * background, as the rest of the app does.
  */
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Line, Path } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 
 import { LENGTH, part } from '../logic/intro';
 import * as Motion from '../logic/motion';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
+import { GlassBack } from './GlassBack';
 
 /** An arc of `sweep` degrees from the top, clockwise, as an SVG path. */
 function arc(cx: number, cy: number, r: number, sweep: number): string {
@@ -70,6 +74,8 @@ export function Intro({ onDone }: { onDone: () => void }) {
   const name = at(800, 500);
   const line = at(1000, 500) * span * 0.9;
   const ty = cy + span * 0.5 + span * 0.38 + (1 - name) * span * 0.08;
+  // the frosted card the wheel and the name sit on, with room round both
+  const card = { x: w / 2 - span * 1.45, y: cy - span * 0.95, w: span * 2.9, h: ty + span * 0.45 - (cy - span * 0.95) };
 
   return (
     <Pressable
@@ -78,9 +84,30 @@ export function Intro({ onDone }: { onDone: () => void }) {
       accessibilityLabel="OpenRath"
       style={[StyleSheet.absoluteFill, { backgroundColor: look.background, opacity: fade }]}
     >
+      {look.glass ? <GlassBack look={look} /> : null}
       {w > 0 ? (
         <>
           <Svg width={w} height={h} style={StyleSheet.absoluteFill}>
+            {look.glass ? (
+              <>
+                <Defs>
+                  <LinearGradient id="introcard" x1={0} y1={card.y} x2={0} y2={card.y + card.h} gradientUnits="userSpaceOnUse">
+                    <Stop offset={0} stopColor={look.panelTop} />
+                    <Stop offset={1} stopColor={look.panel} />
+                  </LinearGradient>
+                </Defs>
+                <Rect
+                  x={card.x}
+                  y={card.y}
+                  width={card.w}
+                  height={card.h}
+                  rx={look.radius}
+                  fill="url(#introcard)"
+                  stroke={look.edge}
+                  strokeWidth={Math.max(1, u * 0.3)}
+                />
+              </>
+            ) : null}
             <Path
               d={arc(cx, cy, rim, 360 * at(0, 700))}
               stroke={look.text}

@@ -7,6 +7,7 @@
  */
 import { unzipSync } from 'fflate';
 
+import type { Glass } from './glass.ts';
 import { f, t } from './i18n.ts';
 import type { Prefs } from './prefs.ts';
 
@@ -44,6 +45,8 @@ export interface Look {
   problem: string;
   /** the pack's background.jpg or .png, cropped to fill the screen; absent for none */
   backgroundImage?: string;
+  /** the Glass look's wallpaper, when Glass is on (1.44); absent when it is off */
+  glass?: Glass;
 }
 
 /** The car-paint accent used by themes that don't set their own. */

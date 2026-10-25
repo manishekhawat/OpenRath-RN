@@ -17,6 +17,7 @@ import magmaGrey from '../data/theme-magma-grey.json';
 import minimal from '../data/theme-minimal.json';
 import mission from '../data/theme-mission.json';
 import roadster from '../data/theme-roadster.json';
+import * as Glass from '../logic/glass';
 import type { Prefs } from '../logic/prefs';
 import {
   brokenPack,
@@ -128,12 +129,30 @@ const autoListeners = new Set<() => void>();
 let autoTimer: ReturnType<typeof setInterval> | null = null;
 let autoPrefs: Prefs | null = null;
 
-/** ThemeAuto.check: switch the theme on screen when it should change. */
+/**
+ * Night at the car's position, which the Glass look needs: its glass and wallpaper are darker
+ * after dark whatever theme is on (Glass.night). Checked on the same 15-second tick as the theme.
+ */
+let night = false;
+
+export function isNight(): boolean {
+  return night;
+}
+
+/** ThemeAuto.check: switch the theme on screen when it should change, and follow nightfall. */
 export function checkAuto(p: Prefs): void {
   const trip = Engine.snapshot().trip;
-  const want = ThemeAuto.want(p, trip.lat, trip.lon, Date.now());
-  if (want === getOverride()) return;
-  setOverride(want);
+  const now = Date.now();
+  const want = ThemeAuto.want(p, trip.lat, trip.lon, now);
+  const dark = ThemeAuto.night(trip.lat, trip.lon, now);
+  const moved = want !== getOverride();
+  const dusk = dark !== night && Glass.wanted(p);
+  if (!moved && !dusk) {
+    night = dark;
+    return;
+  }
+  night = dark;
+  if (moved) setOverride(want);
   for (const fn of [...autoListeners]) fn();
 }
 
@@ -153,11 +172,22 @@ export function useLook(): Look {
   const { prefs, version } = usePrefs();
   autoPrefs = prefs;
   const over = useSyncExternalStore(subscribeAuto, getOverride);
-  // a change in Settings (the switch, the night theme) shows at once
+  const dark = useSyncExternalStore(subscribeAuto, isNight);
+  // a change in Settings (the switch, the night theme, the Glass look) shows at once
   useEffect(() => checkAuto(prefs), [prefs, version]);
   const id = chosen(prefs);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  return useMemo(() => lookFor(pack(id)), [id, version, over]);
+  const glass = Glass.wanted(prefs);
+  const wall = Glass.wall(prefs);
+  return useMemo(
+    () => {
+      const look = lookFor(pack(id));
+      return glass ? Glass.apply(look, wall, dark) : look;
+    },
+    // `version` and `over` say when to read an imported theme's look off the storage again; the
+    // linter can't see that, because neither is named inside the function
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [id, version, over, glass, wall, dark],
+  );
 }
 
 /**

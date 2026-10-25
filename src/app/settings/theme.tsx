@@ -14,6 +14,7 @@ import { Alert, Pressable, Text, useWindowDimensions, View } from 'react-native'
 import { mix, ThemePreview } from '../../components/LayoutView';
 import { Button, Heading, ListScreen, Row } from '../../components/ui';
 import * as Features from '../../logic/features';
+import * as Glass from '../../logic/glass';
 import { f, hindi, t } from '../../logic/i18n';
 import { about, chosen, choose, DEFAULT, type Pack } from '../../logic/theme';
 import * as ThemeAuto from '../../logic/themeauto';
@@ -36,12 +37,14 @@ export default function ThemeScreen() {
   const { width } = useWindowDimensions();
   const [refresh, setRefresh] = useState(0);
   const [pickingNight, setPickingNight] = useState(false);
+  const [pickingWall, setPickingWall] = useState(false);
   const current = chosen(prefs);
   // the same theme objects from one render to the next, so a tap doesn't draw every preview again
   // eslint-disable-next-line react-hooks/exhaustive-deps -- 'refresh' is the counter that bumps when a theme pack is added
   const packs = useMemo(() => available(), [refresh]);
   const tile = Math.max(140, Math.min(360, (width - 32 - GAP) / 2));
   const autoOn = Features.on(prefs, 'autoTheme');
+  const glassOn = Glass.wanted(prefs);
   const nightTheme = prefs.str('nightTheme', '');
   void version;
   // an imported theme's look is read off the storage, so work each one out once; the previews
@@ -126,7 +129,37 @@ export default function ThemeScreen() {
       gap={GAP}
       initialNumToRender={2}
       windowSize={3}
-      header={look.problem ? <Text style={{ color: '#E5484D', marginBottom: 10 }}>{look.problem}</Text> : null}
+      header={
+        <>
+          {look.problem ? <Text style={{ color: '#E5484D', marginBottom: 10 }}>{look.problem}</Text> : null}
+          <Heading>Glass look</Heading>
+          <Row
+            name="Glass look"
+            value="See-through panels on a soft blurred background. The theme below still sets the accent colour."
+            on={glassOn}
+            onPress={() => Glass.set(prefs, !glassOn)}
+          />
+          {glassOn ? (
+            <>
+              <Row name={f('Background: %1$s', Glass.wallName(prefs))} value="Which background?" chevron onPress={() => setPickingWall(!pickingWall)} />
+              {pickingWall
+                ? Glass.WALLS.map((w, i) => (
+                    <Row
+                      key={w}
+                      name={(Glass.wall(prefs) === w ? '✓  ' : '     ') + t(Glass.WALL_NAMES[i])}
+                      value={w === 'mine' ? "The theme's own picture, where it has one" : undefined}
+                      onPress={() => {
+                        Glass.setWall(prefs, w);
+                        setPickingWall(false);
+                      }}
+                    />
+                  ))
+                : null}
+            </>
+          ) : null}
+          <Heading>Themes</Heading>
+        </>
+      }
       footer={
         <>
           <Heading>Theme changes by itself</Heading>

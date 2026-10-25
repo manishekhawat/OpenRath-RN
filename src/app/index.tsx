@@ -14,6 +14,7 @@ import { CalendarBox } from '../components/CalendarBox';
 import { CompassBox } from '../components/CompassBox';
 import { DashcamView } from '../components/DashcamView';
 import { Dock } from '../components/Dock';
+import { GlassBack } from '../components/GlassBack';
 import LayoutView, { useLayout } from '../components/LayoutView';
 import { FloatingMic } from '../components/MicButton';
 import { MusicBox } from '../components/MusicBox';
@@ -479,6 +480,13 @@ export default function Home() {
       ) : null}
     </SafeAreaView>
   );
+  if (look.glass)
+    return (
+      <View style={[styles.fill, { backgroundColor: look.background }]}>
+        <GlassBack look={look} />
+        {content}
+      </View>
+    );
   return look.gradient ? (
     <LinearGradient colors={look.gradient as [string, string, ...string[]]} style={styles.fill}>
       {content}

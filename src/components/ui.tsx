@@ -26,6 +26,7 @@ import { t } from '../logic/i18n';
 import { split as splitValue } from '../logic/settings';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
+import { GlassBack } from './GlassBack';
 import { feedback } from './Tap';
 
 /** A short message at the bottom of the screen (Android's Toast), or an alert elsewhere. */
@@ -93,6 +94,7 @@ export function Screen({ title, children, scroll = true }: { title: string; chil
   const body = scroll ? <ScrollView contentContainerStyle={styles.screenBody}>{children}</ScrollView> : <View style={{ flex: 1 }}>{children}</View>;
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: look.background }]}>
+      <GlassBack look={look} />
       <Bar title={title} />
       {body}
     </SafeAreaView>
@@ -142,6 +144,7 @@ export function ListScreen<T>({
   const step = rowHeight == null ? 0 : rowHeight + gap;
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: look.background }]}>
+      <GlassBack look={look} />
       <Bar title={title} />
       <FlatList
         ref={listRef}
