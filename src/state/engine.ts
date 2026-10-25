@@ -364,6 +364,7 @@ function feedOne(l: LocationObject) {
       speed: l.coords.speed,
       heading: l.coords.heading,
       accuracy: l.coords.accuracy,
+      alt: l.coords.altitude,
       t: l.timestamp || Date.now(),
     },
     { over: speed.warned, scoring: Features.on(prefs, 'score'), parking: Features.on(prefs, 'parking'), speedFix: Speed.fix(prefs) },

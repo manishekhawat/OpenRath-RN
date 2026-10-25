@@ -3,8 +3,13 @@
  * kept, and while there is no internet the box shows the hour that is now from it. A tall weather
  * box also shows the next 24 hours' temperature and rain (Hourly weather, 1.38), from the same
  * kept forecast when offline.
+ *
+ * Since 1.44 the box also carries the car's altitude, the way it points and the air quality on one
+ * row, and the next two days under that. Which of those rows there is room for is worked out here
+ * (`rows`), and a box that is much wider than it is tall lays them out side by side (`wide`).
  */
 import { f, t } from './i18n.ts';
+import { compass } from './layouts.ts';
 
 export interface Wx {
   /** °C, rounded */
@@ -95,6 +100,65 @@ export function next(all: (number | null | undefined)[] | null | undefined, from
 export function firstRain(rain: number[] | null | undefined): number {
   for (let i = 0; rain && i < rain.length; i++) if (rain[i] >= 0.3) return i;
   return -1;
+}
+
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** "2026-10-26" as "Mon" in the owner's language; anything else comes back as it is. */
+export function dayName(date: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) return date;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (Number.isNaN(d.getTime())) return date;
+  return t(DAYS[d.getDay()]);
+}
+
+/** The car's height above the sea: "640 m", or "--" before the GPS has said. */
+export function altText(altM: number): string {
+  return altM < 0 || !Number.isFinite(altM) ? '--' : Math.round(altM) + ' m';
+}
+
+/** The way the car points: "NE 42°", or "--" while it is parked and nothing was kept. */
+export function headingText(deg: number): string {
+  return deg < 0 || !Number.isFinite(deg) ? '--' : compass(deg) + ' ' + Math.round(deg) + '\u00B0';
+}
+
+/**
+ * The air quality on the facts row: nothing at all when the air-quality feature is off, "AQI --"
+ * while no reading has come in, else the reading. The space never breaks the line.
+ */
+export function aqiText(aqi: number, on: boolean): string {
+  if (!on) return '';
+  return aqi < 0 ? 'AQI --' : 'AQI\u00A0' + aqi;
+}
+
+/** The colour of the air-quality dot: green through red as the air gets worse. */
+export function aqiColour(aqi: number, dim: string): string {
+  if (aqi < 0) return dim;
+  if (aqi <= 50) return '#4CAF50';
+  if (aqi <= 100) return '#CDDC39';
+  if (aqi <= 200) return '#FFB02E';
+  if (aqi <= 300) return '#F4511E';
+  return '#D32F2F';
+}
+
+/** A box much wider than it is tall: the rows go side by side rather than under each other. */
+export function wide(w: number, h: number): boolean {
+  return w > 520 && w > h * 2.4;
+}
+
+/**
+ * Which rows the box has room for, under the reading itself. They are dropped last first: the
+ * next 24 hours need the most room, then the two days, then the three facts.
+ */
+export function rows(w: number, h: number, hourly: boolean): { facts: boolean; days: boolean; hours: boolean } {
+  if (wide(w, h)) return { facts: true, days: w > 760, hours: false };
+  const scale = Math.min(1, w / 300);
+  return {
+    facts: h > 150 * scale,
+    days: h > 215 * scale,
+    hours: hourly && h > 300 * scale,
+  };
 }
 
 /** "Offline · forecast from 3 h ago", under the weather. */

@@ -354,7 +354,7 @@ export default function Home() {
   );
 
   const weatherBox = Features.on(prefs, 'weather') ? (
-    <WeatherBox weather={weather} waiting={trip.lat === 0} style={styles.flexBox} />
+    <WeatherBox weather={weather} waiting={trip.lat === 0} altM={trip.altM} heading={trip.heading} style={styles.flexBox} />
   ) : null;
 
   const min = Math.floor(trip.todaySec / 60);

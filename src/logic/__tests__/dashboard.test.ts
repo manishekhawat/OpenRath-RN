@@ -129,3 +129,64 @@ test('tap feedback', () => {
   assert.equal(String.fromCharCode(...w.slice(0, 4)), 'RIFF');
   assert.equal(w.length, 44 + Math.round((Tap.RATE * Tap.TICK_MS) / 1000) * 2);
 });
+
+// ------------------------------------------------------------------ the weather strip (1.44)
+
+test('weather strip: the day names, the altitude, the heading and the air', () => {
+  assert.equal(Weather.dayName('2026-10-26'), 'Mon');
+  assert.equal(Weather.dayName('2026-10-25'), 'Sun');
+  // a day that does not exist rolls on, as Java's own date reading does: 29 February 2026 is 1 March
+  assert.equal(Weather.dayName('2026-02-29'), 'Sun');
+  assert.equal(Weather.dayName('tomorrow'), 'tomorrow', 'anything else is left alone');
+
+  assert.equal(Weather.altText(640.4), '640 m');
+  assert.equal(Weather.altText(0), '0 m', 'the sea is a height too');
+  assert.equal(Weather.altText(-1), '--', 'nothing from the GPS yet');
+  assert.equal(Weather.altText(NaN), '--');
+
+  assert.equal(Weather.headingText(42), 'NE 42°');
+  assert.equal(Weather.headingText(0), 'N 0°');
+  assert.equal(Weather.headingText(-1), '--', 'parked, with nothing kept');
+
+  assert.equal(Weather.aqiText(142, true), 'AQI 142');
+  assert.equal(Weather.aqiText(-1, true), 'AQI --', 'waiting for a reading');
+  assert.equal(Weather.aqiText(142, false), '', 'nothing at all with the alerts off');
+
+  // green when the air is good, through to red
+  assert.equal(Weather.aqiColour(-1, '#8A8F96'), '#8A8F96');
+  assert.equal(Weather.aqiColour(40, '#8A8F96'), '#4CAF50');
+  assert.equal(Weather.aqiColour(90, '#8A8F96'), '#CDDC39');
+  assert.equal(Weather.aqiColour(180, '#8A8F96'), '#FFB02E');
+  assert.equal(Weather.aqiColour(260, '#8A8F96'), '#F4511E');
+  assert.equal(Weather.aqiColour(420, '#8A8F96'), '#D32F2F');
+});
+
+test('weather strip: which rows a box has room for', () => {
+  // the box as the 1024 x 600 layouts give it: tall enough for everything
+  assert.deepEqual(Weather.rows(330, 330, true), { facts: true, days: true, hours: true });
+  // the same box with Hourly weather off keeps the rest
+  assert.deepEqual(Weather.rows(330, 330, false), { facts: true, days: true, hours: false });
+  // shorter boxes drop the rows from the bottom up
+  assert.deepEqual(Weather.rows(330, 250, true), { facts: true, days: true, hours: false });
+  assert.deepEqual(Weather.rows(330, 180, true), { facts: true, days: false, hours: false });
+  assert.deepEqual(Weather.rows(330, 120, true), { facts: false, days: false, hours: false });
+
+  // a wide strip across the screen: the facts go beside the reading, and the curve never fits
+  assert.ok(Weather.wide(1000, 150));
+  assert.ok(!Weather.wide(330, 330), 'a square box is not a strip');
+  assert.ok(!Weather.wide(500, 150), 'nor is a small one');
+  assert.deepEqual(Weather.rows(1000, 150, true), { facts: true, days: true, hours: false });
+  assert.deepEqual(Weather.rows(600, 150, true), { facts: true, days: false, hours: false }, 'a narrower strip keeps the facts only');
+});
+
+test('the altitude is kept from the last fix that had one', () => {
+  let s = Trip.initial(Date.UTC(2026, 9, 25, 9));
+  assert.equal(s.altM, -1);
+  const opts = { over: false, scoring: true, parking: true };
+  s = Trip.feed(s, { lat: 28.6, lon: 77.2, speed: 10, heading: 90, accuracy: 5, alt: 216.7, t: Date.UTC(2026, 9, 25, 9, 0, 1) }, opts).state;
+  assert.equal(s.altM, 216.7);
+  // a fix without one leaves it as it was, so a parked car still shows where it is
+  s = Trip.feed(s, { lat: 28.6, lon: 77.2, speed: 0, heading: null, accuracy: 5, alt: null, t: Date.UTC(2026, 9, 25, 9, 0, 3) }, opts).state;
+  assert.equal(s.altM, 216.7);
+  assert.equal(s.heading, -1, 'the heading is dropped while parked, as before');
+});

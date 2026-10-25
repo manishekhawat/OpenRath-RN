@@ -15,6 +15,8 @@ export interface Fix {
   heading: number | null;
   /** metres */
   accuracy: number | null;
+  /** metres above sea level, or null when the GPS gives none */
+  alt?: number | null;
   t: number;
 }
 
@@ -30,6 +32,8 @@ export interface TripState {
   odoKm: number;
   kmh: number;
   heading: number;
+  /** metres above sea level from the last fix that gave one, -1 until then (Drive.altNow) */
+  altM: number;
   lat: number;
   lon: number;
   todayBrakes: number;
@@ -65,6 +69,7 @@ export function initial(now: number, saved?: Partial<TripState>): TripState {
     odoKm: 0,
     kmh: 0,
     heading: -1,
+    altM: -1,
     lat: 0,
     lon: 0,
     todayBrakes: 0,
@@ -126,6 +131,8 @@ export function feed(s0: TripState, f: Fix, opts: { over: boolean; scoring: bool
   s.lat = f.lat;
   s.lon = f.lon;
   s.heading = f.heading != null && kmh > 5 ? f.heading : -1;
+  // the altitude is kept from the last fix that had one, so a parked car still shows where it is
+  if (f.alt != null && Number.isFinite(f.alt)) s.altM = f.alt;
 
   // harsh braking / hard starts: speed change over about a second
   let hardBrake = false;
