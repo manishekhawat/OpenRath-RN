@@ -26,6 +26,18 @@ The on-the-road round, matching OpenRath 1.44.
   India's holidays, the UPI split) follow it.
 - The hidden shortcuts — what holding a box or a button does — are listed in Settings > Help, with
   one tip a day on the dashboard while the car is parked.
+- The Wi-Fi, mobile data, GPS and battery icons move from the buttons bar to the top of the clock
+  box, and the line under the date is the next event today, or the weather now.
+- News headlines each sit in their own panel, with a numbered badge and the paper's name, and a
+  tall box holds up to eight of them; the voice still reads the first five.
+- The trip box shows the last day you drove when today has nothing yet, the compass keeps its
+  heading and altitude over a restart, and the fuel box with no fill-ups says so in one line.
+- The radio and music screen has a bar to move in a song, and while the car moves its lists stop
+  at twelve rows and the search box goes; each source comes back at the volume it last played at.
+- The spoken voice falls back to a Hindi voice when the unit has no English one, says what is
+  missing, and Settings offers Google's own voice download and eSpeak NG from F-Droid.
+- The parking code is Google's walking directions, so a phone opens Maps walking back to the car.
+- With the screen off, standing still slows the GPS after 30 seconds instead of five minutes.
 - Hindi now has 2,484 pairs, from the 1.44 string files.
 
 Android Auto (wired and wireless), the next-turn card and the strip over other apps, the call

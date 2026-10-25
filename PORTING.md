@@ -117,6 +117,13 @@ it would take.
   drawn once as soft colour blobs behind a dark veil. "My picture" uses the theme's own background
   picture, because there is no wallpaper to read without native code.
 - **The map's street colours** follow sunset, like the theme, not the unit's headlights.
+- **The map keeps drawing behind other apps:** the Android version pauses the WebView, which
+  react-native-webview offers no way to do, so the page is left running (it costs little, as the
+  map only redraws on a fix).
+- **The radio and music screen** has the sources, station and song lists, a now-playing panel and a
+  bar to move in a song, but no album artwork and no other app's queue: both come from a media
+  session, which is native. Its volume is this player's own, not the stereo's, so 1.44's volume for
+  each source applies to OpenRath's own radio and music files.
 - **The number plate** on the 3D car uses an affine transform, not Android's perspective mapping.
 - **QR codes** keep the screen awake but don't raise the brightness.
 - **The boot animation** uses a built-in stroke font instead of Inter, and the brand badge is the
