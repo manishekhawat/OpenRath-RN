@@ -10,7 +10,8 @@ import { Alert, AppState, Platform, StyleSheet, Text, ToastAndroid, View, type S
 
 import * as Agenda from '../logic/agenda';
 import * as Features from '../logic/features';
-import { t } from '../logic/i18n';
+import * as Holidays from '../logic/holidays';
+import { f, t } from '../logic/i18n';
 import { useLook } from '../state/look';
 import { usePrefs } from '../state/prefs';
 import { TapBox } from './Tap';
@@ -94,7 +95,9 @@ export const CalendarBox = memo(function CalendarBox({ style }: { style?: StyleP
     : allowed === false
       ? t('Tap to allow OpenRath to read your calendar')
       : events && events.length === 0
-        ? t('Nothing in the next few days')
+        ? // 1.44: a day with nothing in it says when the next holiday is instead of sitting empty
+          t('Nothing in the next few days') +
+          (Holidays.upcoming(new Date(), 1)[0] ? '\n' + f('Next holiday: %1$s', Holidays.upcoming(new Date(), 1)[0]) : '')
         : '';
   const now = Date.now();
   return (
@@ -114,7 +117,11 @@ export const CalendarBox = memo(function CalendarBox({ style }: { style?: StyleP
             })
           : null}
       </View>
-      {foot ? <Text style={[styles.foot, { color: look.textDim }]}>{foot}</Text> : null}
+      {foot ? (
+        <Text style={[styles.foot, { color: look.textDim }]} numberOfLines={2}>
+          {foot}
+        </Text>
+      ) : null}
     </TapBox>
   );
 });

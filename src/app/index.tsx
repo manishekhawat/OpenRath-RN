@@ -456,20 +456,27 @@ export default function Home() {
 
   const fuelBox = (
     <TapBox title="FUEL" style={styles.flexBox} onPress={() => router.push('/fuel')}>
-      <Figures
-        figs={[
-          ['LAST TANK KM/L', fuelStats.lastKmpl > 0 ? Fuel.fmt(fuelStats.lastKmpl) : '--'],
-          ['AVERAGE KM/L', fuelStats.avgKmpl > 0 ? Fuel.fmt(fuelStats.avgKmpl) : '--'],
-          ['₹ / KM', fuelStats.rupeesPerKm > 0 ? Fuel.fmt(fuelStats.rupeesPerKm) : '--'],
-        ]}
-      />
-      <Text style={[styles.small, { color: look.textDim, textAlign: 'center' }]} numberOfLines={1}>
-        {fuelStats.fills === 0
-          ? t('Tap to add your first fill-up')
-          : fuelStats.lastKmpl <= 0
-            ? t('Mileage shows after two full-tank fill-ups')
-            : f('%1$s fill-ups  ·  last %2$s', fuelStats.fills, ago(fuelStats.lastAt, now.getTime())) + tolls}
-      </Text>
+      {/* 1.44: nothing logged yet, so one friendly line instead of three dashes */}
+      {fuelStats.fills === 0 ? (
+        <View style={styles.oneLine}>
+          <Text style={{ color: look.textDim, textAlign: 'center' }}>{t('Tap to add your first fill-up')}</Text>
+        </View>
+      ) : (
+        <>
+          <Figures
+            figs={[
+              ['LAST TANK KM/L', fuelStats.lastKmpl > 0 ? Fuel.fmt(fuelStats.lastKmpl) : '--'],
+              ['AVERAGE KM/L', fuelStats.avgKmpl > 0 ? Fuel.fmt(fuelStats.avgKmpl) : '--'],
+              ['₹ / KM', fuelStats.rupeesPerKm > 0 ? Fuel.fmt(fuelStats.rupeesPerKm) : '--'],
+            ]}
+          />
+          <Text style={[styles.small, { color: look.textDim, textAlign: 'center' }]} numberOfLines={1}>
+            {fuelStats.lastKmpl <= 0
+              ? t('Mileage shows after two full-tank fill-ups')
+              : f('%1$s fill-ups  ·  last %2$s', fuelStats.fills, ago(fuelStats.lastAt, now.getTime())) + tolls}
+          </Text>
+        </>
+      )}
     </TapBox>
   );
 
@@ -591,6 +598,7 @@ const styles = StyleSheet.create({
   small: { fontSize: 12, letterSpacing: 0.5 },
   time: { fontSize: 54, fontWeight: '300' },
   clockStatus: { position: 'absolute', top: 6, right: 10 },
+  oneLine: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   ampm: { fontSize: 18 },
   big: { fontSize: 34, fontWeight: '300' },
   figures: { flex: 1, flexDirection: 'row', alignItems: 'center' },
