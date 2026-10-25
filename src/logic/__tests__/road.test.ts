@@ -124,6 +124,9 @@ test('ahead: school hours and toll text', () => {
   assert.equal(ahead.tollText(2050, 100, ''), 'Toll plaza in 2 kilometres, about 100 rupees. Keep to the FASTag lane.');
   assert.equal(ahead.tollText(640, 0, 'Kherki Daula'), 'Toll plaza, Kherki Daula, in 600 metres. Keep to the FASTag lane.');
   assert.equal(ahead.tollText(1000, 0, ''), 'Toll plaza in 1 kilometre. Keep to the FASTag lane.');
+  // 1.44: the price is spoken in the owner's currency, and FASTag lanes are an Indian thing
+  assert.equal(ahead.tollText(2050, 100, '', 'pounds', false), 'Toll plaza in 2 kilometres, about 100 pounds.');
+  assert.equal(ahead.tollText(640, 0, 'M6 Toll', 'pounds', false), 'Toll plaza, M6 Toll, in 600 metres.');
 });
 
 test('ahead: Overpass query and answer', () => {

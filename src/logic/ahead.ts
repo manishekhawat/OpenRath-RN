@@ -7,6 +7,7 @@
  */
 import { bearing, dist, ahead as isAhead } from './geo.ts';
 import { f, t } from './i18n.ts';
+import * as Money from './money.ts';
 import { code, Gate, shared } from './overpass.ts';
 
 /** A place ahead to speak about once: a toll plaza, school or hospital. */
@@ -130,13 +131,17 @@ export function schoolHours(d: Date): boolean {
   return (m >= 7 * 60 && m <= 9 * 60 + 30) || (m >= 12 * 60 + 30 && m <= 15 * 60 + 30);
 }
 
-/** "Toll plaza in 2 kilometres, about 65 rupees. Keep to the FASTag lane." */
-export function tollText(m: number, rupees: number, name: string): string {
+/**
+ * "Toll plaza in 2 kilometres, about 65 rupees. Keep to the FASTag lane." The price is spoken in
+ * the owner's own currency, and since 1.44 the FASTag lane is only mentioned in India, where the
+ * lanes exist.
+ */
+export function tollText(m: number, money: number, name: string, currency = Money.spoken(), india = Money.india()): string {
   const km = Math.round(m / 1000);
   const where = m >= 950 ? `${km} kilometre${km === 1 ? '' : 's'}` : Math.round(m / 100) * 100 + ' metres';
   return (
     'Toll plaza' + (name === '' ? '' : ', ' + name + ',') + ' in ' + where +
-    (rupees > 0 ? ', about ' + rupees + ' rupees' : '') + '. Keep to the FASTag lane.'
+    (money > 0 ? ', about ' + money + ' ' + currency : '') + '.' + (india ? ' Keep to the FASTag lane.' : '')
   );
 }
 

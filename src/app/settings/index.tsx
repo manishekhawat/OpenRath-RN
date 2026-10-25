@@ -27,9 +27,11 @@ import * as Dashcam from '../../logic/dashcam';
 import * as Diag from '../../logic/diag';
 import * as Features from '../../logic/features';
 import * as Fuel from '../../logic/fuel';
+import * as Hints from '../../logic/hints';
 import * as Holidays from '../../logic/holidays';
 import { f, hindi, lang, load as loadLanguage, t } from '../../logic/i18n';
 import * as Layouts from '../../logic/layouts';
+import * as Money from '../../logic/money';
 import * as Motion from '../../logic/motion';
 import * as News from '../../logic/news';
 import { num, type Prefs } from '../../logic/prefs';
@@ -179,6 +181,19 @@ export default function Settings() {
   add('Dashboard', 'Your name', owner === '' ? 'hidden' : owner, () =>
     askText({ title: 'Your name, on the home screen (empty to hide)', value: owner, save: (v) => Layouts.saveOwner(prefs, v) }),
   );
+  // 1.44: the country sets the currency prices are written in, and whether the India-only parts show
+  const country = Money.country(prefs);
+  add('Dashboard', 'Your country', `${Money.name(country)}  ·  ${Money.symbol(country).trim()}`, () =>
+    choose(
+      'Your country',
+      Money.COUNTRIES.map((c) => `${Money.name(c)}  (${Money.symbol(c).trim()})`),
+      Math.max(0, Money.COUNTRIES.indexOf(country)),
+      (i) => {
+        Money.set(prefs, Money.COUNTRIES[i]);
+        loadLanguage(prefs);
+      },
+    ),
+  );
   const saverMin = num(prefs, 'saverMin', 5);
   add('Dashboard', 'Clock screensaver after', on('saver') ? f('%1$s min idle while parked', saverMin) : 'off (switch above)', () => {
     const steps = [1, 2, 5, 10, 20];
@@ -312,8 +327,10 @@ export default function Settings() {
   add('Driving', 'Paid parking reminder', Chores.parkingRow(prefs), '/chores?open=parkTimer', on('parking'));
   add('Driving', "This week's report", 'km, time, petrol, tolls, score; or say "weekly report"', '/report', on('startSummary'));
   add('Driving', 'Last parking photo', Cam.photoRowText(), '/parkphoto', on('parking'));
+  // 1.44: India's holidays only mean heavy traffic in India
   add('Driving', 'Holidays ahead', Holidays.upcoming(new Date(), 3).join(';  '), () =>
     Alert.alert(t('Holidays with heavy traffic'), Holidays.upcoming(new Date(), 12).join('\n')),
+    Money.india(),
   );
   add('Monsoon', 'Marked spots', 'waterlogging spots warned before in rain', '/settings/road', on('rain'));
   add('Dashcam', 'Dashcam', Dashcam.rowText(prefs, Cam.get().status), '/dashcam', on('dashcam'));
@@ -367,6 +384,10 @@ export default function Settings() {
     prefs.put('setupStep', '0');
     router.push('/setup');
   }, Features.shown(prefs, Features.get('setup') as Features.Feature));
+  const tips = Hints.list(prefs);
+  add('Help', 'Hidden shortcuts', f('%1$s things a long press does', String(tips.length)), () =>
+    Alert.alert(t('Hidden shortcuts'), tips.map((x) => '\u2022  ' + t(x)).join('\n\n')),
+  );
   add('Help', 'Android settings', null, () => IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.SETTINGS).catch(() => {}));
   add('Help', 'Version', 'OpenRath ' + VERSION + (Features.dev(prefs) ? t(', developer mode') : ''), versionTapped);
   add('Help', 'About and licences', 'free and open source (GPL-3.0)', '/settings/about');

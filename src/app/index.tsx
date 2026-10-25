@@ -34,6 +34,7 @@ import { DAYS_FULL, MONTHS_FULL } from '../logic/dates';
 import * as Errands from '../logic/errands';
 import * as Features from '../logic/features';
 import * as Fuel from '../logic/fuel';
+import * as Hints from '../logic/hints';
 import { f, t } from '../logic/i18n';
 import * as Layouts from '../logic/layouts';
 import { num } from '../logic/prefs';
@@ -223,6 +224,17 @@ export default function Home() {
       if (Car.ready(prefs) && driveRef.current.trip.kmh <= 3 && Weekly.due(prefs)) router.push('/report');
     }, 3000);
     return () => clearTimeout(t);
+    // once per dashboard visit
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 1.44: one tip a day about the things a long press does, while parked (Hints.maybe)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const tip = Hints.due(prefs, Date.now(), driveRef.current.trip.kmh > 3);
+      if (tip) toast(t('Tip') + ': ' + t(tip), true);
+    }, 7000);
+    return () => clearTimeout(timer);
     // once per dashboard visit
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

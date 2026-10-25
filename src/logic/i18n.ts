@@ -5,9 +5,13 @@
  * Code passes its English through t(), or f() for text with numbers or names in it
  * ("Toll in %1$s km"); anything not translated stays in English, so new text never shows blank.
  * The owner picks the language in Settings ('lang'); it starts as the unit's own language.
+ *
+ * Every ₹ on screen also passes through here (1.44): outside India it becomes the local
+ * currency's sign, which is why the app can write prices with ₹ everywhere (src/logic/money.ts).
  */
 import words from '../data/hi.json' with { type: 'json' };
 
+import * as Money from './money.ts';
 import type { Prefs } from './prefs.ts';
 
 const HI = words as Record<string, string>;
@@ -24,24 +28,25 @@ export function lang(p: Prefs): string {
   return p.str('lang', def) === 'hi' ? 'hi' : 'en';
 }
 
-/** Read the language once at start-up and whenever Settings changes it. */
+/** Read the language and the country once at start-up and whenever Settings changes them. */
 export function load(p: Prefs): void {
   on = lang(p) === 'hi';
+  Money.load(p);
 }
 
 export function hindi(): boolean {
   return on;
 }
 
-/** The Hindi for this English, when Hindi is on and there is one. */
+/** The Hindi for this English, when Hindi is on and there is one, in the owner's currency. */
 export function t(s: string): string {
-  if (!on || !s) return s;
-  return HI[s] ?? s;
+  if (!s) return s;
+  return Money.shown(on ? HI[s] ?? s : s);
 }
 
 /** Text with numbers or names in it: "%1$s km" (or plain "%s", "%d") filled in after translating. */
 export function f(format: string, ...args: unknown[]): string {
-  return fill(t(format), args);
+  return Money.shown(fill(t(format), args));
 }
 
 export function fill(format: string, args: unknown[]): string {
